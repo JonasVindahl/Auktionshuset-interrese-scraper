@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable
 
+from . import images
 from .config import MIN_SCRAPE_INTERVAL_SECONDS, Config, ConfigError, Source, load_config
 from .classifier import Classifier, ClassifierSettings, OpenAICompatibleClient
 from .matcher import Match, match_all, sort_matches
@@ -61,6 +62,7 @@ class RunStats:
     deferred: int = 0
     blind_alert_sent: bool = False
     pruned: int = 0
+    images_cached: int = 0
     errors: list[str] = field(default_factory=list)
 
 
@@ -180,6 +182,16 @@ def maybe_prune(store: Store) -> dict[str, int]:
             pass
 
     removed = store.prune()
+
+    # Billeder for lots der har været afsluttet længe. De ryddes i samme takt
+    # som historikken, så der kun er ét tidspunkt hvor disken bliver rørt.
+    try:
+        gone = images.prune(store.conn, store.path)
+        if gone:
+            removed["images"] = gone
+    except Exception:
+        log.exception("Billedoprydning fejlede — fortsætter")
+
     store.set_meta(PRUNE_KEY, datetime.now(timezone.utc).isoformat(timespec="seconds"))
     return removed
 
@@ -277,6 +289,17 @@ def run_once(
             new_matches=stats.new_matches,
             error="; ".join(stats.errors) or None,
         )
+
+        # Billederne hentes efter notifikationerne, så en langsom eller død
+        # billedserver aldrig kan forsinke en besked. Kun fund og
+        # gennemsynskandidater hentes — auktionshuset fjerner billedet når
+        # lot'et lukker, og så er Udløbet-fanen uden billeder for altid.
+        try:
+            stats.images_cached = images.cache_pending(
+                store.conn, store.path, session=scraper.session
+            )
+        except Exception:
+            log.exception("Billedcachen fejlede — fortsætter")
 
         # Oprydning kører efter kørslen, så en fejl her ikke koster fund.
         try:

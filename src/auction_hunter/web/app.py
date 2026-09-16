@@ -16,12 +16,15 @@ from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
 from pydantic import BeforeValidator
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import (
+    HTMLResponse, RedirectResponse, Response, StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.status import HTTP_303_SEE_OTHER
 
+from .. import images as images_mod
 from ..classifier import OpenAICompatibleClient
 from ..config import ConfigError, load_config
 from ..secrets import SecretError, get_secret
@@ -177,7 +180,7 @@ def create_app() -> FastAPI:
         finally:
             conn.close()
         categories = sorted({r["category_key"] for r in active if r["category_key"]})
-        prepared = rows_mod.prepare_all(active)
+        prepared = rows_mod.prepare_all(active, db_path=db_path())
         return page(
             request, "finds.html",
             rows=prepared, groups=rows_mod.group_by_date(prepared),
@@ -196,7 +199,7 @@ def create_app() -> FastAPI:
         finally:
             conn.close()
         categories = sorted({r["category_key"] for r in gone if r["category_key"]})
-        prepared = rows_mod.prepare_all(gone)
+        prepared = rows_mod.prepare_all(gone, db_path=db_path())
         return page(
             request, "finds.html",
             rows=prepared, groups=rows_mod.group_by_date(prepared),
@@ -273,7 +276,7 @@ def create_app() -> FastAPI:
         return page(
             request, "archive.html",
             result=result,
-            rows=rows_mod.prepare_all(result.rows, seen_field="first_seen"),
+            rows=rows_mod.prepare_all(result.rows, seen_field="first_seen", db_path=db_path()),
             archive=stats, categories=categories, page_url=page_url,
             status_choices=search_mod.STATUS_CHOICES,
             match_choices=search_mod.MATCH_CHOICES,
@@ -426,7 +429,7 @@ def create_app() -> FastAPI:
         return page(
             request, "chat.html",
             question=q, answer=answer,
-            rows=rows_mod.prepare_all(answer.rows, seen_field="first_seen") if answer else [],
+            rows=rows_mod.prepare_all(answer.rows, seen_field="first_seen", db_path=db_path()) if answer else [],
             has_key=llm_client() is not None,
         )
 
@@ -445,6 +448,11 @@ def create_app() -> FastAPI:
             }
         finally:
             conn.close()
+        count, total = images_mod.usage(db_path())
+        context["images"] = {
+            "count": count,
+            "mb": round(total / 1024 / 1024, 1),
+        }
         return page(request, "stats.html", **context)
 
     @app.get("/export/feedback.csv")
@@ -469,6 +477,29 @@ def create_app() -> FastAPI:
             iter([buffer.getvalue()]),
             media_type="text/csv",
             headers={"Content-Disposition": 'attachment; filename="feedback.csv"'},
+        )
+
+    @app.get("/image/{lot_id}")
+    def lot_image(lot_id: str, _: None = Depends(require_login)) -> Response:
+        """Udlever et cachet lot-billede.
+
+        Auktionshuset fjerner billedet når lot'et lukker, så det cachede er
+        det eneste der overlever. Findes der intet, svares 404 og skabelonen
+        falder tilbage til den levende adresse.
+        """
+        cached = images_mod.read_cached(db_path(), lot_id)
+        if cached is None:
+            raise HTTPException(404, "intet cachet billede")
+        data, media_type = cached
+        return Response(
+            content=data,
+            media_type=media_type,
+            headers={
+                # Filen ændrer sig aldrig: den er gemt netop fordi originalen
+                # forsvinder.
+                "Cache-Control": "public, max-age=604800, immutable",
+                "Content-Length": str(len(data)),
+            },
         )
 
     @app.get("/healthz")

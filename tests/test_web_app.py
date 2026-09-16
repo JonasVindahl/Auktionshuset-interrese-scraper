@@ -476,3 +476,60 @@ def test_healthz_paa_manglende_database(tmp_path, monkeypatch):
     monkeypatch.setenv("DB_PATH", str(tmp_path / "findes-ikke.db"))
     monkeypatch.delenv("WEB_PASSWORD", raising=False)
     assert TestClient(create_app()).get("/healthz").status_code == 503
+
+
+# -- cachede billeder ------------------------------------------------------
+
+def _cache_image(db_path: str, lot_id: str) -> bytes:
+    """Læg et rigtigt billede i cachen, som en kørsel ville have gjort."""
+    from tests.test_images import PNG  # noqa: PLC0415
+
+    from auction_hunter import images
+
+    path = images.cache_path(db_path, lot_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(PNG)
+    return PNG
+
+
+def test_cachet_billede_udleveres(client, sample_db):
+    data = _cache_image(sample_db, "a1")
+    response = client.get("/image/a1")
+    assert response.status_code == 200
+    assert response.content == data
+    assert response.headers["content-type"] == "image/png"
+
+
+def test_ucachet_billede_giver_404(client):
+    """404 er meningen: skabelonen falder tilbage til den levende adresse."""
+    assert client.get("/image/findes-ikke").status_code == 404
+
+
+def test_kort_peger_paa_cachet_billede(client, sample_db):
+    """Når billedet er hentet, skal siden bruge det og ikke auktionshusets."""
+    _cache_image(sample_db, "a1")
+    body = client.get("/").text
+    assert 'src="/image/a1"' in body
+    assert "auktionshuset.dk/i/1.jpg" not in body
+
+
+def test_kort_bruger_levende_adresse_uden_cache(client):
+    assert "auktionshuset.dk/i/1.jpg" in client.get("/").text
+
+
+def test_udloebet_lot_viser_stadig_sit_billede(client, sample_db):
+    """Hele pointen: originalen er død, men vores kopi lever."""
+    _cache_image(sample_db, "a3")        # Dell PowerEdge, sluttede for 5 t siden
+    body = client.get("/expired").text
+    assert 'src="/image/a3"' in body
+
+
+def test_billede_kraever_login(locked_client, sample_db):
+    _cache_image(sample_db, "a1")
+    assert locked_client.get("/image/a1").status_code in (303, 401)
+
+
+def test_billedrute_taaler_ondsindet_lot_id(client):
+    """lot_id kommer fra auktionshusets HTML og må ikke kunne læse filer."""
+    for evil in ["..%2F..%2F..%2Fetc%2Fpasswd", "....//....//etc/passwd"]:
+        assert client.get(f"/image/{evil}").status_code in (404, 400)

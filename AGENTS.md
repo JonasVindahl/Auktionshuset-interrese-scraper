@@ -140,6 +140,12 @@ mod den, aldrig mod et snapshot.
 - **De 48 timer på /expired er et visningsvindue, ikke en sletning.** Intet
   fjernes efter 48 timer; fanen viser bare det vindue hvor det giver mening at
   markere «budt/købt».
+- **Billedadressen dør når lot'et lukker.** Derfor henter `images.py`
+  miniaturen mens lot'et er aktivt, og kun for lots i `notifications` eller
+  `review_queue` — ikke for de ~2.200 der scrapes. Filnavnet er et hash af
+  `lot_id`, som kommer fra et HTML-attribut og aldrig må bruges som filnavn
+  direkte. `looks_complete` tjekker at filen har sin kendte afslutning, fordi
+  en afbrudt overførsel stadig har de rigtige magiske bytes i starten.
 - **Søgeindekset har to danske foldninger.** `normalize` giver `hoejttaler`,
   `normalize_loose` giver `hojttaler`. Begge indekseres i `lots_fts.normalized`,
   fordi folk skriver begge dele. Brug aldrig `normalize_loose` til
