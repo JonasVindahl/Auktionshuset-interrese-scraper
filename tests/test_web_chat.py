@@ -306,17 +306,74 @@ def test_arkivet_link_baerer_filteret():
     assert "max_price=2000" in url
 
 
-def test_tomt_soegeresultat_reddes_af_de_andre_filtre(conn):
-    # Modellen vælger et søgeord der ikke findes, men en kategori der gør.
+def test_tomt_soegeresultat_giver_ikke_fremmede_lots(conn):
+    """Ord der ikke findes maa ikke erstattes af alt muligt andet.
+
+    Det var den fejl der fik et spoergsmaal om et server rack til at blive
+    besvaret med en switch.
+    """
     client = FakeClient(
         json.dumps({"soegeord": ["findes-slet-ikke-xyz"], "kategori": "it_tech"}),
-        json.dumps({"valgte": [1], "svar": "Her er hvad der matcher."}),
+        json.dumps({"valgte": [], "svar": "Intet."}),
     )
     answer = ask(conn, client, "noget med it", categories=["it_tech"])
-    assert answer.total > 0
+    assert answer.total == 0
+    assert answer.rows == []
+    assert "matcher" in answer.text.lower()
+    # Filteret viser det der faktisk blev soegt paa, ikke et oprydnet et.
+    assert "findes-slet-ikke-xyz" in answer.archive_url
+
+
+def test_and_loeses_til_or_naar_det_giver_nul(conn):
+    """Et for stramt AND-filter maa ikke give et tomt svar."""
+    client = FakeClient(
+        json.dumps({"soegeord": ["sennheiser", "findes-slet-ikke"],
+                    "alle_ord": True}),
+        json.dumps({"valgte": [1], "svar": "Her er en Sennheiser."}),
+    )
+    answer = ask(conn, client, "sennheiser", categories=["it_tech"])
     assert answer.rows
-    assert "søgeordene" in answer.text
-    assert answer.archive_url.startswith("/archive?")
+    assert "hver for sig" in answer.text
+
+
+def test_soegeord_renses_for_citationstegn():
+    client = FakeClient(json.dumps({"soegeord": ['"server rack"', "rackmonteret"]}))
+    query, _ = build_filter(client, "server rack")
+    assert '"' not in query.text
+    assert "server rack" in query.text
+    assert "rackmonteret" in query.text
+
+
+def test_rangordning_uden_stigninger(conn):
+    client = FakeClient(json.dumps({"liste": "stigere"}))
+    answer = ask(conn, client, "hvad er steget mest i pris?")
+    assert answer.rows == []
+    assert "steget" in answer.text.lower()
+
+
+def test_ask_svarer_paa_prisstigninger(tmp_path, lot_factory):
+    from auction_hunter.storage import Store
+
+    with Store(tmp_path / "t.db") as store:
+        store.record_lots(
+            [
+                lot_factory("a", "Stille lot", first_bid=100, total=125),
+                lot_factory("b", "Stiger lot", first_bid=100, total=125),
+            ],
+            {"a": 125, "b": 125},
+        )
+        # b faar et hoejere bud, saa den er steget siden foerste registrering.
+        store.record_lots(
+            [lot_factory("b", "Stiger lot", first_bid=300, total=375)], {"b": 375}
+        )
+        store.conn.commit()
+
+        client = FakeClient(json.dumps({"liste": "stigere"}))
+        answer = ask(store.conn, client, "hvad er gået mest op i pris?")
+
+    assert answer.rows
+    assert answer.rows[0]["lot_id"] == "b"
+    assert "Stiger" in answer.text
 
 
 # -- prisoversigt, sammenlignelige salg og markeringer ---------------------

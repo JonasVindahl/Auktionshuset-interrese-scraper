@@ -40,6 +40,8 @@ def _positive(value: int | None, maximum: int) -> int | None:
 STATUS_CHOICES = ("alle", "aktive", "afsluttede")
 MATCH_CHOICES = ("alle", "kun_fund", "kun_ikke_fund")
 SORT_CHOICES = ("relevans", "nyeste", "slutter", "pris_op", "pris_ned")
+# Assistentens rangordninger. Ikke en søgning, men et spørgsmål om rækkefølge.
+LISTE_CHOICES = ("", "stigere")
 
 
 @dataclass(frozen=True)
@@ -59,6 +61,9 @@ class SearchQuery:
     # Sand når ordene skal slås sammen med OR i stedet for AND. Bruges af
     # assistentens nøgleordsfald, hvor et enkelt dækord ellers dræber svaret.
     any_words: bool = False
+    # Assistentens rangordning i stedet for en søgning. "stigere" beder om de
+    # lots hvis bud er steget mest. Tom betyder en almindelig søgning.
+    liste: str = ""
 
     def normalized(self) -> "SearchQuery":
         """Ret ugyldige værdier til deres standard i stedet for at fejle."""
@@ -74,13 +79,14 @@ class SearchQuery:
             sort=self.sort if self.sort in SORT_CHOICES else "relevans",
             page=max(1, self.page),
             any_words=self.any_words,
+            liste=self.liste if self.liste in LISTE_CHOICES else "",
         )
 
     @property
     def is_empty(self) -> bool:
         return not any((
             self.text, self.min_price, self.max_price, self.category,
-            self.auction, self.days_back,
+            self.auction, self.days_back, self.liste,
             self.status != "alle", self.matched != "alle",
         ))
 

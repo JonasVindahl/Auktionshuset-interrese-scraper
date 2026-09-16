@@ -349,6 +349,42 @@ def lots_by_ids(conn: sqlite3.Connection, lot_ids: list[str]) -> list[sqlite3.Ro
     return [by_id[lot_id] for lot_id in lot_ids if lot_id in by_id]
 
 
+def risers(conn: sqlite3.Connection, limit: int = 12) -> list[sqlite3.Row]:
+    """Lots hvor buddet er steget mest siden første registrering.
+
+    Samme raekkeform som soegningen, saa kortene kan tegnes som de andre.
+    """
+    if not has_schema(conn, "lots", "notifications"):
+        return []
+    image = "l.image_url" if has_column(conn, "lots", "image_url") else "''"
+    details_flags = ("l.details_flags" if has_column(conn, "lots", "details_flags")
+                     else "'' AS details_flags")
+    feedback_join = (
+        "LEFT JOIN feedback f ON f.lot_id = l.lot_id"
+        if has_table(conn, "feedback") else ""
+    )
+    feedback_col = "COALESCE(f.action,'')" if feedback_join else "''"
+    return conn.execute(
+        f"""
+        SELECT DISTINCT l.lot_id, l.title, l.url, l.auction_title, l.lot_number,
+               l.first_seen, l.last_seen, l.ends_at,
+               l.first_bid, l.last_bid, l.last_total, {details_flags},
+               {image} AS image_url,
+               n.category_key, n.sent_at, n.cost,
+               {feedback_col} AS feedback_action,
+               CASE WHEN n.lot_id IS NULL THEN 0 ELSE 1 END AS was_match
+        FROM lots l
+        LEFT JOIN notifications n ON n.lot_id = l.lot_id
+        {feedback_join}
+        WHERE l.first_bid IS NOT NULL AND l.last_bid IS NOT NULL
+          AND l.last_bid > l.first_bid
+        ORDER BY (l.last_bid - l.first_bid) DESC
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
+
+
 def table_counts(conn: sqlite3.Connection) -> dict[str, int]:
     """Rækkeantal pr. tabel. Driftssiden skal kunne se hvad der vokser."""
     counts: dict[str, int] = {}
