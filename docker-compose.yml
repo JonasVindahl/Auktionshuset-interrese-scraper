@@ -47,8 +47,8 @@ services:
       - hunter
 
     volumes:
-      # Read-only: dashboardet læser databasen, skriver intet.
-      - ./data:/app/data:ro
+      # Dashboardet skriver feedback til databasen (WAL-mode, deles med scraperen).
+      - ./data:/app/data
       - ./config:/app/config:ro
 
     ports:
