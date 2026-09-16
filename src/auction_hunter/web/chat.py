@@ -260,7 +260,9 @@ def _price_summary(rows: list[sqlite3.Row]) -> str:
     )
 
 
-def _comparables_note(conn: sqlite3.Connection, rows: list[sqlite3.Row], *, limit: int = 2) -> str:
+def _comparables_note(
+    conn: sqlite3.Connection, rows: list[sqlite3.Row], *, limit: int = 2, sales: int = 3
+) -> str:
     """Hvad samme slags er gået for, for de øverste kandidater.
 
     Tallene kommer fra arkivets egne afsluttede salg, ikke fra modellen, så et
@@ -272,12 +274,20 @@ def _comparables_note(conn: sqlite3.Connection, rows: list[sqlite3.Row], *, limi
             comps = similar.find(conn, lot_id=row["lot_id"], title=row["title"] or "")
         except sqlite3.Error:
             continue
-        if comps.count and comps.median is not None:
-            parts.append(
-                f"{(row['title'] or '')[:60]}: median {kr(comps.median)} "
-                f"over {comps.count} tidligere salg"
-            )
-    return "; ".join(parts)
+        if not comps.count or comps.median is None:
+            continue
+        head = (
+            f"{(row['title'] or '')[:60]}: median {kr(comps.median)}, "
+            f"laveste {kr(comps.low)}, højeste {kr(comps.high)} "
+            f"over {comps.count} tidligere salg"
+        )
+        # De enkelte salg med pris og dato, saa svaret kan naevne konkrete tal
+        # i stedet for kun et gennemsnit.
+        examples = "; ".join(
+            f"{kr(sale.total)} ({sale.ended_at[:10]})" for sale in comps.items[:sales]
+        )
+        parts.append(f"{head}. Eksempler: {examples}" if examples else head)
+    return " ".join(parts)
 
 
 def _selected_rows(rows: list[sqlite3.Row], valgte: Any) -> list[sqlite3.Row]:

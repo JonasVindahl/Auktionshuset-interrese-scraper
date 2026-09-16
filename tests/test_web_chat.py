@@ -362,3 +362,27 @@ def test_svaret_faar_prisoversigt_med(conn):
     )
     ask(conn, client, "hvad koster de?", categories=["it_tech"])
     assert "median" in client.calls[1]["user"]
+
+
+def test_sammenlignelige_naevner_priser_og_datoer(tmp_path, lot_factory):
+    from auction_hunter.storage import Store
+    from auction_hunter.web.chat import _comparables_note
+
+    with Store(tmp_path / "t.db") as store:
+        store.record_lots(
+            [
+                lot_factory("a", "Thorens TD160 pladespiller", ends_in_hours=-720,
+                            first_bid=900, total=1250),
+                lot_factory("b", "Thorens TD160 pladespiller defekt", ends_in_hours=-48,
+                            first_bid=700, total=950),
+            ],
+            {"a": 1250, "b": 950},
+        )
+        store.conn.commit()
+        note = _comparables_note(
+            store.conn, [{"lot_id": "a", "title": "Thorens TD160 pladespiller"}]
+        )
+
+    assert "median" in note
+    assert "Eksempler" in note
+    assert "kr" in note
