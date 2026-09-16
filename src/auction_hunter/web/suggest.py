@@ -13,9 +13,10 @@ facitlisten, ikke mod et øjebliksbillede.
 from __future__ import annotations
 
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
+from .. import evaluate
 from .queries import has_schema, keyword_noise
 
 # Mindste antal lots et nøgleord skal have været med i, før det må foreslås
@@ -36,6 +37,11 @@ class Suggestion:
     seen: int
     skip: int
     pct: int
+    # Hårde facitliste-krav som ændringen ville bryde, hvis den er tjekket.
+    breaks: tuple[str, ...] = ()
+    # False når facitlisten ikke kunne læses her, så visningen kan se forskel på
+    # "ingen effekt" og "kunne ikke tjekkes".
+    checked: bool = False
 
     @property
     def reason(self) -> str:
@@ -79,6 +85,31 @@ def noisy_keywords(
         )
         if len(out) >= limit:
             break
+    return out
+
+
+def annotate_impact(
+    suggestions: list[Suggestion], config: Any, cases: list[dict]
+) -> list[Suggestion]:
+    """Sæt facitlistens svar på hvert forslag, før det vises.
+
+    Et forslag der bryder et hårdt krav er ikke nødvendigvis forkert, men det
+    skal stå klart at det er en afvejning, ikke en gratis forbedring.
+    """
+    if not cases:
+        return suggestions
+    out: list[Suggestion] = []
+    for suggestion in suggestions:
+        impact = evaluate.corpus_impact(
+            config, cases,
+            action=suggestion.action, category=suggestion.category,
+            level=suggestion.level, keyword=suggestion.keyword,
+        )
+        out.append(replace(
+            suggestion,
+            breaks=tuple(impact["breaks"]) if impact else (),
+            checked=impact is not None,
+        ))
     return out
 
 

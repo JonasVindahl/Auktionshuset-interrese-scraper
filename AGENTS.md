@@ -156,7 +156,7 @@ kan læses.
 
 ## Testfilosofi
 
-`tests/corpus/match_expectations.jsonl` er projektets vigtigste artefakt.
+`config/match_expectations.jsonl` er projektets vigtigste artefakt.
 Auktionsdata skifter konstant, men facitlisten gør ikke — den er den
 versionerede beslutning om hvad der er interessant. Tune altid `interests.yml`
 mod den, aldrig mod et snapshot.

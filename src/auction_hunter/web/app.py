@@ -26,6 +26,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.status import HTTP_303_SEE_OTHER
 
+from .. import evaluate as evaluate_mod
 from .. import images as images_mod
 from ..classifier import OpenAICompatibleClient
 from ..config import DEFAULT_CONFIG_PATH, ConfigError, load_config
@@ -689,6 +690,10 @@ def create_app() -> FastAPI:
             try:
                 suggestions = suggest_mod.noisy_keywords(suggest_conn, suggest_config)
                 unmatched = suggest_mod.unmatched_marks(suggest_conn, suggest_config)
+                # Facitliste-porten: vis om et forslag ville bryde et hårdt krav.
+                suggestions = suggest_mod.annotate_impact(
+                    suggestions, suggest_config, evaluate_mod.load_corpus()
+                )
             finally:
                 suggest_conn.close()
         except (ConfigError, sqlite3.Error, OSError):

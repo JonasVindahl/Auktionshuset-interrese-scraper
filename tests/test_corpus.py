@@ -23,7 +23,10 @@ from auction_hunter.config import load_config
 from auction_hunter.matcher import match_lot
 from auction_hunter.scraper import Lot
 
-CORPUS = Path(__file__).parent / "corpus" / "match_expectations.jsonl"
+# Facitlisten bor i config/ sammen med interesseprofilen, saa den ogsaa er med
+# i Docker-imaget. Dashboardet bruger samme fil til at vurdere et forslag foer
+# det anvendes.
+CORPUS = Path(__file__).resolve().parent.parent / "config" / "match_expectations.jsonl"
 
 
 def load_corpus() -> list[dict]:

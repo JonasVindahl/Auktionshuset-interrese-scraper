@@ -83,6 +83,15 @@
       </form>
       {% endif %}
       <p class="suggest-why">{{ s.reason }}.</p>
+      {% if s.checked %}
+        {% if s.breaks %}
+        <p class="suggest-impact is-bad" title="{{ s.breaks|join(' · ') }}">Bryder {{ s.breaks|length }} hårdt krav i facitlisten</p>
+        {% else %}
+        <p class="suggest-impact is-ok">Ingen hårde krav i facitlisten påvirkes</p>
+        {% endif %}
+      {% else %}
+        <p class="suggest-impact">Facitlisten kunne ikke tjekkes her</p>
+      {% endif %}
     </div>
     {% endfor %}
   </div>

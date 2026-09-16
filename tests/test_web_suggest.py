@@ -76,3 +76,25 @@ def test_finder_kob_profilen_ikke_fangede(tmp_path, lot_factory):
         out = suggest.unmatched_marks(store.conn, _config())
 
     assert [row["lot_id"] for row in out] == ["b1"]
+
+
+def test_annotate_impact_markerer_brud_paa_facitlisten():
+    from auction_hunter.web.suggest import Suggestion, annotate_impact
+
+    forslag = Suggestion(action="remove", keyword="switch", category="it_tech",
+                         level="strong", seen=6, skip=5, pct=83)
+    out = annotate_impact([forslag], _config(), [
+        {"title": "Switch TP-LINK", "expect": "yes", "why": "x"},
+    ])
+    assert out[0].checked is True
+    assert out[0].breaks == ("Switch TP-LINK",)
+
+
+def test_annotate_impact_uden_facitliste_er_ukontrolleret():
+    from auction_hunter.web.suggest import Suggestion, annotate_impact
+
+    forslag = Suggestion(action="remove", keyword="switch", category="it_tech",
+                         level="strong", seen=6, skip=5, pct=83)
+    out = annotate_impact([forslag], _config(), [])
+    assert out[0].checked is False
+    assert out[0].breaks == ()

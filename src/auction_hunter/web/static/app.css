@@ -1272,6 +1272,9 @@ tr.run-error td{background:var(--urgent-soft);color:var(--urgent);font-size:var(
 }
 .suggest-where{font-size:var(--fs-caption);color:var(--text-3)}
 .suggest-why{grid-column:1/-1;margin:0;font-size:var(--fs-small);color:var(--text-2)}
+.suggest-impact{grid-column:1/-1;margin:0;font-size:var(--fs-caption);color:var(--text-3)}
+.suggest-impact.is-bad{color:var(--urgent);font-weight:600}
+.suggest-impact.is-ok{color:var(--ok)}
 .unmatched{margin-top:var(--sp-3)}
 
 /* ---- statistik: stoerre tal, tydeligere bjaelker ---- */

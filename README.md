@@ -233,8 +233,10 @@ konkret at fjerne nøgleord der oftest fører til noget du afviser. Der skal
 mindst fem afviste lots bag et ord, så et enkelt underligt lot ikke fører til
 en ændring, og intet ændres uden et klik. Den viser også de lots du har budt
 på eller købt, som profilen ikke fangede, som et hint om et manglende
-nøgleord. Analysen er ren regelbaseret; sprogmodellen kommer først ind når
-forslagene skal formuleres og prioriteres.
+nøgleord. Før du anvender et forslag, viser siden om det ville bryde et hårdt
+`yes`/`no`-krav i facitlisten (`config/match_expectations.jsonl`), så en
+ændring er en afvejning og ikke et gæt. Analysen er ren regelbaseret;
+sprogmodellen kommer først ind når forslagene skal formuleres og prioriteres.
 
 ### Assistent
 
@@ -350,7 +352,7 @@ To slags tests:
 
 - **Enhedstests** i `tests/test_textmatch.py` og `tests/test_matcher.py` bruger
   syntetiske titler og tester reglerne isoleret.
-- **Facitlisten** i `tests/corpus/match_expectations.jsonl` indeholder rigtige
+- **Facitlisten** i `config/match_expectations.jsonl` indeholder rigtige
   lot-titler med et menneskeligt svar: `yes`, `no` eller `maybe`.
 
 Facitlisten er den vigtigste artefakt. Auktionerne skifter indhold hele tiden,
