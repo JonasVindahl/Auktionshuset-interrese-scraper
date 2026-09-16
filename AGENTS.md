@@ -130,6 +130,14 @@ skifter tilbage til 'nyeste'.
 tilføj-formularer ligger bag `<details>` og virker uden JavaScript. Alle
 arkivfiltre er stadig server-side via GET-formularen.
 
+**Alt der kan tage tid skal vise at det arbejder.** Mest tydeligt i assistenten,
+hvor hele turen kører modelkald server-side før redirect: imens vises et skelet
+i tråden (`#chat-pending`) og en tynd streg i toppen (`#busy-bar`). Mønsteret er
+generelt: sæt `data-busy` på en formular eller et link, så tager
+`initBusyStates` i `app.js` sig af resten. Vi sætter ikke `disabled` på
+knapperne, for en knap med `name`/`value` bliver så ikke sendt med;
+`pointer-events` i CSS holder dobbeltklik ude i stedet.
+
 **Ingen inline JavaScript i skabelonerne.** CSP'en tillader kun script fra
 `/static`. Bekræftelser ligger på `data-confirm` og håndteres af en delegeret
 `submit`-lytter, og billedfejl fanges af en global `error`-lytter i

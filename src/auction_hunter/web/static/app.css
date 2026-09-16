@@ -791,6 +791,32 @@ th.col-meter{width:160px}
 .thread-history-list a{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
 .composer{display:flex;gap:var(--sp-2);align-items:center;margin-top:var(--sp-6)}
 .composer .search-field{flex:1}
+
+/* ---- ventetilstand ---- */
+/* En tynd streg i toppen mens en handling arbejder, og et skelet i traaden
+   mens assistenten taenker. Skaermen maa ikke staa stille. */
+#busy-bar{
+  position:fixed;top:0;left:0;height:3px;width:0;z-index:var(--z-modal);
+  background:var(--accent);opacity:0;pointer-events:none;
+  transition:width var(--dur-slower) var(--ease-out),opacity var(--dur-fast) var(--ease-standard);
+}
+#busy-bar.is-on{width:85%;opacity:1}
+form.is-busy .btn,form.is-busy input,form.is-busy button{pointer-events:none;opacity:.6}
+a.is-busy{pointer-events:none;opacity:.6}
+.turn.is-pending{opacity:.9}
+.skeleton-line{
+  display:block;height:12px;border-radius:var(--r-1);margin-bottom:9px;
+  background:linear-gradient(90deg,var(--surface-3) 25%,var(--surface-2) 37%,var(--surface-3) 63%);
+  background-size:400% 100%;animation:shimmer 1.4s ease-in-out infinite;
+}
+.skeleton-line:last-child{margin-bottom:0}
+.skeleton-line.is-wide{width:85%}
+.skeleton-line.is-short{width:50%}
+@keyframes shimmer{from{background-position:100% 0}to{background-position:0 0}}
+@media (prefers-reduced-motion:reduce){
+  .skeleton-line{animation:none;background:var(--surface-3)}
+  #busy-bar{transition:none}
+}
 .answer-actions{margin-top:14px}
 .answer-filter{display:flex;flex-wrap:wrap;gap:6px;align-items:center;
   margin-top:14px;padding-top:14px;

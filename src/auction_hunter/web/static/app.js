@@ -580,10 +580,52 @@
     });
   }
 
+  /* ---- ventetilstand: alt der kan tage tid skal vise at det arbejder ---- */
+
+  function initBusyStates() {
+    const bar = $('#busy-bar');
+    const showBar = () => { if (bar) bar.classList.add('is-on'); };
+    const hideBar = () => { if (bar) bar.classList.remove('is-on'); };
+
+    // Chatten svarer først når hele turen er kørt færdig server-side. Imens
+    // vises et skelet i tråden, så skærmen ikke står stille.
+    function showPendingTurn() {
+      const template = $('#chat-pending');
+      const thread = $('.thread');
+      if (!template || !thread || $('.turn.is-pending', thread)) return;
+      thread.appendChild(template.content.cloneNode(true));
+      const pending = $('.turn.is-pending', thread);
+      if (pending) pending.scrollIntoView({ block: 'end', behavior: 'smooth' });
+    }
+
+    // Vi rører ikke disabled-attributten: en knap med name/value skal stadig
+    // kunne sendes med. pointer-events i CSS holder dobbeltklik ude.
+    document.addEventListener('submit', event => {
+      const form = event.target;
+      if (!form || form.tagName !== 'FORM') return;
+      if (form.classList.contains('is-busy')) { event.preventDefault(); return; }
+      if (!form.classList.contains('composer') && !form.hasAttribute('data-busy')) return;
+      form.classList.add('is-busy');
+      form.setAttribute('aria-busy', 'true');
+      showBar();
+      if (form.classList.contains('composer')) showPendingTurn();
+    });
+
+    document.addEventListener('click', event => {
+      const link = event.target.closest('a[data-busy]');
+      if (!link) return;
+      showBar();
+      link.classList.add('is-busy');
+    });
+
+    window.addEventListener('pageshow', hideBar);
+  }
+
   initFindPage();
   initKeyboardNav();
   initView();
   initInterestBlocks();
   initArchiveForm();
   initSearchShortcut();
+  initBusyStates();
 })();
