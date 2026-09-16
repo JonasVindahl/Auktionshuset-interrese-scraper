@@ -59,8 +59,8 @@
   --border-input:#948d85;   /* 3.12:1, så feltet har en synlig kant */
   --text:#36322d;
   --text-2:#57524b;
-  --text-3:#777169;
-  --text-4:#948d85;
+  --text-3:#6b655d;   /* 5.0:1 paa den moerkeste flade den ligger paa */
+  --text-4:#948d85;   /* 3.1:1, kun ikoner og streger */
 
   /* Accent, amber H60. Trin 9 er hans #e8954a og er den eneste flade der
      bruges som brand. Lys tekst på den ville være 2.3:1, så knappen i lys
@@ -74,19 +74,19 @@
   --on-accent:#fffdfa;
 
   --ok:#2f7442; --ok-soft:#e7f4e9; --ok-line:#bcdcc4;
-  --warn:#947200; --warn-soft:#fcf1d8; --warn-line:#e6d5a4;
+  --warn:#745600; --warn-soft:#fcf1d8; --warn-line:#e6d5a4;
   --urgent:#aa342e; --urgent-soft:#ffebe8; --urgent-line:#f0c3bf;
   --maybe:#13658b; --maybe-soft:#e4f3fc; --maybe-line:#b6ddf0;
 
   /* Kategorifarver. Hues fra Okabe-Ito, som er konstrueret til at kunne
      skelnes ved rød-grøn-blindhed. Prikken bruger den mættede variant
      (3:1 som grafisk objekt), etiketten den mørkere tekstvariant (4.5:1). */
-  --cat-it_tech:#0072b2;            --cat-text-it_tech:#2377b2;
-  --cat-audio_hifi:#009e73;         --cat-text-audio_hifi:#00835f;
-  --cat-watches:#be861d;            --cat-text-watches:#996800;
-  --cat-maker_electronics:#249ad3;  --cat-text-maker_electronics:#007bad;
-  --cat-gaming:#ce72a6;             --cat-text-gaming:#a95886;
-  --cat-coffee:#d55e00;             --cat-text-coffee:#ae5d31;
+  --cat-it_tech:#0072b2;            --cat-text-it_tech:#2e6bb3;
+  --cat-audio_hifi:#009e73;         --cat-text-audio_hifi:#007771;
+  --cat-watches:#be861d;            --cat-text-watches:#8c6200;
+  --cat-maker_electronics:#249ad3;  --cat-text-maker_electronics:#0070a6;
+  --cat-gaming:#ce72a6;             --cat-text-gaming:#a24b7e;
+  --cat-coffee:#d55e00;             --cat-text-coffee:#b84300;
 
   /* typografi */
   --font:'Onest',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
@@ -537,10 +537,11 @@ select{appearance:none;padding-right:30px;cursor:pointer;
   display:inline-flex;align-items:center;gap:5px;
   font-size:var(--fs-caption);font-weight:600;
   color:var(--cat-text,var(--text-2));
-  background:color-mix(in oklab,var(--cat-color,var(--text-4)) 13%,transparent);
+  background:var(--surface-2);
   border-radius:var(--r-1);padding:2px 8px;cursor:help;
 }
-.tag-cat::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.tag-cat::before{content:"";width:6px;height:6px;border-radius:50%;flex:none;
+  background:var(--cat-color,var(--text-4))}
 .tag-maybe{font-size:var(--fs-caption);font-weight:600;background:var(--maybe-soft);
   color:var(--maybe);border-radius:var(--r-1);padding:2px 8px}
 .tag-miss{font-size:var(--fs-caption);color:var(--text-3);background:var(--surface-3);
