@@ -59,6 +59,93 @@
   </div>
 </details>
 
+{% if suggestions or unmatched %}
+<section class="section suggest">
+  <h2 class="section-title">Forslag fra dine markeringer <span class="count">{{ suggestions|length }}</span></h2>
+  <p class="section-note">Bygget på hvad du selv har afvist og købt. Tallene er antal lots, ikke et bevis. Intet ændres før du siger ja, og profilen bør køres mod facitlisten bagefter.</p>
+  {% if suggestions %}
+  <div class="suggest-list">
+    {% for s in suggestions %}
+    <div class="suggest-row">
+      <div class="suggest-main">
+        <span class="suggest-action">Fjern</span>
+        <span class="kw-text">{{ s.keyword }}</span>
+        <span class="suggest-where">{{ category_labels.get(s.category, s.category) }} · {{ s.level }}</span>
+      </div>
+      {% if editable %}
+      <form method="post" action="/interests/keyword"
+            data-confirm="Fjern {{ s.keyword }} fra {{ s.category }}.{{ s.level }}?">
+        <input type="hidden" name="action" value="remove">
+        <input type="hidden" name="category" value="{{ s.category }}">
+        <input type="hidden" name="level" value="{{ s.level }}">
+        <input type="hidden" name="keyword" value="{{ s.keyword }}">
+        <button type="submit" class="btn is-quiet">Fjern</button>
+      </form>
+      {% endif %}
+      <p class="suggest-why">{{ s.reason }}.</p>
+      {% if s.checked %}
+        {% if s.breaks %}
+        <p class="suggest-impact is-bad" title="{{ s.breaks|join(' · ') }}">Bryder {{ s.breaks|length }} hårdt krav i facitlisten</p>
+        {% else %}
+        <p class="suggest-impact is-ok">Ingen hårde krav i facitlisten påvirkes</p>
+        {% endif %}
+      {% else %}
+        <p class="suggest-impact">Facitlisten kunne ikke tjekkes her</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="empty">Ingen nøgleord støjer nok endnu. Der skal være mindst fem afviste lots bag et ord, før det foreslås.</p>
+  {% endif %}
+  {% if unmatched %}
+  <details class="unmatched"{% if ai %} open{% endif %}>
+    <summary class="btn is-quiet">{{ icon('info', 15) }} {{ unmatched|length }} køb profilen ikke fangede</summary>
+    <ul class="kw-list">
+      {% for m in unmatched %}<li class="kw"><span class="kw-text">{{ m.title[:80] }}</span></li>{% endfor %}
+    </ul>
+    <p class="hint">Lots du har budt på eller købt, som aldrig blev et fund. Det tyder på et manglende nøgleord.</p>
+    {% if ai_suggestions %}
+    <div class="suggest-list">
+      {% for s in ai_suggestions %}
+      <div class="suggest-row">
+        <div class="suggest-main">
+          <span class="suggest-action is-add">Tilføj</span>
+          <span class="kw-text">{{ s.keyword }}</span>
+          <span class="suggest-where">{{ category_labels.get(s.category, s.category) }} · {{ s.level }}</span>
+        </div>
+        {% if editable %}
+        <form method="post" action="/interests/keyword">
+          <input type="hidden" name="action" value="add">
+          <input type="hidden" name="category" value="{{ s.category }}">
+          <input type="hidden" name="level" value="{{ s.level }}">
+          <input type="hidden" name="keyword" value="{{ s.keyword }}">
+          <button type="submit" class="btn is-quiet">Tilføj</button>
+        </form>
+        {% endif %}
+        <p class="suggest-why">{{ s.reason }}</p>
+        {% if s.checked %}
+          {% if s.breaks %}
+          <p class="suggest-impact is-bad" title="{{ s.breaks|join(' · ') }}">Bryder {{ s.breaks|length }} hårdt krav i facitlisten</p>
+          {% else %}
+          <p class="suggest-impact is-ok">Ingen hårde krav i facitlisten påvirkes</p>
+          {% endif %}
+        {% else %}
+          <p class="suggest-impact">Facitlisten kunne ikke tjekkes her</p>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="hint">
+      <a class="btn" href="/interests?ai=1{% if selected %}&cat={{ selected.key }}{% endif %}">Spørg modellen om manglende nøgleord</a>
+    </p>
+    {% endif %}
+  </details>
+  {% endif %}
+</section>
+{% endif %}
+
 {% if categories %}
 <div class="editor">
   <nav class="cat-list" aria-label="Kategorier">

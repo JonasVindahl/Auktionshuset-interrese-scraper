@@ -818,6 +818,8 @@ th.col-meter{width:160px}
   display:flex;flex-wrap:wrap;gap:10px 24px;justify-content:space-between;align-items:center}
 .site-foot-links{display:flex;gap:20px}
 .site-foot-links a{display:inline-flex;align-items:center;gap:6px;min-height:26px;padding:2px 0}
+/* Log ud er en POST-formular, saa den ikke kan rammes af et <img src>. */
+.linkish-form{display:contents}
 .site-foot-links a:hover{color:var(--accent)}
 
 /* ---- motion ---- */
@@ -1255,6 +1257,26 @@ tr.run-error td{background:var(--urgent-soft);color:var(--urgent);font-size:var(
 }
 .lot-origin{margin-top:var(--sp-5)}
 .lot-origin .deflist{margin-top:0}
+
+/* ---- forslag fra markeringer ---- */
+.suggest-list{display:flex;flex-direction:column;gap:8px}
+.suggest-row{
+  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 16px;align-items:center;
+  padding:12px 16px;background:var(--surface);border-radius:var(--r-3);
+  box-shadow:var(--e1),var(--edge);
+}
+.suggest-main{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.suggest-action{
+  font-size:var(--fs-overline);font-weight:700;text-transform:uppercase;
+  letter-spacing:.1em;color:var(--urgent);
+}
+.suggest-action.is-add{color:var(--ok)}
+.suggest-where{font-size:var(--fs-caption);color:var(--text-3)}
+.suggest-why{grid-column:1/-1;margin:0;font-size:var(--fs-small);color:var(--text-2)}
+.suggest-impact{grid-column:1/-1;margin:0;font-size:var(--fs-caption);color:var(--text-3)}
+.suggest-impact.is-bad{color:var(--urgent);font-weight:600}
+.suggest-impact.is-ok{color:var(--ok)}
+.unmatched{margin-top:var(--sp-3)}
 
 /* ---- statistik: stoerre tal, tydeligere bjaelker ---- */
 .metric{padding:16px 18px}

@@ -8,6 +8,7 @@ kun overskrides opad.
 from __future__ import annotations
 
 import logging
+import os
 import signal
 import sys
 import time
@@ -18,8 +19,8 @@ from typing import Callable
 from . import images
 from .config import MIN_SCRAPE_INTERVAL_SECONDS, Config, ConfigError, Source, load_config
 from .classifier import Classifier, ClassifierSettings, OpenAICompatibleClient
-from .matcher import Match, match_all, sort_matches
-from .notifier import DiscordNotifier, send_digest
+from .matcher import Match, last_chance, match_all, sort_matches
+from .notifier import DiscordNotifier, LastChanceAlert, PriceAlert, send_digest
 from .scraper import ScrapeError, Scraper
 from .secrets import SecretError, get_secret, redact
 from .storage import Store
@@ -48,6 +49,13 @@ PRUNE_KEY = "pruned_at"
 # Minimum mellem to advarsler om samme problem.
 BLIND_ALERT_COOLDOWN_HOURS = 24
 
+# Hvor laenge en prisadvarsel hviler pr. lot. Uden den ville hvert budloft i en
+# travl auktion give en besked, og saa slår man ordningen fra igen.
+PRICE_ALERT_COOLDOWN_HOURS = 12
+
+# Hvor taet paa hammerslag et fulgt lot skal vaere foer "sidste chance".
+LAST_CHANCE_HOURS = 1.0
+
 
 @dataclass
 class RunStats:
@@ -64,6 +72,10 @@ class RunStats:
     pruned: int = 0
     images_cached: int = 0
     details_fetched: int = 0
+    lots_with_ends: int = 0
+    ends_parse_failures: int = 0
+    price_alerts: int = 0
+    last_chance: int = 0
     errors: list[str] = field(default_factory=list)
 
 
@@ -164,6 +176,15 @@ def check_blindness(stats: RunStats, store: Store) -> str | None:
             "midlertidigt ikke er aktive auktioner."
         )
 
+    if (stats.ends_parse_failures >= 5
+            and stats.ends_parse_failures >= stats.lots_with_ends * 0.5):
+        return (
+            "**Agenten kan ikke læse sluttidspunkter.**\n"
+            f"{stats.ends_parse_failures} af {stats.lots_with_ends} lots havde et "
+            "data-ends der ikke kunne parses. Formatet på auktionshusets side "
+            "er sandsynligvis ændret. Tjek scraper.parse_ends."
+        )
+
     baseline = store.last_successful_lot_count()
     if baseline and stats.lots < baseline * BLIND_THRESHOLD:
         return (
@@ -199,6 +220,174 @@ def alert_if_blind(stats: RunStats, store: Store, notifier: DiscordNotifier | No
         stats.blind_alert_sent = True
         return True
     return False
+
+
+def price_alerts_enabled() -> bool:
+    raw = os.environ.get("PRICE_ALERTS", "").strip().lower()
+    return raw not in ("0", "false", "nej", "no", "off")
+
+
+def select_price_alerts(
+    matches: list[Match],
+    actions: dict[str, str],
+    states: dict[str, tuple[int | None, str | None]],
+    *,
+    now: datetime | None = None,
+    cooldown_hours: float = PRICE_ALERT_COOLDOWN_HOURS,
+) -> list[PriceAlert]:
+    """Hvilke fulgte lots er steget nok til at give en besked?
+
+    Foerste gang et lot ses, findes der ingen raekke, og der sendes intet: den
+    pris bliver baseline. En stigning foer det tidspunkt kan vi ikke vide noget
+    om. Derefter kraever en besked at prisen er steget, at lot'et stadig er
+    aktivt, og at cooldown er udloebet.
+    """
+    now = now or datetime.now(timezone.utc)
+    out: list[PriceAlert] = []
+    for match in matches:
+        lot = match.lot
+        if actions.get(lot.lot_id) not in ("watch", "bid"):
+            continue
+        if lot.ends_at is not None and lot.ends_at <= now:
+            continue
+        state = states.get(lot.lot_id)
+        if state is None:
+            continue
+        old_cost, last_alerted = state
+        cost = match.cost
+        if old_cost is None or cost <= old_cost:
+            continue
+        if last_alerted:
+            try:
+                elapsed = (now - datetime.fromisoformat(last_alerted)).total_seconds()
+            except ValueError:
+                elapsed = None
+            if elapsed is not None and elapsed < cooldown_hours * 3600:
+                continue
+        out.append(
+            PriceAlert(
+                lot_id=lot.lot_id,
+                title=lot.title,
+                url=lot.url,
+                old_cost=old_cost,
+                new_cost=cost,
+                ends_at=lot.ends_at.isoformat(timespec="seconds") if lot.ends_at else None,
+            )
+        )
+    return out
+
+
+def maybe_price_alerts(
+    store: Store,
+    notifier: DiscordNotifier | None,
+    matches: list[Match],
+    stats: RunStats,
+) -> None:
+    """Send besked naar prisen stiger paa et lot brugeren selv foelger."""
+    if notifier is None or not matches or not price_alerts_enabled():
+        return
+
+    actions = store.feedback_actions([m.lot.lot_id for m in matches])
+    watched = [m for m in matches if actions.get(m.lot.lot_id) in ("watch", "bid")]
+    if not watched:
+        return
+
+    states = store.price_alert_state([m.lot.lot_id for m in watched])
+    alerts = select_price_alerts(matches, actions, states)
+    sent = bool(alerts) and notifier.send_price_alerts(alerts)
+    alerted = {a.lot_id for a in alerts}
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+    for match in watched:
+        lot_id = match.lot.lot_id
+        if sent and lot_id in alerted:
+            store.mark_price_alerted(lot_id, match.cost, now_iso)
+        elif lot_id not in alerted:
+            # Ingen besked endnu: hold baseline opdateret, saa naeste stigning
+            # maales fra den nyeste pris.
+            store.set_price_baseline(lot_id, match.cost)
+        # Fejlede beskeden, roeres prisen ikke, saa stigningen forsoeges igen.
+
+    if sent:
+        stats.price_alerts = len(alerts)
+
+
+def last_chance_alerts_enabled() -> bool:
+    raw = os.environ.get("LAST_CHANCE_ALERTS", "").strip().lower()
+    return raw not in ("0", "false", "nej", "no", "off")
+
+
+def last_chance_window_hours() -> float:
+    raw = os.environ.get("LAST_CHANCE_HOURS", "").strip()
+    try:
+        return float(raw) if raw else LAST_CHANCE_HOURS
+    except ValueError:
+        return LAST_CHANCE_HOURS
+
+
+def select_last_chance(
+    matches: list[Match],
+    actions: dict[str, str],
+    sent: set[str],
+    *,
+    now: datetime | None = None,
+    within_hours: float | None = None,
+) -> list[LastChanceAlert]:
+    """Fulgte lots hvor hammerslaget er taet paa, og vi ikke har sagt det.
+
+    Beskeden skal kun komme én gang pr. lot. Ellers ville den komme hvert 15.
+    minut i den sidste time.
+    """
+    now = now or datetime.now(timezone.utc)
+    hours = LAST_CHANCE_HOURS if within_hours is None else within_hours
+    out: list[LastChanceAlert] = []
+    for match in matches:
+        lot = match.lot
+        if actions.get(lot.lot_id) not in ("watch", "bid"):
+            continue
+        if lot.lot_id in sent:
+            continue
+        if not last_chance(lot, hours, now=now):
+            continue
+        out.append(
+            LastChanceAlert(
+                lot_id=lot.lot_id,
+                title=lot.title,
+                url=lot.url,
+                ends_at=lot.ends_at.isoformat(timespec="seconds") if lot.ends_at else None,
+            )
+        )
+    return out
+
+
+def maybe_last_chance(
+    store: Store,
+    notifier: DiscordNotifier | None,
+    matches: list[Match],
+    stats: RunStats,
+) -> None:
+    """Advar én gang naar et fulgt lot er taet paa hammerslag."""
+    if notifier is None or not matches or not last_chance_alerts_enabled():
+        return
+
+    actions = store.feedback_actions([m.lot.lot_id for m in matches])
+    watched = [m for m in matches if actions.get(m.lot.lot_id) in ("watch", "bid")]
+    if not watched:
+        return
+
+    sent = store.last_chance_sent([m.lot.lot_id for m in watched])
+    alerts = select_last_chance(
+        matches, actions, sent, within_hours=last_chance_window_hours()
+    )
+    if not alerts:
+        return
+
+    if notifier.send_last_chance(alerts):
+        store.mark_last_chance(
+            [alert.lot_id for alert in alerts],
+            datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        )
+        stats.last_chance = len(alerts)
 
 
 def maybe_prune(store: Store) -> dict[str, int]:
@@ -266,6 +455,10 @@ def run_once(
             scraper._polite_pause()
 
         stats.lots = len(all_lots)
+        # Scraperen taeller hvor mange data-ends der ikke kunne parses. Uden
+        # det fjerner et aendret format alle deadlines uden en lyd.
+        stats.lots_with_ends = int(getattr(scraper, "lots_with_ends", 0))
+        stats.ends_parse_failures = int(getattr(scraper, "ends_parse_failures", 0))
 
         matches = sort_matches(match_all(all_lots, config, opening_bid=config.opening_bid))
         stats.matches = len(matches)
@@ -319,6 +512,14 @@ def run_once(
             # besked forsøges igen ved næste kørsel i stedet for at gå tabt.
             for match in result.sent:
                 store.mark_notified(match.lot.lot_id, match.category.key, match.cost)
+
+        # Prisen kan stige på et lot brugeren selv følger. Det er den anden
+        # slags ny information ud over et nyt fund.
+        maybe_price_alerts(store, notifier, matches, stats)
+
+        # Og naar et fulgt lot er taet paa hammerslag, saa det ikke bliver
+        # opdaget for sent.
+        maybe_last_chance(store, notifier, matches, stats)
 
         # Grænsetilfælde sendes samlet i ét digest i stedet for én ad gangen,
         # så de ikke støjer i nuet. Først når beskeden er leveret markeres de,

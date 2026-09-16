@@ -243,6 +243,13 @@ class OpenAICompatibleClient:
                         return body["choices"][0]["message"]["content"]
                     except (KeyError, IndexError, TypeError) as exc:
                         raise LLMError(f"Uventet svarformat fra modellen: {body}") from exc
+                if (status == 400 and "max_tokens" in payload
+                        and "max_tokens" in str(body).lower()):
+                    # Nyere modeller (o-serien) afviser max_tokens og vil have
+                    # max_completion_tokens. Proev én gang med det rigtige navn.
+                    payload["max_completion_tokens"] = payload.pop("max_tokens")
+                    log.info("Modellen afviste max_tokens — proever max_completion_tokens")
+                    continue
                 if status in (429, 500, 502, 503, 504):
                     last_error = LLMError(f"HTTP {status}: {str(body)[:200]}")
                     log.warning("Sprogmodellen svarede %s (forsøg %d/%d)",
@@ -286,12 +293,21 @@ class Classifier:
 
         cached = self.store.cached_classification(key)
         if cached is not None:
-            return Classification(
-                verdict=Verdict(cached["verdict"]),
-                reason=cached["reason"],
-                model=cached["model"],
-                source="cache",
-            )
+            try:
+                verdict = Verdict(cached["verdict"])
+            except ValueError:
+                # En ukendt vaerdi i cachen (fx efter en manuel rettelse i
+                # databasen) maa ikke vaelte hele AI-trinnet. Behandl den som
+                # et cache-miss og spoerg modellen igen.
+                log.warning("Ukendt verdict i cachen for %s: %r",
+                            match.lot.lot_id, cached["verdict"])
+            else:
+                return Classification(
+                    verdict=verdict,
+                    reason=cached["reason"],
+                    model=cached["model"],
+                    source="cache",
+                )
 
         prompt = build_user_prompt(
             title=match.lot.title,

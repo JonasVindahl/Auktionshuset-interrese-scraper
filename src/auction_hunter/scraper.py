@@ -120,6 +120,10 @@ class Scraper:
         self.max_retries = max_retries
         self.session = session or requests.Session()
         self.session.headers.update(DEFAULT_HEADERS)
+        # Taelles op under parsingen, saa et aendret data-ends-format kan
+        # opdages i stedet for at fjerne alle deadlines i stilhed.
+        self.lots_with_ends = 0
+        self.ends_parse_failures = 0
 
     def _get(self, url: str) -> str:
         last_error: Exception | None = None
@@ -322,6 +326,13 @@ class Scraper:
             image_el = item.select_one("img")
             image_url = self._image_url(image_el) if image_el else ""
 
+            ends_raw = item.get("data-ends")
+            if ends_raw:
+                self.lots_with_ends += 1
+            ends_at = parse_ends(ends_raw)
+            if ends_raw and ends_at is None:
+                self.ends_parse_failures += 1
+
             classes = item.get("class") or []
 
             lots.append(
@@ -334,7 +345,7 @@ class Scraper:
                     auction_title=auction.title,
                     current_bid=current_bid,
                     total_price=total_price,
-                    ends_at=parse_ends(item.get("data-ends")),
+                    ends_at=ends_at,
                     image_url=image_url,
                     has_bids="item-bid" in classes,
                 )

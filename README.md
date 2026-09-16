@@ -14,7 +14,11 @@ Hvert 15. minut (auktionshusets vilkår tillader ikke hurtigere):
    samme ord
 3. Matcher mod interesseprofilen i `config/interests.yml`
 4. Fratrækker udelukkelser, så høretelefoner og tastaturer ikke støjer
-5. Slår op i SQLite-hukommelsen og beholder kun nye lots og prisændringer
+5. Slår op i SQLite-hukommelsen og beholder kun nye lots. Stiger prisen på et
+   lot du følger eller har budt på, giver det sin egen besked — højst hver 12.
+   time pr. lot, så en travl auktion ikke fylder kanalen (slås fra med
+   `PRICE_ALERTS=0`). Er et fulgt lot tæt på hammerslag, kommer der også én
+   besked om det (`LAST_CHANCE_ALERTS=0`)
 6. Lader en sprogmodel vurdere de nye fund (valgfrit, se nedenfor) — støj
    afvises, og grænsetilfælde lægges i et samlet digest
 7. Sender fund til Discord som embeds, højst 10 pr. besked
@@ -225,6 +229,22 @@ Feltet **Test en titel** kører den rigtige matcher på en titel og viser hvilke
 nøgleord der blev ramt, eller hvad der manglede. Det er den hurtigste vej til
 at forstå hvorfor noget slap igennem eller blev væk.
 
+Sektionen **Forslag fra dine markeringer** læser din feedback og foreslår
+konkret at fjerne nøgleord der oftest fører til noget du afviser. Der skal
+mindst fem afviste lots bag et ord, så et enkelt underligt lot ikke fører til
+en ændring, og intet ændres uden et klik. Den viser også de lots du har budt
+på eller købt, som profilen ikke fangede, som et hint om et manglende
+nøgleord. Før du anvender et forslag, viser siden om det ville bryde et hårdt
+`yes`/`no`-krav i facitlisten (`config/match_expectations.jsonl`), så en
+ændring er en afvejning og ikke et gæt. Analysen er ren regelbaseret.
+
+Knappen **Spørg modellen om manglende nøgleord** (`/interests?ai=1`) sender de
+køb profilen ikke fangede til sprogmodellen og beder om et nøgleord pr. titel.
+Den kører kun når du beder om det, så siden ikke spørger af sig selv. Python
+tjekker at ordet faktisk står i titlen, at kategorien og niveauet findes, og at
+ordet ikke allerede står der — et svar der ikke kan efterprøves, bliver ikke et
+forslag.
+
 ### Assistent
 
 Spørg i almindeligt sprog: *«har der været Sennheiser-forstærkere under 1.000
@@ -339,7 +359,7 @@ To slags tests:
 
 - **Enhedstests** i `tests/test_textmatch.py` og `tests/test_matcher.py` bruger
   syntetiske titler og tester reglerne isoleret.
-- **Facitlisten** i `tests/corpus/match_expectations.jsonl` indeholder rigtige
+- **Facitlisten** i `config/match_expectations.jsonl` indeholder rigtige
   lot-titler med et menneskeligt svar: `yes`, `no` eller `maybe`.
 
 Facitlisten er den vigtigste artefakt. Auktionerne skifter indhold hele tiden,

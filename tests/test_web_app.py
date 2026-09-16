@@ -408,8 +408,18 @@ def test_login_blokerer_protokolrelativ_omdirigering(locked_client):
 def test_logout_lukker_adgangen(locked_client):
     locked_client.post("/login", data={"password": "hemmelig123", "next": "/"})
     assert locked_client.get("/").status_code == 200
-    locked_client.get("/logout")
+    # Log ud er en POST, saa den ikke kan rammes af et <img src> fra en anden side.
+    locked_client.post("/logout")
     assert locked_client.get("/").status_code == 303
+
+
+def test_for_mange_loginfoersoeg_blokeres(locked_client):
+    for _ in range(5):
+        locked_client.post("/login", data={"password": "forkert", "next": "/"})
+    response = locked_client.post(
+        "/login", data={"password": "hemmelig123", "next": "/"}
+    )
+    assert response.status_code == 429
 
 
 def test_redigering_kraever_login(locked_client, sample_config):

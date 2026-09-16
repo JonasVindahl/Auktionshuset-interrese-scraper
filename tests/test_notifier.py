@@ -185,3 +185,35 @@ def test_embed_skriver_loftet_med_dansk_tusindtal():
     tekst = " ".join(f["value"] for f in embed["fields"])
     assert "kr" in tekst
     assert "," not in tekst, "tusindtal skal skrives med punktum"
+
+
+def test_prisadvarsel_naevner_titel_og_beloeb():
+    from auction_hunter.notifier import PriceAlert, build_price_alerts
+
+    text = build_price_alerts([PriceAlert(
+        lot_id="L1", title="Synology DS1817+ NAS", url="https://x/1",
+        old_cost=1250, new_cost=1450, ends_at=None,
+    )])
+    assert "Synology" in text
+    assert "1.250" in text and "1.450" in text
+
+
+def test_tom_prisadvarsel_giver_ingen_besked():
+    from auction_hunter.notifier import build_price_alerts
+    assert build_price_alerts([]) == ""
+
+
+def test_sidste_chance_naevner_titel_og_tid():
+    from auction_hunter.notifier import LastChanceAlert, build_last_chance
+
+    text = build_last_chance([LastChanceAlert(
+        lot_id="L1", title="Thorens TD160 pladespiller", url="https://x/1",
+        ends_at=None,
+    )])
+    assert "Thorens" in text
+    assert "slutter snart" in text
+
+
+def test_tom_sidste_chance_giver_ingen_besked():
+    from auction_hunter.notifier import build_last_chance
+    assert build_last_chance([]) == ""

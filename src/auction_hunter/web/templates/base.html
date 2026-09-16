@@ -47,7 +47,9 @@
     <button type="button" class="linkish" data-keys-open>{{ icon('keyboard', 14) }} Tastaturgenveje</button>
     <a href="/export/feedback.csv">{{ icon('download', 14) }} Markeringer som CSV</a>
     <a href="/export/archive.csv">{{ icon('download', 14) }} Arkiv som CSV</a>
-    <a href="/logout">{{ icon('logout', 14) }} Log ud</a>
+    <form method="post" action="/logout" class="linkish-form">
+      <button type="submit" class="linkish">{{ icon('logout', 14) }} Log ud</button>
+    </form>
   </p>
 </footer>
 

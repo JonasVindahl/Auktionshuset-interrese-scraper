@@ -12,6 +12,7 @@ import io
 import logging
 import os
 import sqlite3
+import time
 from pathlib import Path
 from typing import Annotated, Any, Callable
 
@@ -25,6 +26,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.status import HTTP_303_SEE_OTHER
 
+from .. import evaluate as evaluate_mod
 from .. import images as images_mod
 from ..classifier import OpenAICompatibleClient
 from ..config import DEFAULT_CONFIG_PATH, ConfigError, load_config
@@ -39,6 +41,7 @@ from . import (
     rows as rows_mod,
     search as search_mod,
     similar as similar_mod,
+    suggest as suggest_mod,
 )
 from .formatting import date_label, kr, rel_past, time_left, timestamp
 from .yamledit import EditError, InterestsFile, LEVELS
@@ -386,6 +389,27 @@ def create_app() -> FastAPI:
 
     # -- login -------------------------------------------------------------
 
+    # Dashboardet har én adgangskode, så et hurtigt ordbogsangreb er den
+    # realistiske trussel. Tælleren lever i processen, hvilket er nok fordi
+    # uvicorn kører én worker. Bag en reverse proxy er client.host proxyens
+    # adresse, så grænsen bliver global frem for per klient; det er
+    # acceptabelt for et enkeltbruger-dashboard.
+    LOGIN_MAX_ATTEMPTS = 5
+    LOGIN_WINDOW_SECONDS = 900
+    _login_failures: dict[str, list[float]] = {}
+
+    def _login_key(request: Request) -> str:
+        return request.client.host if request.client else "ukendt"
+
+    def _recent_failures(key: str) -> list[float]:
+        now = time.monotonic()
+        recent = [t for t in _login_failures.get(key, []) if now - t < LOGIN_WINDOW_SECONDS]
+        if recent:
+            _login_failures[key] = recent
+        else:
+            _login_failures.pop(key, None)
+        return recent
+
     def require_login(request: Request) -> None:
         if not auth.auth_required():
             return
@@ -421,16 +445,25 @@ def create_app() -> FastAPI:
     def login_submit(
         request: Request, password: str = Form(""), next: str = Form("/")
     ) -> Any:
+        key = _login_key(request)
+        if len(_recent_failures(key)) >= LOGIN_MAX_ATTEMPTS:
+            return templates.TemplateResponse(
+                request, "login.html",
+                {"next": next, "error": "For mange forsøg. Prøv igen om et kvarter."},
+                status_code=429,
+            )
         if auth.check_password(password):
+            _login_failures.pop(key, None)
             request.session[auth.SESSION_KEY] = True
             return RedirectResponse(safe_next(next), HTTP_303_SEE_OTHER)
+        _login_failures.setdefault(key, []).append(time.monotonic())
         return templates.TemplateResponse(
             request, "login.html",
             {"next": next, "error": "Forkert adgangskode."},
             status_code=401,
         )
 
-    @app.get("/logout")
+    @app.post("/logout")
     def logout(request: Request) -> RedirectResponse:
         request.session.clear()
         return RedirectResponse("/login", HTTP_303_SEE_OTHER)
@@ -617,6 +650,7 @@ def create_app() -> FastAPI:
         error: str = "",
         test: str = "",
         cat: str = "",
+        ai: bool = False,
         _: None = Depends(require_login),
     ) -> HTMLResponse:
         try:
@@ -646,6 +680,40 @@ def create_app() -> FastAPI:
             except ConfigError as exc:
                 error = error or f"Konfigurationen kunne ikke læses: {exc}"
 
+        # Forslag fra feedbacken. Ren regelbaseret analyse, ingen model: den
+        # skal være billig og forudsigelig, og den foreslår aldrig selv et nyt
+        # nøgleord. Intet anvendes uden et klik.
+        suggestions: list = []
+        unmatched: list = []
+        suggest_config = None
+        try:
+            suggest_config = load_config(config_path())
+            suggest_conn = queries.ro_conn(db_path())
+            try:
+                suggestions = suggest_mod.noisy_keywords(suggest_conn, suggest_config)
+                unmatched = suggest_mod.unmatched_marks(suggest_conn, suggest_config)
+                # Facitliste-porten: vis om et forslag ville bryde et hårdt krav.
+                suggestions = suggest_mod.annotate_impact(
+                    suggestions, suggest_config, evaluate_mod.load_corpus()
+                )
+            finally:
+                suggest_conn.close()
+        except (ConfigError, sqlite3.Error, OSError):
+            pass
+
+        # Modellens forslag køres kun når man beder om det: det koster et kald,
+        # og siden skal ikke spørge af sig selv hver gang man kigger forbi.
+        ai_suggestions: list = []
+        if ai and unmatched and suggest_config is not None:
+            client = llm_client()
+            if client is not None:
+                titles = [row["title"] for row in unmatched]
+                entries = chat_mod.suggest_keywords(suggest_config, client, titles)
+                ai_suggestions = suggest_mod.from_model(entries, suggest_config, titles)
+                ai_suggestions = suggest_mod.annotate_impact(
+                    ai_suggestions, suggest_config, evaluate_mod.load_corpus()
+                )
+
         # To-punkts-editoren viser én kategori ad gangen. Uden et gyldigt valg
         # falder den tilbage til den første, så siden aldrig står tom.
         selected = next(
@@ -659,6 +727,8 @@ def create_app() -> FastAPI:
             excludes=excludes, levels=LEVELS,
             message=message, error=error or read_error,
             test=test, trace=trace, explanation=explanation,
+            suggestions=suggestions, unmatched=unmatched,
+            ai=ai, ai_suggestions=ai_suggestions,
             editable=os.access(config_path() or "config/interests.yml", os.W_OK),
         )
 
