@@ -273,6 +273,11 @@ fundne lots, og hvad samme slags er gået for tidligere. Modellen finder ikke p�
 beløb, og hver række den får, bærer din egen markering, så den kan svare på
 «har jeg afvist noget lignende».
 
+Spørger du hvad en bestemt vare er værd, kan modellen pege på den kandidat
+spørgsmålet handler om. Så hentes lot'ets egne sammenlignelige salg og dets
+prisforløb, og de vises som et panel under svaret: typisk, laveste og højeste,
+hvert tidligere salg med pris og dato, og pris-kurven.
+
 ### Billeder
 
 Auktionshuset fjerner et lots billede i samme øjeblik auktionen lukker. Det er

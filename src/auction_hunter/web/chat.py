@@ -33,7 +33,7 @@ from ..config import Config
 from ..matcher import match_lot
 from ..scraper import Lot
 from ..textmatch import find_keywords
-from . import similar
+from . import queries, similar
 from .formatting import kr, time_left
 from .search import SearchQuery, search
 
@@ -81,7 +81,11 @@ ANSWER_SYSTEM = (
     "er relevant. Find ikke på lots der ikke står i listen, og find ikke på "
     "beløb. Du får også et prisoverblik over det fundne sæt og, når det "
     "findes, hvad samme slags er gået for tidligere; brug de tal hvis "
-    "spørgsmålet handler om hvad noget er værd."
+    "spørgsmålet handler om hvad noget er værd.\n"
+    "sammenlign  valgfrit. Nummeret på den kandidat spørgsmålet handler om, når "
+    "det handler om hvad noget er værd. Så hentes arkivets tidligere salg af "
+    "samme slags og lot'ets eget prisforløb og vises under svaret. Udelad "
+    "feltet hvis spørgsmålet ikke handler om en bestemt vare."
 )
 
 _FEEDBACK_LABELS = {
@@ -117,6 +121,18 @@ EXPLAIN_SYSTEM = (
 
 
 @dataclass
+class Valuation:
+    """Et lot assistenten vurderer: dets egne tal og hvad samme slags gik for."""
+
+    lot_id: str
+    title: str
+    url: str
+    total: int | None = None
+    comps: object = None
+    series: list = field(default_factory=list)
+
+
+@dataclass
 class ChatAnswer:
     text: str
     rows: list[sqlite3.Row] = field(default_factory=list)
@@ -126,6 +142,7 @@ class ChatAnswer:
     selected: bool = False      # True når modellen selv valgte rækkerne
     total: int = 0              # hvor mange arkivet matchede i alt
     archive_url: str = ""       # samme filter, aabnet i arkivets eget UI
+    valuation: Valuation | None = None   # naar spoergsmaalet er hvad noget er vaerd
 
 
 def _extract_json(raw: str) -> dict:
@@ -257,6 +274,23 @@ def _price_summary(rows: list[sqlite3.Row]) -> str:
     return (
         f"Priser i det fundne sæt: median {kr(median)}, laveste {kr(prices[0])}, "
         f"højeste {kr(prices[-1])}, over {len(prices)} af {len(rows)} lots med en pris."
+    )
+
+
+def _valuation(conn: sqlite3.Connection, row: sqlite3.Row) -> Valuation:
+    """Det valgte lots egne tal, de sammenlignelige salg og prisforløbet."""
+    try:
+        comps = similar.find(conn, lot_id=row["lot_id"], title=row["title"] or "")
+    except sqlite3.Error:
+        comps = similar.Comparables()
+    series = queries.price_series(conn, [row["lot_id"]]).get(row["lot_id"], [])
+    return Valuation(
+        lot_id=row["lot_id"],
+        title=row["title"] or "",
+        url=row["url"] or "",
+        total=row["last_total"] or row["last_bid"],
+        comps=comps,
+        series=series,
     )
 
 
@@ -460,6 +494,15 @@ def ask(
 
     picked = _selected_rows(candidates, payload.get("valgte"))
     text = str(payload.get("svar") or "").strip() or raw.strip()
+
+    # Modellen kan pege paa den kandidat spoergsmaalet handler om. Nummeret
+    # valideres mod listen, og resten bygges af Python.
+    valuation = None
+    if payload.get("sammenlign") is not None:
+        subject = _selected_rows(candidates, [payload.get("sammenlign")])
+        if subject:
+            valuation = _valuation(conn, subject[0])
+
     return finish(ChatAnswer(
         text=text,
         rows=picked,
@@ -468,6 +511,7 @@ def ask(
         considered=len(candidates),
         selected=True,
         total=result.total,
+        valuation=valuation,
     ))
 
 

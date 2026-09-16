@@ -543,3 +543,24 @@ def test_billedrute_taaler_ondsindet_lot_id(client):
     """lot_id kommer fra auktionshusets HTML og må ikke kunne læse filer."""
     for evil in ["..%2F..%2F..%2Fetc%2Fpasswd", "....//....//etc/passwd"]:
         assert client.get(f"/image/{evil}").status_code in (404, 400)
+
+
+def test_chat_viser_vurderingspanel(client, monkeypatch):
+    """Når spørgsmålet handler om hvad noget er værd, vises arkivets egne tal."""
+    import auction_hunter.web.app as appmod
+
+    class Sequence:
+        def __init__(self):
+            self.calls = 0
+
+        def complete(self, *, system, user, max_tokens=120):
+            self.calls += 1
+            if self.calls == 1:
+                return '{"kategori": "it_tech"}'
+            return ('{"valgte": [1], "svar": "Her er hvad den er værd.", '
+                    '"sammenlign": 1}')
+
+    monkeypatch.setattr(appmod, "llm_client", lambda: Sequence())
+    response = client.get("/chat?q=hvad er den vaerd")
+    assert response.status_code == 200
+    assert "Hvad samme slags er gået for" in response.text

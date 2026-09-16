@@ -386,3 +386,14 @@ def test_sammenlignelige_naevner_priser_og_datoer(tmp_path, lot_factory):
     assert "median" in note
     assert "Eksempler" in note
     assert "kr" in note
+
+
+def test_sammenlign_giver_en_vurdering(conn):
+    client = FakeClient(
+        json.dumps({"kategori": "it_tech"}),
+        json.dumps({"valgte": [1], "svar": "Svar.", "sammenlign": 1}),
+    )
+    answer = ask(conn, client, "hvad er den vaerd?", categories=["it_tech"])
+    assert answer.valuation is not None
+    assert answer.valuation.title
+    assert answer.valuation.lot_id == answer.rows[0]["lot_id"]

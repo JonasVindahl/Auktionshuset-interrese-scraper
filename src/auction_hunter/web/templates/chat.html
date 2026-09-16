@@ -52,6 +52,55 @@
   {% endif %}
 </div>
 
+{% if answer.valuation %}
+<section class="section">
+  <h2 class="section-title">Hvad samme slags er gået for <span class="count">{{ answer.valuation.comps.count }}</span></h2>
+  <p class="section-note">{{ answer.valuation.title }}</p>
+  {% if answer.valuation.comps.count %}
+  <div class="panel comps">
+    <div class="comp-summary">
+      <div><dt>Typisk</dt><dd>{{ answer.valuation.comps.median|kr }}</dd></div>
+      <div><dt>Laveste</dt><dd>{{ answer.valuation.comps.low|kr }}</dd></div>
+      <div><dt>Højeste</dt><dd>{{ answer.valuation.comps.high|kr }}</dd></div>
+    </div>
+    <ol class="comp-list">
+      {% for sale in answer.valuation.comps.items %}
+      <li class="comp">
+        <span class="comp-price">{{ sale.total|kr }}</span>
+        <span class="comp-title">
+          <a href="/lot/{{ sale.lot_id }}">{{ sale.title[:70] }}</a>
+          <span class="muted-note">hammer {{ sale.hammer|kr }} · {{ sale.ended_at[:10] }}</span>
+        </span>
+        <span class="comp-shared" title="Fælles ord">{{ sale.shared|length }}</span>
+      </li>
+      {% endfor %}
+    </ol>
+  </div>
+  {% else %}
+  <p class="empty">Arkivet har ikke tidligere salg der ligner dette nok.</p>
+  {% endif %}
+  {% if answer.valuation.series and answer.valuation.series|length > 1 %}
+  <h2 class="section-title">Prisforløb</h2>
+  {% set lo = answer.valuation.series|min %}
+  {% set hi = answer.valuation.series|max %}
+  {% set span = (hi - lo) if hi > lo else 1 %}
+  <div class="panel spark-large">
+    <svg viewBox="0 0 300 70" preserveAspectRatio="none" role="img"
+         aria-label="Prisforløb over {{ answer.valuation.series|length }} observationer">
+      <polyline fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linejoin="round" stroke-linecap="round"
+                points="{% for v in answer.valuation.series %}{{ (loop.index0 / (answer.valuation.series|length - 1) * 296 + 2)|round(1) }},{{ (66 - (v - lo) / span * 58)|round(1) }}{% if not loop.last %} {% endif %}{% endfor %}"/>
+    </svg>
+    <p class="spark-legend">
+      <span>{{ answer.valuation.series[0]|kr }}</span>
+      <span>{{ answer.valuation.series|length }} observationer</span>
+      <span>{{ answer.valuation.series[-1]|kr }}</span>
+    </p>
+  </div>
+  {% endif %}
+</section>
+{% endif %}
+
 {% if rows %}
 <section class="section">
   <h2 class="section-title">
