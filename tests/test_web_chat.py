@@ -270,3 +270,130 @@ def test_tomt_valg_giver_ingen_raekker(conn):
     answer = ask(conn, client, "hvad?")
     assert answer.rows == []
     assert answer.selected is True
+
+
+# -- udvidelse, redning og arkiv-link --------------------------------------
+
+def test_soegeord_udvides_og_slaas_sammen_med_or():
+    client = FakeClient(json.dumps({"soegeord": ["nvme", "ssd", "nas", "nuc"]}))
+    query, degraded = build_filter(client, "ting der normalt har SSD eller NVMe")
+    assert query.any_words is True
+    assert query.text == "nvme ssd nas nuc"
+    assert degraded is False
+
+
+def test_alle_ord_kraever_and():
+    client = FakeClient(json.dumps({"soegeord": ["sennheiser", "hd650"], "alle_ord": True}))
+    query, _ = build_filter(client, "Sennheiser HD650")
+    assert query.any_words is False
+
+
+def test_modellen_kan_vaelge_kategori():
+    client = FakeClient(json.dumps({"soegeord": ["nas"], "kategori": "it_tech"}))
+    query, _ = build_filter(client, "NAS", categories=["it_tech", "audio_hifi"])
+    assert query.category == "it_tech"
+    assert "it_tech" in client.calls[0]["user"]
+
+
+def test_arkivet_link_baerer_filteret():
+    from auction_hunter.web.chat import archive_url
+    from auction_hunter.web.search import SearchQuery
+
+    url = archive_url(SearchQuery(text="nas nuc", category="it_tech", max_price=2000))
+    assert url.startswith("/archive?")
+    assert "q=nas+nuc" in url
+    assert "category=it_tech" in url
+    assert "max_price=2000" in url
+
+
+def test_tomt_soegeresultat_reddes_af_de_andre_filtre(conn):
+    # Modellen vælger et søgeord der ikke findes, men en kategori der gør.
+    client = FakeClient(
+        json.dumps({"soegeord": ["findes-slet-ikke-xyz"], "kategori": "it_tech"}),
+        json.dumps({"valgte": [1], "svar": "Her er hvad der matcher."}),
+    )
+    answer = ask(conn, client, "noget med it", categories=["it_tech"])
+    assert answer.total > 0
+    assert answer.rows
+    assert "søgeordene" in answer.text
+    assert answer.archive_url.startswith("/archive?")
+
+
+# -- prisoversigt, sammenlignelige salg og markeringer ---------------------
+
+def test_prisoversigt_regner_median():
+    from auction_hunter.web.chat import _price_summary
+
+    rows = [
+        {"last_total": 100, "last_bid": 80},
+        {"last_total": 300, "last_bid": 300},
+        {"last_total": None, "last_bid": 200},
+    ]
+    text = _price_summary(rows)
+    assert "median 200" in text
+    assert "laveste 100" in text
+    assert "3 af 3" in text
+
+
+def test_prisoversigt_uden_priser_er_tom():
+    from auction_hunter.web.chat import _price_summary
+    assert _price_summary([{"last_total": None, "last_bid": None}]) == ""
+
+
+def test_raekker_til_modellen_naevner_markering():
+    from auction_hunter.web.chat import _rows_for_model
+
+    rows = [{
+        "title": "Synology DS1817+ NAS", "last_total": 4400, "last_bid": 4000,
+        "ends_at": None, "was_match": 1, "feedback_action": "skip",
+    }]
+    assert "du har afvist" in _rows_for_model(rows)
+
+
+def test_sammenlignelige_er_tomt_naar_intet_ligner(conn):
+    from auction_hunter.web.chat import _comparables_note
+    assert _comparables_note(conn, []) == ""
+
+
+def test_svaret_faar_prisoversigt_med(conn):
+    client = FakeClient(
+        json.dumps({"kategori": "it_tech"}),
+        json.dumps({"valgte": [1], "svar": "Svar."}),
+    )
+    ask(conn, client, "hvad koster de?", categories=["it_tech"])
+    assert "median" in client.calls[1]["user"]
+
+
+def test_sammenlignelige_naevner_priser_og_datoer(tmp_path, lot_factory):
+    from auction_hunter.storage import Store
+    from auction_hunter.web.chat import _comparables_note
+
+    with Store(tmp_path / "t.db") as store:
+        store.record_lots(
+            [
+                lot_factory("a", "Thorens TD160 pladespiller", ends_in_hours=-720,
+                            first_bid=900, total=1250),
+                lot_factory("b", "Thorens TD160 pladespiller defekt", ends_in_hours=-48,
+                            first_bid=700, total=950),
+            ],
+            {"a": 1250, "b": 950},
+        )
+        store.conn.commit()
+        note = _comparables_note(
+            store.conn, [{"lot_id": "a", "title": "Thorens TD160 pladespiller"}]
+        )
+
+    assert "median" in note
+    assert "Eksempler" in note
+    assert "kr" in note
+
+
+def test_sammenlign_giver_en_vurdering(conn):
+    client = FakeClient(
+        json.dumps({"kategori": "it_tech"}),
+        json.dumps({"valgte": [1], "svar": "Svar.", "sammenlign": 1}),
+    )
+    answer = ask(conn, client, "hvad er den vaerd?", categories=["it_tech"])
+    assert answer.valuation is not None
+    assert answer.valuation.title
+    assert answer.valuation.lot_id == answer.rows[0]["lot_id"]

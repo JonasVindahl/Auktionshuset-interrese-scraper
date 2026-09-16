@@ -7,6 +7,13 @@
   'søgeord': 'Søgeord', 'min_pris': 'Fra', 'maks_pris': 'Til',
   'status': 'Status', 'kun': 'Match', 'dage_tilbage': 'Periode'
 } %}
+{% set forslag = [
+  'Hvilke NAS-enheder er der lige nu?',
+  'Hvad slutter inden for et døgn?',
+  'Hvad har Synology været gået for?',
+  'Vis pladespillere som ikke blev til fund',
+  'Hvad har været af servere de sidste 30 dage?'
+] %}
 
 {% block title %}Assistent · Auktionshuset Hunter{% endblock %}
 {% block page_class %}is-narrow{% endblock %}
@@ -15,17 +22,8 @@
 <header class="page-head">
   <p class="overline">{{ icon('search', 13) }} Spørg arkivet</p>
   <h1>Assistent</h1>
-  <p class="page-meta">Stil et spørgsmål i almindeligt sprog, og få et svar bygget på arkivet.</p>
+  <p class="page-meta">En samtale om arkivet. Spørg i almindeligt sprog, og byg videre på svaret.</p>
 </header>
-
-<form class="search-form" method="get" action="/chat">
-  <div class="search-field">
-    {{ icon('search', 17) }}
-    <input type="search" name="q" value="{{ question }}" data-search
-           placeholder="Spørg om arkivet" aria-label="Spørgsmål til arkivet">
-  </div>
-  <button class="btn is-primary" type="submit">Spørg</button>
-</form>
 
 {% if not has_key %}
 <p class="banner is-note" role="status">
@@ -34,76 +32,138 @@
 </p>
 {% endif %}
 
-{% if answer %}
-<div class="answer">
-  <p class="answer-text">{{ answer.text }}</p>
-  {% if answer.filter_used %}
-  <p class="answer-filter">
-    <span class="answer-filter-label">Søgte efter</span>
-    {% for key, value in answer.filter_used.items() %}
-    <span class="tag">{{ filter_labels.get(key, key) }}: {{ value }}</span>
-    {% endfor %}
-  </p>
-  {% endif %}
+{% if thread %}
+<div class="thread-tools">
+  {% if conversations|length > 1 %}
+  <details class="thread-history">
+    <summary class="btn is-quiet">{{ icon('list', 14) }} Tidligere samtaler</summary>
+    <ul class="thread-history-list">
+      {% for item in conversations %}
+      <li><a href="/chat?c={{ item.id }}">{{ item.title or 'Samtale ' ~ item.id }}</a>
+        <span class="muted-note">{{ item.created_at[:10] }}</span></li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% else %}<span></span>{% endif %}
+  <form method="post" action="/chat/new">
+    <button type="submit" class="btn is-quiet">{{ icon('plus', 14) }} Ny samtale</button>
+  </form>
 </div>
-
-{% if rows %}
-<section class="section">
-  <h2 class="section-title">
-    {% if answer.selected %}Modellen valgte{% else %}Fundne lots{% endif %}
-    <span class="count">{{ rows|length }}</span>
-  </h2>
-  {% if answer.selected and answer.considered > rows|length %}
-  <p class="result-count">
-    Søgningen gav {{ answer.considered }} kandidater, og {{ rows|length }} af dem er et svar
-    på spørgsmålet.
-    <a href="/chat?q={{ question|urlencode }}&alle=1">Vis alle {{ answer.considered }}</a>
-  </p>
-  {% elif show_all and answer.considered > rows|length %}
-  <p class="result-count">Viser alle {{ rows|length }} kandidater søgningen gav.</p>
-  {% endif %}
-  <div class="lot-grid">
-    {% for row in rows %}{{ card(row, show_seen=True, index=loop.index0) }}{% endfor %}
-  </div>
-</section>
-{% elif answer %}
-<p class="empty">Modellen fandt ingen af de {{ answer.considered }} kandidater relevant.
-  <a href="/chat?q={{ question|urlencode }}&alle=1">Vis alle</a>.</p>
-{% else %}
-<p class="empty">Ingen lots i arkivet matcher spørgsmålet.</p>
 {% endif %}
 
-<section class="section">
-  <h2 class="section-title">Prøv også</h2>
-  <div class="suggestions">
-    {% for suggestion in [
-      'Hvilke NAS-enheder er der lige nu?',
-      'Hvad slutter inden for et døgn?',
-      'Vis pladespillere som ikke blev til fund',
-      'Hvad har været af servere de sidste 30 dage?'
-    ] %}
-    <a href="/chat?q={{ suggestion|urlencode }}">{{ suggestion }}</a>
-    {% endfor %}
-  </div>
-</section>
-
-{% else %}
+{% if not thread %}
 {{ empty_state('Spørg arkivet',
    'Jeg leder i alt hvad agenten har set, også de lots der aldrig blev til et fund. Spørgsmålet oversættes til en søgning, og det er Python der bygger den, så en mærkelig lot-titel kan ikke narre mig til at hente noget andet end lots.',
    'search') }}
+{% endif %}
+
+<div class="thread">
+  {% for message in thread %}
+    {% if message.role == 'user' %}
+    <div class="turn turn-user"><p>{{ message.content }}</p></div>
+    {% else %}
+    <div class="turn turn-assistant">
+      <p class="answer-text">{{ message.content }}</p>
+
+      {% if message.meta.filter_used %}
+      <p class="answer-filter">
+        <span class="answer-filter-label">Søgte efter</span>
+        {% for key, value in message.meta.filter_used.items() %}
+        <span class="tag">{{ filter_labels.get(key, key) }}: {{ value }}</span>
+        {% endfor %}
+      </p>
+      {% endif %}
+
+      {% if message.meta.archive_url %}
+      <p class="answer-actions">
+        <a class="btn is-quiet" href="{{ message.meta.archive_url }}">{{ icon('filter', 14) }} Åbn i arkivet med disse filtre</a>
+      </p>
+      {% endif %}
+
+      {% if message.meta.valuation %}
+      {% set v = message.meta.valuation %}
+      {% set comps = v.comps %}
+      <div class="turn-extra">
+        <h2 class="section-title">Hvad samme slags er gået for <span class="count">{{ comps.count if comps else 0 }}</span></h2>
+        <p class="section-note">{{ v.title }}</p>
+        {% if comps and comps.count %}
+        <div class="panel comps">
+          <div class="comp-summary">
+            <div><dt>Typisk</dt><dd>{{ comps.median|kr }}</dd></div>
+            <div><dt>Laveste</dt><dd>{{ comps.low|kr }}</dd></div>
+            <div><dt>Højeste</dt><dd>{{ comps.high|kr }}</dd></div>
+          </div>
+          <ol class="comp-list">
+            {% for sale in comps.items %}
+            <li class="comp">
+              <span class="comp-price">{{ sale.total|kr }}</span>
+              <span class="comp-title">
+                <a href="/lot/{{ sale.lot_id }}">{{ sale.title[:70] }}</a>
+                <span class="muted-note">hammer {{ sale.hammer|kr }} · {{ sale.ended_at[:10] }}</span>
+              </span>
+              <span class="comp-shared" title="Fælles ord">{{ sale.shared|length }}</span>
+            </li>
+            {% endfor %}
+          </ol>
+        </div>
+        {% else %}
+        <p class="empty">Arkivet har ikke tidligere salg der ligner dette nok.</p>
+        {% endif %}
+        {% if v.series and v.series|length > 1 %}
+        <h2 class="section-title">Prisforløb</h2>
+        {% set lo = v.series|min %}
+        {% set hi = v.series|max %}
+        {% set span = (hi - lo) if hi > lo else 1 %}
+        <div class="panel spark-large">
+          <svg viewBox="0 0 300 70" preserveAspectRatio="none" role="img"
+               aria-label="Prisforløb over {{ v.series|length }} observationer">
+            <polyline fill="none" stroke="currentColor" stroke-width="2"
+                      stroke-linejoin="round" stroke-linecap="round"
+                      points="{% for point in v.series %}{{ (loop.index0 / (v.series|length - 1) * 296 + 2)|round(1) }},{{ (66 - (point - lo) / span * 58)|round(1) }}{% if not loop.last %} {% endif %}{% endfor %}"/>
+          </svg>
+          <p class="spark-legend">
+            <span>{{ v.series[0]|kr }}</span>
+            <span>{{ v.series|length }} observationer</span>
+            <span>{{ v.series[-1]|kr }}</span>
+          </p>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {% if message.cards %}
+      <div class="turn-extra">
+        <div class="lot-grid">
+          {% for row in message.cards %}{{ card(row, show_seen=True, index=loop.index0) }}{% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+  {% endfor %}
+</div>
+
+{% if not thread %}
 <section class="section">
   <h2 class="section-title">Prøv også</h2>
-  <div class="suggestions">
-    {% for suggestion in [
-      'Har der været Sennheiser-forstærkere under 1.000 kr?',
-      'Hvilke NAS-enheder er der lige nu?',
-      'Hvad slutter inden for et døgn?',
-      'Vis pladespillere som ikke blev til fund',
-      'Hvad har været af servere de sidste 30 dage?'
-    ] %}
-    <a href="/chat?q={{ suggestion|urlencode }}">{{ suggestion }}</a>
-    {% endfor %}
-  </div>
+  <form method="post" action="/chat">
+    <input type="hidden" name="c" value="0">
+    <div class="chip-row">
+      {% for suggestion in forslag %}
+      <button type="submit" name="q" value="{{ suggestion }}" class="chip">{{ suggestion }}</button>
+      {% endfor %}
+    </div>
+  </form>
 </section>
 {% endif %}
+
+<form class="composer" method="post" action="/chat">
+  <input type="hidden" name="c" value="{{ conversation_id }}">
+  <div class="search-field">
+    {{ icon('search', 17) }}
+    <input type="search" name="q" placeholder="Spørg om arkivet" aria-label="Spørgsmål til arkivet"
+           autocomplete="off" required autofocus>
+  </div>
+  <button class="btn is-primary" type="submit">Spørg</button>
+</form>
 {% endblock %}

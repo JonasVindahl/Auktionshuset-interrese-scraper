@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import logging
 import os
 import sqlite3
@@ -37,6 +38,7 @@ from ..secrets import SecretError, get_secret
 from . import (
     auth,
     chat as chat_mod,
+    chatstore,
     queries,
     rows as rows_mod,
     search as search_mod,
@@ -299,6 +301,14 @@ def _csv_safe(value: Any) -> Any:
 def pct(value: float) -> str:
     """Procent med dansk decimalseparator. round(1) giver '70.0 %' på engelsk."""
     return f"{value:.1f}".replace(".", ",")
+
+
+def _conversation_id(raw: object) -> int:
+    """Tomt eller ugyldigt samtale-id skal give 0, ikke en 422."""
+    try:
+        return max(0, int(str(raw)))
+    except (TypeError, ValueError):
+        return 0
 
 
 def safe_next(target: str) -> str:
@@ -819,29 +829,108 @@ def create_app() -> FastAPI:
 
     # -- assistent ---------------------------------------------------------
 
+    def _chat_store() -> chatstore.ChatStore:
+        """Samtalerne ligger i deres egen fil, ikke i agentens database."""
+        return chatstore.ChatStore(chatstore.chat_db_path(db_path()))
+
+    def _thread_rows(store: chatstore.ChatStore, conversation_id: int, conn) -> list[dict]:
+        """Beskedrækkerne klar til skabelonen, med deres kort og meta."""
+        items: list[dict] = []
+        # Et loft, saa en meget lang samtale ikke tegner hundredvis af kort.
+        for message in store.messages(conversation_id, limit=40):
+            meta: dict = {}
+            if message["meta"]:
+                try:
+                    meta = json.loads(message["meta"])
+                except ValueError:
+                    meta = {}
+            cards = []
+            selected = meta.get("selected") or []
+            if selected:
+                # Beskeden gemmer lot_id'er, ikke et øjebliksbillede af priserne.
+                rows = queries.lots_by_ids(conn, list(selected))
+                cards = with_series(rows_mod.prepare_all(
+                    rows, seen_field="first_seen",
+                    db_path=db_path(), opening_bid=opening_bid(),
+                ))
+            items.append({
+                "role": message["role"],
+                "content": message["content"],
+                "meta": meta,
+                "cards": cards,
+            })
+        return items
+
     @app.get("/chat", response_class=HTMLResponse)
     def chat_page(
         request: Request,
-        q: str = Query("", max_length=chat_mod.MAX_QUESTION_LENGTH),
-        alle: bool = False,
+        c: str = Query(""),
         _: None = Depends(require_login),
     ) -> HTMLResponse:
-        answer = None
-        # Klienten læses fra konfiguration og miljø, så den hentes én gang
-        # pr. sidekald i stedet for to.
         client = llm_client()
-        if q.strip():
-            conn = ro_conn(db_path())
-            try:
-                answer = chat_mod.ask(conn, client, q, show_all=alle)
-            finally:
-                conn.close()
+        conn = ro_conn(db_path())
+        try:
+            with _chat_store() as store:
+                conversation_id = _conversation_id(c) or store.latest_conversation() or 0
+                thread = _thread_rows(store, conversation_id, conn) if conversation_id else []
+                conversations = store.conversations()
+        finally:
+            conn.close()
         return page(
             request, "chat.html",
-            question=q, answer=answer, show_all=alle,
-            rows=with_series(rows_mod.prepare_all(answer.rows, seen_field="first_seen", db_path=db_path(), opening_bid=opening_bid())) if answer else [],
-            has_key=client is not None,
+            thread=thread, conversation_id=conversation_id,
+            conversations=conversations, has_key=client is not None,
         )
+
+    @app.post("/chat")
+    def chat_send(
+        request: Request,
+        q: str = Form(""),
+        c: str = Form(""),
+        _: None = Depends(require_login),
+    ) -> RedirectResponse:
+        question = q.strip()[:chat_mod.MAX_QUESTION_LENGTH]
+        if not question:
+            conversation = _conversation_id(c)
+            return RedirectResponse(
+                f"/chat?c={conversation}" if conversation else "/chat",
+                HTTP_303_SEE_OTHER,
+            )
+
+        client = llm_client()
+        conn = ro_conn(db_path())
+        try:
+            with _chat_store() as store:
+                conversation_id = _conversation_id(c) or store.latest_conversation()
+                if not conversation_id:
+                    conversation_id = store.new_conversation(title=question[:80])
+                elif not store.messages(conversation_id):
+                    store.set_title(conversation_id, question[:80])
+
+                # Vinduet og det forrige filter bærer samtalen videre uden at
+                # hele historikken sendes med hver gang.
+                history = store.transcript(conversation_id, limit=6)
+                previous = store.last_meta(conversation_id).get("filter")
+                store.append(conversation_id, "user", question)
+
+                config = _safe_config()
+                keys = [cat.key for cat in config.categories] if config else None
+                answer = chat_mod.ask(
+                    conn, client, question,
+                    categories=keys, history=history, previous=previous,
+                )
+                store.append(conversation_id, "assistant", answer.text, answer.meta)
+                # Oprydning i samme fil, hoejst en gang i doegnet.
+                store.maybe_prune()
+        finally:
+            conn.close()
+        return RedirectResponse(f"/chat?c={conversation_id}", HTTP_303_SEE_OTHER)
+
+    @app.post("/chat/new")
+    def chat_new(_: None = Depends(require_login)) -> RedirectResponse:
+        with _chat_store() as store:
+            conversation_id = store.new_conversation()
+        return RedirectResponse(f"/chat?c={conversation_id}", HTTP_303_SEE_OTHER)
 
     # -- statistik ---------------------------------------------------------
 

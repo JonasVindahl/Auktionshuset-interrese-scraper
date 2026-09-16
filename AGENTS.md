@@ -38,10 +38,12 @@ mærke i `strong`.
 
 **`exclude` vinder over alt.** Læg støjende ord der, ikke i weak.
 
-**Webben må kun skrive to steder.** Dashboardet skriver til `feedback` og til
-`config/interests.yml`. Alt andet ejer agenten. Sider læser gennem
-`queries.ro_conn`, som åbner databasen i read-only-tilstand, så en fejl i en
-rute ikke kan ødelægge hukommelsen.
+**Webben må kun skrive tre steder.** Dashboardet skriver til `feedback`, til
+`config/interests.yml` og til sin egen samtalefil `data/conversations.db`
+(`web/chatstore.py`). Alt andet ejer agenten. Samtalerne ligger i en separat
+fil, netop fordi webben ikke må kunne røre agentens hukommelse. Sider læser
+gennem `queries.ro_conn`, som åbner agentens database i read-only-tilstand, så
+en fejl i en rute ikke kan ødelægge hukommelsen.
 
 **Sprogmodellen i `web/chat.py` skriver aldrig SQL.** Den leverer et
 struktureret filter med samme felter som søgeformularen, og Python bygger
