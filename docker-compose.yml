@@ -37,3 +37,33 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  web:
+    image: auction-hunter:latest
+    container_name: auction-hunter-web
+    restart: unless-stopped
+    command: ["python", "-m", "auction_hunter", "web"]
+    depends_on:
+      - hunter
+
+    volumes:
+      # Read-only: dashboardet læser databasen, skriver intet.
+      - ./data:/app/data:ro
+      - ./config:/app/config:ro
+
+    ports:
+      - "8080:8080"
+
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "2m"
+        max-file: "2"
