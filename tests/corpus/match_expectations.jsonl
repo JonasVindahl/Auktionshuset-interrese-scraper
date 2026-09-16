@@ -1,0 +1,60 @@
+{"title": "Netværksswitches HP  Model: ProCurve", "expect": "yes", "why": "Netværksswitch, it_tech"}
+{"title": "Switch TP-LINK TL-SG1016D", "expect": "yes", "why": "Netværksswitch, it_tech"}
+{"title": "Switch HPE OfficeConnect 1820", "expect": "yes", "why": "Netværksswitch, it_tech"}
+{"title": "Netværkskontakt (switch) 8G PoE+ HP Model: HPE ARUBA", "expect": "yes", "why": "Netværksswitch med PoE"}
+{"title": "Netværkskontakt (switch)  NETGEAR Model: M4250-10G2XF-PoE+", "expect": "yes", "why": "Netværksswitch"}
+{"title": "\"Easy smart-switch\" 24-port TP-LINK Model: TL-SG1428PE(UN)", "expect": "yes", "why": "Netværksswitch"}
+{"title": "Espressomaskine FUTURMAT  Ariette", "expect": "yes", "why": "Espressomaskine, coffee"}
+{"title": "Espressomaskine STEAMHAMMER XLVI", "expect": "yes", "why": "Espressomaskine, over budget men relevant"}
+{"title": "Kaffemaskine med vandindtag  MELITTA", "expect": "yes", "why": "Kaffemaskine, coffee"}
+{"title": "Højtaler MACKIE Model: Thump12", "expect": "yes", "why": "Højttaler, audio_hifi"}
+{"title": "2.Stk.Cosmos højtaler med stativer og styreenhed", "expect": "yes", "why": "Højttalere, audio_hifi"}
+{"title": "Diverse højtalere og subwoofer EDIFIEL", "expect": "yes", "why": "Højttalere og subwoofer"}
+{"title": "3 stk. højtalere BIRDDOG Model: Play", "expect": "yes", "why": "Højttalere"}
+{"title": "Forstærker SMPRO Model: HPGE", "expect": "yes", "why": "Forstærker, audio_hifi"}
+{"title": "Pladespiller Thorens TD 160", "expect": "yes", "why": "Pladespiller, audio_hifi"}
+{"title": "Raspberry Pi 4 model B 8GB", "expect": "yes", "why": "SBC, it_tech"}
+{"title": "Proxmark3 RDV4 med antenne", "expect": "yes", "why": "Hacking-hardware, it_tech"}
+{"title": "Oscilloskop Rigol DS1054Z", "expect": "yes", "why": "Måleudstyr, maker_electronics"}
+{"title": "3D printer Prusa i3 MK3S", "expect": "yes", "why": "3D-printer, maker_electronics"}
+{"title": "Høretelefoner SENNHEISER HD 280 PRO", "expect": "no", "why": "Udelukket: høretelefoner"}
+{"title": "Tastatur og mus LOGITECH", "expect": "no", "why": "Udelukket: tastatur og mus"}
+{"title": "Logitech musemåtte", "expect": "no", "why": "Udelukket: musemåtte"}
+{"title": "Flightcase SENNHEISER", "expect": "no", "why": "Tilbehør, ikke HiFi"}
+{"title": "Flightcase PELI 1560 Case", "expect": "no", "why": "Tilbehør"}
+{"title": "Flightcase til 2 rack units D56", "expect": "no", "why": "Tilbehør"}
+{"title": "Mikrofonstativ K&M 26000", "expect": "no", "why": "Tilbehør"}
+{"title": "Mikrofonstativ samt beslag", "expect": "no", "why": "Tilbehør"}
+{"title": "Div. batterier SENNHEISER", "expect": "no", "why": "Forbrugsgode"}
+{"title": "2 stk. batterier HEDBOX & PAG", "expect": "no", "why": "Forbrugsgode"}
+{"title": "Batterier, ladere, kabler m.m.", "expect": "no", "why": "Forbrugsgode og tilbehør"}
+{"title": "2 stk. Computerskærme LG 32UP55NP-W med strømforsyninger, uden fod", "expect": "no", "why": "Skærm; 'strømforsyning' er tilbehør, ikke kernen"}
+{"title": "Computerskærm LG 32UP55NP-W med strømforsyning", "expect": "no", "why": "Skærm"}
+{"title": "Reol med diverse kabler, strømforsyninger m.m.", "expect": "no", "why": "Rodlot med tilbehør"}
+{"title": "Div. kameratilbehør: kabler, adapter mv. SENNHEISER Model:", "expect": "no", "why": "Tilbehør"}
+{"title": "Håndholdt-transmitter SENNHEISER Model: 508792", "expect": "no", "why": "Tilbehør til mikrofonanlæg"}
+{"title": "Trådløs videotransmission samt decoder", "expect": "no", "why": "Mærket 'mission' er ikke højttalermærket her"}
+{"title": "Trådløs videotransmission TERADECK Bolt6", "expect": "no", "why": "Samme falske 'mission'-match"}
+{"title": "Dockingstation, højtalere, musemåtte, stativ m.m.", "expect": "no", "why": "Rodlot, udelukket på musemåtte"}
+{"title": "Div. Computer reserverdele: harddiske, kabler mv.  SYNOLOGY", "expect": "no", "why": "Rodlot med reservedele"}
+{"title": "Rackkuffert med Switch ZYXEL, SENNHEISER EW Digital", "expect": "no", "why": "Rackkuffert er tilbehør"}
+{"title": "Div. Lydudstyr: mikrofoner, kabler mv. SENNHEISER/ PROEL Model: 508936 mv.", "expect": "maybe", "why": "Lydudstyr men rodlot; brugeren boer vurdere"}
+{"title": "Trådløst mikrofonsæt SENNHEISER Evolution Wireless D1", "expect": "maybe", "why": "Pro-audio, ikke HiFi-lytning; brugeren boer vurdere"}
+{"title": "Trådløst mikrofonsæt SENNHEISER EM D1", "expect": "maybe", "why": "Som ovenstående"}
+{"title": "Trådreol m. indhold - Div. Kabler, Netgear Switch m.m.", "expect": "maybe", "why": "Indeholder switch men er et rodlot"}
+{"title": "Mikrobølgeovn SAMSUNG, kaffemaskine, airfyrer NINJA samt diverse", "expect": "maybe", "why": "Kaffemaskine men blandet lot"}
+{"title": "6 stk. Blueray/stereoafspillere PIONEER/SONY", "expect": "maybe", "why": "Afspillere i bunke; ikke klassisk HiFi"}
+{"title": "2 stk. Lydkort/audio interfaces + Hovedtelefonforstærker", "expect": "maybe", "why": "Lydkort er relevant, men lot indeholder høretelefonforstærker"}
+{"title": "Intern harddiske ca. 12 stk  1 TB, 8 TB, 18 TB  SEAGATE EXOS, HGST ULTRASTAR", "expect": "yes", "why": "Drevbunke, it_tech; over budget men brugeren vil se den"}
+{"title": "Intern harddiske ca. 30 stk. 2 TB, 6 TB, 12 TB  TOSHIBA, WESTERN DIGITAL (se info)", "expect": "yes", "why": "Drevbunke, it_tech"}
+{"title": "Ekstern harddisk GLYPH BLACKBOX Pro 2 TB", "expect": "yes", "why": "Harddisk, it_tech"}
+{"title": "Ekstern harddisk 1 TB GLYPH Model: Secure Drive", "expect": "yes", "why": "Harddisk, it_tech"}
+{"title": "2 stk. Ekstern hardisk 1 TB  GLYPH Model: Blackbox Plus", "expect": "yes", "why": "Harddiske med auktionshusets stavefejl 'hardisk'"}
+{"title": "3 stk. Ekstern hardisk 1/2 TB   GLYPH Model: PRO SSD Thunderbolt/ Atom EV SSD", "expect": "yes", "why": "Harddiske, stavefejlen 'hardisk'"}
+{"title": "Ekstern hardisk 8 TB  GLYPH Model: Blackbox PRO", "expect": "yes", "why": "Harddisk, stavefejlen 'hardisk'"}
+{"title": "1.Stk. Ekspeditions disk i træ", "expect": "no", "why": "Butiksdisk; ordet 'disk' er derfor ikke et noegleord"}
+{"title": "Stor købmandsdisk", "expect": "no", "why": "Butiksindretning, ikke storage"}
+{"title": "Industriopvaskemaskine, se tekst  WEXIÖDISK WD-4", "expect": "no", "why": "'WEXIOeDISK' indeholder 'disk' — derfor matcher vi ikke paa 'disk'"}
+{"title": "Videoopbygning med skærm, server og UPS", "expect": "maybe", "why": "Indeholder en server, men er et videopakke-lot over budget; AI-trinnet boer vurdere"}
+{"title": "Div. Computerudstyr: SSD-kort, adapter mv.  SONNOS", "expect": "maybe", "why": "Tilbehoer; matcher paa 'ssd', AI-trinnet forventes at sige nej"}
+{"title": "Div. lydudstyr: DVI-forlængere, HDD-adaptere mv.  BLACK MAGIC DESIGN/ADDONICS Model: AD2SAHDCF", "expect": "maybe", "why": "Rodlot med adaptere; matcher paa 'hdd', AI-trinnet forventes at sige nej"}

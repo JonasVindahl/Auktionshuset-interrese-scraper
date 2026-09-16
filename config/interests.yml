@@ -1,0 +1,684 @@
+# Auktionshuset Hunter — interesseprofil
+#
+# Alt i denne fil kan overrides med miljøvariabler (se README).
+# Filen læses på ny ved hver kørsel, så ændringer slår igennem uden genstart.
+
+source:
+  base_url: https://auktionshuset.dk
+  # Sjælland. Se regions-mappingen nedenfor for de øvrige landsdele.
+  region_ids:
+    - lyr0boj4d8
+  region_label: Sjælland
+  # 1 = aktive auktioner, 0 = afsluttede, 2 = alle
+  auction_status: 1
+
+regions:
+  Nordjylland: w3OmpOjkLx
+  Midtjylland: RVz0ALE6Wr
+  Sønderjylland: M15jaL0J2l
+  Fyn: epV0wO0K7l
+  Sjælland: lyr0boj4d8
+
+# Prisloftet er blødt: fund over grænsen rapporteres stadig, men markeres
+# "over budget", indtil de passerer max_price * soft_over_budget_factor.
+budget:
+  max_price: 1000
+  soft_over_budget_factor: 2.5
+
+# Prisen for at afgive første bud på et lot uden bud.
+opening_bid: 50
+
+# AI-trin: et sprogmodel-kald der kun kører på lots der allerede har matchet på
+# nøgleord. Det fanger den slags støj nøgleord ikke kan se — fx
+# 'Div. lydudstyr: DVI-forlængere, HDD-adaptere mv.', hvor ordet 'hdd' står i
+# titlen, men varen er et rodlot med adaptere.
+#
+# Krav: CLASSIFIER_API_KEY skal være sat (miljø, _FILE eller _FROM_ENV).
+# Slå til/fra med 'enabled' her eller CLASSIFIER_ENABLED=1.
+# Sæt CLASSIFIER_MODEL, CLASSIFIER_BASE_URL og CLASSIFIER_MAX_PER_RUN for at
+# override uden at redigere filen. Funktionen virker med enhver
+# OpenAI-kompatibel endpoint (OpenAI, Azure, OpenRouter, Ollama, vLLM).
+classifier:
+  enabled: false
+  model: gpt-4o-mini
+  base_url: https://api.openai.com/v1
+  # Loft pr. kørsel, så en fejlkonfiguration ikke kan løbe med budgettet.
+  # Fund ud over loftet udskydes til næste kørsel i stedet for at sendes
+  # uklassificeret.
+  max_per_run: 25
+  timeout: 30
+  # Profilen læses af modellen for hvert lot. Skriv frit — den er den
+  # egentlige 'smag', mens nøglelisterne kun er grovsortering.
+  profile: |
+    Jeg samler på og bruger:
+    - IT og hacking-hardware: SDR, Proxmark, Flipper Zero, Raspberry Pi,
+      netværksudstyr, switches, routere, firewalls
+    - Servere og storage: rack- og towerservere, NAS, harddiske, SSD'er,
+      RAID-controllere. Gerne hele maskiner, drevbunker og reservedele til dem.
+    - Lyd og HiFi: forstærkere, højttalere, pladespillere, DAC'er, vintage
+      anlæg. Gerne noget der kan repareres eller opgraderes.
+    - Ure: mekaniske og automatiske, gerne vintage. Mærker med historie.
+    - Elektronik og maker: oscilloskoper, måleudstyr, loddeudstyr, 3D-printere,
+      komponenter og moduler.
+    - Kaffe: espressomaskiner og kværne, gerne professionelt brugt.
+
+    Jeg er IKKE interesseret i:
+    - Tilbehør og forbrugsgoder: kabler, adaptere, batterier, opladere, tasker,
+      flightcases, stativer, emballage, manualer, skærme og dockingstationer.
+    - Rodlodder og blandede partier. Hvis titlen er en opremsning af forskellige
+      småting ('diverse', 'mv.', 'm.m.', 'og andet'), er den næsten altid
+      uinteressant, også selvom et enkelt nøgleord optræder.
+    - Høretelefoner, headsets, tastaturer og mus.
+    - Bulk-partier af forbrugsvarer uden enkeltværdi.
+
+    Afvejning: et enkelt, komplet og fungerende stykke udstyr er langt mere
+    interessant end en bunke dele. Er du i tvivl om et lot er et reelt stykke
+    udstyr eller et rodlot, svar 'måske' frem for 'ja'.
+
+# Nøgleord der ALTID gør et lot uinteressant, uanset hvilken kategori det
+# ellers ville matche. Brugeren er eksplicit ligeglad med høretelefoner,
+# keyboards og mus — derfor udelukkes de her i stedet for at skulle undgås
+# ved at fjerne hele mærker som Sennheiser fra HiFi-kategorien.
+exclude:
+  - høretelefoner
+  - høretelefon
+  - højtalertelefon
+  - headset
+  - in-ear
+  - inear
+  - earbuds
+  - øretelefoner
+  - øreprop
+  - hovedtelefon
+  - hovedtelefoner
+  - tastatur
+  - keyboard
+  - keyboards
+  - tastaturer
+  - mus
+  - computermus
+  - musemåtte
+  - trackpad
+  - printerpatron
+  - blækpatron
+  - tonerkassette
+  - tonepatron
+  # Tilbehør og forbrugsgoder: interessante for nogen, men ikke for denne
+  # profil. De støjer mere end de gavner, fordi de optræder i bunker.
+  - flightcase
+  - flight case
+  - mikrofonstativ
+  - kameratilbehør
+  - batterier
+  - batteri
+  - bordoplader
+  - opladere
+  # Transportkasser er tilbehør. Uden denne fanges 'Rackkuffert med Switch'
+  # på selve switch-nøgleordet, selvom varen er en kasse.
+  - rackkuffert
+  - rack kuffert
+  - rackcase
+  - rack case
+  - transportkuffert
+  # Reservedels- og rodpartier indeholder sjældent en komplet vare, men
+  # indeholder ofte et mærkenavn der ellers ville udløse et match.
+  - reservedele
+  - reservedel
+  - reserverdele
+  - reserverdel
+
+categories:
+  it_tech:
+    label: IT / tech / hacking
+    emoji: "🖥️"
+    # Højere loft end de øvrige kategorier, fordi servere og drevbunker er
+    # dyre i sig selv: en stak på 12-30 diske ligger typisk på 4.000-11.000 kr
+    # i hammerpris, altså op til ~16.500 kr færdigpris. Overstyr med
+    # MAX_PRICE_IT_TECH.
+    max_price: 7000
+    strong:
+      - proxmark
+      - flipper zero
+      - hackrf
+      - rtlsdr
+      - rtl sdr
+      - airspy
+      - usrp
+      - limesdr
+      - lime sdr
+      - plutosdr
+      - sdr
+      - software defined radio
+      - wifi pineapple
+      - pineapple
+      - rubber ducky
+      - bash bunny
+      - lan turtle
+      - pwnagotchi
+      - chameleonmini
+      - alfa awus
+      - awus036
+      - pfsense
+      - opnsense
+      - truenas
+      - freenas
+      - openwrt
+      - raspberry pi
+      - raspberrypi
+      - esp32
+      - esp8266
+      - odroid
+      - banana pi
+      - nvidia jetson
+      - coral usb
+      - bus pirate
+      # Server- og drevudstyr er nu en del af interessen. Ordene herunder er
+      # entydige varebetegnelser, så et enkelt træf er signal nok.
+      #
+      # 'disk' står bevidst IKKE på listen: det rammer 'ekspeditionsdisk',
+      # 'købmandsdisk' og 'Industriopvaskemaskine WEXIÖDISK'. Brug 'harddisk'
+      # og de øvrige sammensætninger i stedet.
+      - server
+      - servere
+      - rackserver
+      - bladeserver
+      - towerserver
+      - nas
+      - diskstation
+      - harddisk
+      - harddiske
+      - hardisk
+      - hardiske
+      - ssd
+      - nvme
+      - hdd
+      - solid state drive
+      - raid controller
+      - raidcontroller
+      - storage backplane
+      # Produktlinjer for servere. Navnene er entydige — 'PowerEdge' og
+      # 'ProLiant' betegner en maskine og intet andet, i modsætning til
+      # 'Supermicro' og 'Synology', der også bruges om tilbehør og emballage.
+      - poweredge
+      - proliant
+      - thinkstation
+      # Netværksswitches er en konkret vare brugeren vil have, og 'switch' er i
+      # en auktionssammenhæng næsten altid netværksudstyr.
+      - switch
+      - switches
+    brands:
+      - ubiquiti
+      - unifi
+      - mikrotik
+      - synology
+      - qnap
+      - dell poweredge
+      - hp proliant
+      - supermicro
+      - thinkcentre
+      - elgato
+      - netapp
+      - powervault
+      - hpe
+    weak:
+      # 'server', 'servere', 'nas', 'switch' og 'switches' er flyttet til
+      # strong — se ovenfor. De står derfor ikke her.
+      - router
+      - firewall
+      - rack
+      - poe
+      - sfp
+      - raid
+      - kvm
+      - mini pc
+      - nuc
+      - thin client
+      - docking station
+      - thunderbolt
+      - capture card
+      - netværk
+      - netværksudstyr
+      - ethernet
+      - gigabit
+      - access point
+      - storage
+      - patch panel
+      # Komponenter og maskinnavne. De er konkrete, men ordene er korte eller
+      # flertydige nok til at et enkelt træf ikke bør udløse en besked.
+      - cpu
+      - gpu
+      - bundkort
+      - motherboard
+      - ram
+      - hypervisor
+      - proxmox
+      - esxi
+      - vmware
+      - zfs
+      - iscsi
+      - san
+      - drev
+      - kabinet
+      - server rack
+      - netværkskabel
+      - transceiver
+      - computere
+      - bærbar
+      - docking
+
+  audio_hifi:
+    label: Audio / HiFi
+    emoji: "🔊"
+    max_price: 4000
+    strong:
+      # Produkttyper er konkrete varer brugeren gerne vil have. Et enkelt
+      # 'højttaler' eller 'forstærker' er derfor signal nok i sig selv.
+      - forstærker
+      - forstaerker
+      - effektforstærker
+      - rørforstærker
+      - receiver
+      - højttaler
+      - højttalere
+      - højtaler
+      - højtalere
+      - subwoofer
+      - hifi
+      - hi-fi
+      - pladespiller
+      - turntable
+      - riaa
+      - phono
+      - forforstærker
+      - preamp
+      - studiomonitor
+      - monitorhøjttaler
+      - tonearm
+      - centerhøjttaler
+      - gulvhøjttaler
+      - bogreolshøjttaler
+      - klassisk anlæg
+      - hifianlæg
+      - lydkort
+      - soundcard
+    brands:
+      - bang olufsen
+      - bang og olufsen
+      - beolab
+      - beosound
+      - beomaster
+      - beocenter
+      - sonos
+      - devialet
+      - linn
+      - naim
+      - meridian
+      - mcintosh
+      - mark levinson
+      - krell
+      - pass labs
+      - electrocompaniet
+      - primare
+      - hegel
+      - musical fidelity
+      - audiolab
+      - rotel
+      - arcam
+      - cambridge audio
+      - marantz
+      - denon
+      - onkyo
+      - yamaha
+      - technics
+      - pioneer
+      - nad
+      - dynaudio
+      - dali
+      - kef
+      - focal
+      - klipsch
+      - tannoy
+      - monitor audio
+      - bower wilkins
+      - bowers wilkins
+      - elac
+      - q acoustics
+      - harbeth
+      - atc
+      - proac
+      - spendor
+      - wharfedale
+      - sennheiser
+      - beyerdynamic
+      - akg
+      - grado
+      - hifiman
+      - audeze
+      - stax
+      - bose
+      - quad
+      - thiel
+      - mission
+      - jamo
+      - audiovector
+      - svs
+      - rel
+      - velodyne
+      - genelec
+      - neumann
+      - adam audio
+      - ortofon
+      - thorens
+      - rega
+    weak:
+      # Ord der er for brede eller flertydige til at stå alene: 'sub' er både
+      # subwoofer og ubåd, 'dac' er både konverter og forkortelse, 'stereo' og
+      # 'surround' beskriver en egenskab snarere end en vare.
+      - surround
+      - sub
+      - stereo
+      - dac
+      - pick-up
+      - pickup
+    # Mærkenavne der samtidig er almindelige orddele og derfor kun må matche
+    # som selvstændigt ord: 'mission' står også i 'transmission', 'rel' i
+    # 'relevans', 'quad' i 'quadcopter'.
+    exact:
+      - mission
+      - quad
+      - rel
+      - atc
+      - svs
+      - stax
+      - rega
+      - bose
+      - akg
+      - grado
+      - jamo
+      - dac
+      - sub
+      - stereo
+
+  watches:
+    label: Ure
+    emoji: "⌚"
+    max_price: 6000
+    strong:
+    brands:
+      - tissot
+      - seiko
+      - omega
+      - rolex
+      - tudor
+      - tag heuer
+      - breitling
+      - longines
+      - certina
+      - citizen
+      - casio
+      - g-shock
+      - g shock
+      - orient
+      - vostok
+      - junghans
+      - hamilton
+      - oris
+      - zenith
+      - iwc
+      - jaeger-lecoultre
+      - patek philippe
+      - audemars piguet
+      - cartier
+      - bulova
+      - timex
+      - nomos
+      - sinn
+      - stowa
+      - damasko
+      - fortis
+      - raymond weil
+      - maurice lacroix
+      - frederique constant
+      - ebel
+      - eterna
+      - glycine
+      - alpina
+      - mondaine
+      - skagen
+      - swatch
+    weak:
+      - ur
+      - ure
+      - armbåndsur
+      - armbaandsur
+      - herreur
+      - dameur
+      - lommeur
+      - dykkerur
+      - kronograf
+      - chronograph
+      - automatisk
+      - mekanisk
+      - quartz
+      - kvarts
+      - urskive
+      - urværk
+      - urkasse
+      - watch
+      - watches
+      - wristwatch
+      - vintage ur
+      - ældre ur
+      - guldur
+      - stålur
+
+  maker_electronics:
+    label: Elektronik / maker
+    emoji: "🔧"
+    max_price: 1000
+    strong:
+      - oscilloscope
+      - oscilloskop
+      - spektrumanalyzer
+      - signalgenerator
+      - funktionsgenerator
+      - logic analyzer
+      - rework station
+      - hot air station
+      - pick and place
+    brands:
+      - fluke
+      - keysight
+      - agilent
+      - tektronix
+      - lecroy
+      - rigol
+      - siglent
+      - hameg
+      - gw instek
+      - rohde schwarz
+      - anritsu
+      - keithley
+      - hakko
+      - weller
+      - metcal
+      - jbc
+      - ersa
+      - prusa
+      - bambu lab
+      - ultimaker
+      - creality
+      - ender 3
+      - voron
+      - anycubic
+      - formlabs
+      - elegoo
+    weak:
+      - 3d printer
+      - 3d-printer
+      - 3d print
+      - 3dprinter
+      - loddekolbe
+      - loddestation
+      - loddeudstyr
+      - loddemaskine
+      - varmluftstation
+      - multimeter
+      - laboratorieudstyr
+      - strømforsyning
+      - stroemforsyning
+      - måleudstyr
+      - komponenter
+      - modstande
+      - kondensatorer
+      - transistorer
+      - breadboard
+      - printplade
+      - pcb
+      - mikroskop
+      - filament
+      - resin
+      - cnc
+      - drejebænk
+      - fræser
+      - båndsav
+      - søjleboremaskine
+      - kompressor
+      - svejseværk
+      - laboratorium
+      - kalibrering
+
+  gaming:
+    label: Gaming
+    emoji: "🎮"
+    max_price: 1000
+    strong:
+      - steam deck
+      - steamdeck
+      - valve index
+      - meta quest
+      - oculus
+      - htc vive
+      - playstation
+      - xbox
+      - nintendo
+      - dualsense
+      - dualshock
+      - joy-con
+      - joycon
+      - counter-strike
+      - counter strike
+      - counterstrike
+      - csgo
+      - cs go
+      - katowice
+      - awp
+      - arcade maskine
+      - fight stick
+      - racing wheel
+    brands:
+      - gamesir
+      - 8bitdo
+      - razer
+      - steelseries
+      - hyperx
+      - avermedia
+      - turtle beach
+    weak:
+      - gaming
+      - gamer
+      - controller
+      - controllers
+      - gamepad
+      - joystick
+      - konsol
+      - spillekonsol
+      - computerspil
+      - spil
+      - arcade
+      - rat
+      - pedaler
+      - virtual reality
+      - vr briller
+      - trådløs controller
+      - esports
+      - turnering
+      - memorabilia
+      - figur
+      - collectors edition
+      - limited edition
+
+  coffee:
+    label: Kaffe
+    emoji: "☕"
+    max_price: 1500
+    strong:
+      # Produkttyper er specifikke nok til at matche alene. 'maskine'-varianterne
+      # er samme ord og tælles derfor kun én gang.
+      - espressomaskine
+      - espressomaskin
+      - kaffemaskine
+      - kaffemaskin
+      - espressokværn
+      - kaffekværn
+    brands:
+      - rancilio
+      - silvia
+      - gaggia
+      - delonghi
+      - de'longhi
+      - jura
+      - saeco
+      - la marzocco
+      - linea mini
+      - rocket espresso
+      - profitec
+      - bezzera
+      - vibiemme
+      - isomac
+      - quick mill
+      - ascaso
+      - lelit
+      - expobar
+      - nuova simonelli
+      - simonelli
+      - mazzer
+      - eureka
+      - mahlkonig
+      - mahlkönig
+      - compak
+      - baratza
+      - niche zero
+      - comandante
+      - 1zpresso
+      - timemore
+      - ceado
+      - macap
+      - fiorenzato
+      - anfim
+      - sage
+      - breville
+    weak:
+      - kværn
+      - barista
+      - portafilter
+      - tamper
+      - mælkeskum
+      - steamwand
+      - aeropress
+      - chemex
+      - v60
+      - pour over
+      - mokkakande
+      - espressomaskine
+      - espressokande
+      - cappuccino
+      - latte
+      - kaffebønner
+      - kaffeboenner
+      - brygge
+      - espresso
+      - kaffekande
+      - kaffekop
+      - kaffepresse
+      - french press
