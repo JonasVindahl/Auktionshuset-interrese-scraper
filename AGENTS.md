@@ -155,3 +155,13 @@ mod den, aldrig mod et snapshot.
 - Type hints overalt; `from __future__ import annotations`.
 - Kode på engelsk, brugerrettet tekst og docs på dansk.
 - Kommentarer forklarer *hvorfor*, ikke hvad koden gør.
+- **Tomme formularfelter er ikke ugyldige tal.** En HTML-formular sender hvert
+  felt med, også de tomme. Et `int | None`-parameter i FastAPI afviser `""` med
+  422, så en helt almindelig søgning uden prisfilter fejlede. Brug `OptionalInt`
+  fra `web/app.py` til alle heltalsfelter der kommer fra en formular, og bemærk
+  at `Query(...)` som *default* overskriver Annotated-metadataen — `Query` skal
+  ind i `Annotated[...]` når typen har en `BeforeValidator`.
+- **Test formularer som browseren sender dem.** Testene ramte ikke fejlen
+  ovenfor, fordi de sendte enkeltparametre med rigtige værdier. En formular
+  sender *alle* felter, inklusive de tomme. `BROWSER_FORM` i
+  `tests/test_web_app.py` er den form der skal testes mod.

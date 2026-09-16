@@ -12,9 +12,10 @@ import io
 import logging
 import os
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
+from pydantic import BeforeValidator
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -42,6 +43,22 @@ NAV = (
     ("/chat", "Assistent"),
     ("/stats", "Statistik"),
 )
+
+
+def _blank_to_none(value: Any) -> Any:
+    """Tom streng betyder 'ikke udfyldt', ikke 'ugyldigt tal'.
+
+    En HTML-formular sender hvert felt med, også de tomme. Uden denne
+    oversættelse svarer FastAPI 422 på en søgning hvor prisfelterne bare står
+    tomme — altså på den helt almindelige brug af søgeformularen.
+    """
+    if isinstance(value, str) and not value.strip():
+        return None
+    return value
+
+
+# Et heltalsfelt der må stå tomt i en formular.
+OptionalInt = Annotated[int | None, BeforeValidator(_blank_to_none)]
 
 
 def db_path() -> str:
@@ -214,14 +231,16 @@ def create_app() -> FastAPI:
     def archive(
         request: Request,
         q: str = Query("", max_length=200),
-        min_price: int | None = None,
-        max_price: int | None = None,
+        min_price: OptionalInt = None,
+        max_price: OptionalInt = None,
         status: str = "alle",
         matched: str = "alle",
         category: str = "",
-        days_back: int | None = None,
+        days_back: OptionalInt = None,
         sort: str = "relevans",
-        page_no: int = Query(1, alias="page", ge=1),
+        page_no: Annotated[
+            int | None, BeforeValidator(_blank_to_none), Query(alias="page")
+        ] = 1,
         _: None = Depends(require_login),
     ) -> HTMLResponse:
         conn = queries.ro_conn(db_path())
@@ -229,7 +248,7 @@ def create_app() -> FastAPI:
             result = search_mod.search(conn, search_mod.SearchQuery(
                 text=q, min_price=min_price, max_price=max_price,
                 status=status, matched=matched, category=category,
-                days_back=days_back, sort=sort, page=page_no,
+                days_back=days_back, sort=sort, page=page_no or 1,
             ))
             stats = search_mod.archive_stats(conn)
             categories = search_mod.categories_seen(conn)
@@ -369,17 +388,22 @@ def create_app() -> FastAPI:
     @app.post("/interests/price")
     def interests_price(
         category: str = Form(...),
-        max_price: int = Form(...),
+        max_price: str = Form(""),
         _: None = Depends(require_login),
     ) -> RedirectResponse:
-        if not 0 < max_price <= 10_000_000:
+        # Feltet kan stå tomt, og et tomt felt er ikke en serverfejl.
+        try:
+            limit = int(max_price.strip())
+        except ValueError:
+            return _interests_redirect(error="Prisloftet skal være et helt tal.")
+        if not 0 < limit <= 10_000_000:
             return _interests_redirect(error="Prisloftet skal være mellem 1 og 10.000.000.")
         try:
             handle = interests_file()
-            handle.set_scalar(("categories", category, "max_price"), max_price)
+            handle.set_scalar(("categories", category, "max_price"), limit)
             handle.save()
             return _interests_redirect(
-                message=f"Prisloftet for {category} er nu {kr(max_price)}."
+                message=f"Prisloftet for {category} er nu {kr(limit)}."
             )
         except (EditError, OSError) as exc:
             return _interests_redirect(error=str(exc))
