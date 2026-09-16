@@ -190,7 +190,19 @@ def cmd_config(args: argparse.Namespace) -> int:
 
 
 def cmd_web(args: argparse.Namespace) -> int:
-    from .web import serve
+    try:
+        from .web import serve
+    except ImportError as exc:
+        print(
+            f"Webdashboardet mangler en afhængighed: {exc}\n"
+            "Installer dem med: pip install -r requirements.txt",
+            file=sys.stderr,
+        )
+        return 2
+    # Sæt stierne i miljøet, så alle web-moduler ser de samme.
+    os.environ["DB_PATH"] = args.db
+    if args.config:
+        os.environ["CONFIG_PATH"] = args.config
     serve(host=args.host, port=args.port, db_path=args.db)
     return 0
 

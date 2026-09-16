@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex,nofollow">
+<title>Log ind — Auktionshuset Hunter</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div class="login-wrap">
+  <h1>🏷 Auktionshuset Hunter</h1>
+  <p>Dashboardet kan redigere interesseprofilen, så det kræver adgangskode.</p>
+
+  {% if error %}<div class="banner err">{{ error }}</div>{% endif %}
+
+  <form method="post" action="/login">
+    <input type="hidden" name="next" value="{{ next }}">
+    <input type="password" name="password" placeholder="Adgangskode" autofocus required
+           autocomplete="current-password">
+    <button class="primary" type="submit">Log ind</button>
+  </form>
+</div>
+</body>
+</html>

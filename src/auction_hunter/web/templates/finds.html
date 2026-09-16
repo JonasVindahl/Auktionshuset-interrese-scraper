@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% from "_card.html" import card %}
+
+{% block controls %}
+<div class="controls">
+  <div class="filter-row">
+    <span class="filter-label">Kategori</span>
+    {% for cat in categories %}
+      <button class="chip" data-cat="{{ cat }}">{{ cat }}</button>
+    {% else %}
+      <span class="filter-label">ingen endnu</span>
+    {% endfor %}
+  </div>
+
+  <div class="filter-row">
+    {% if show_period %}
+      <span class="filter-label">Sendt</span>
+      <button class="chip active" data-period="all">Alle</button>
+      <button class="chip" data-period="today">I dag</button>
+      <button class="chip" data-period="week">7 dage</button>
+      <div class="filter-sep"></div>
+    {% endif %}
+    {% if show_ending %}
+      <button class="chip urgent" id="ending-chip">⏰ Slutter &lt; 24 t</button>
+      <div class="filter-sep"></div>
+    {% endif %}
+    <span class="filter-label">Pris</span>
+    <input id="price-min" type="number" min="0" placeholder="Fra" inputmode="numeric" class="pill-input">
+    <span class="filter-label">–</span>
+    <input id="price-max" type="number" min="0" placeholder="Til" inputmode="numeric" class="pill-input">
+    <span class="filter-label">kr</span>
+    <button class="reset-btn" id="reset-btn">Nulstil</button>
+  </div>
+
+  <div class="filter-row">
+    <span class="filter-label">Sorter</span>
+    <button class="sort-btn active" data-sort="newest">Nyeste</button>
+    <button class="sort-btn" data-sort="oldest">Ældste</button>
+    {% if show_ending %}<button class="sort-btn" data-sort="ending">Slutter først</button>{% endif %}
+    <button class="sort-btn" data-sort="price_desc">Pris ↓</button>
+    <button class="sort-btn" data-sort="price_asc">Pris ↑</button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<section>
+  <h2>{{ heading }}{% if rows %}<span class="count">{{ rows|length }}</span>{% endif %}</h2>
+
+  {% if not rows %}
+    <p class="empty">{{ empty }}</p>
+  {% else %}
+    <div id="visible-count"></div>
+    <div id="no-results">Ingen fund matcher filteret.</div>
+    <div id="cards-container">
+      {% for label, items in groups %}
+      <div class="date-group">
+        <div class="date-label">{{ label }}</div>
+        {% for row in items %}{{ card(row) }}{% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+    <div id="flat-list" style="display:none"></div>
+  {% endif %}
+</section>
+
+{% if reviews %}
+<section>
+  <h2>Til gennemsyn <span class="count">{{ reviews|length }}</span></h2>
+  {% for review in reviews %}
+  {% set rel, full = rel_past(review.created_at) %}
+  <div class="card">
+    <div class="body">
+      <div><span class="tag-maybe">måske</span></div>
+      {% if review.url %}<a href="{{ review.url }}" target="_blank" rel="noopener">{% endif %}
+        <div class="title">{{ review.title }}</div>
+      {% if review.url %}</a>{% endif %}
+      {% if review.reason %}<div class="meta">{{ review.reason }}</div>{% endif %}
+      <div class="auction-name" title="{{ full }}">{{ rel }}</div>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+{% endblock %}

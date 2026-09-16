@@ -31,6 +31,7 @@ export PYTHONPATH=src
 .venv/bin/python -m auction_hunter scan         # vis fund uden at gemme eller sende
 .venv/bin/python -m auction_hunter once         # én rigtig kørsel
 .venv/bin/python -m auction_hunter run          # kør i loop
+.venv/bin/python -m auction_hunter web          # dashboard på :8080
 ```
 
 `PYTHONPATH=src` er nødvendig fordi pakken ikke installeres, men køres fra
@@ -47,9 +48,10 @@ docker compose up -d --build
 docker compose logs -f
 ```
 
-Containeren kører som ikke-root med read-only filsystem og uden åbne porte —
-den henter kun data ud. Hukommelsen og profilen ligger i `./data` og
-`./config` på værten, så de overlever genopbygning.
+Der startes to containere: agenten, som ikke har åbne porte, og dashboardet
+på port 8080. Begge kører som ikke-root med read-only filsystem. Hukommelsen
+og profilen ligger i `./data` og `./config` på værten, så de overlever
+genopbygning.
 
 Containeren kører som UID/GID 10001, mens `./data` oprettes af dig. Skriv
 derfor til mappen, ellers fejler SQLite på "unable to open database file":
@@ -168,9 +170,9 @@ python -m auction_hunter stats      # viser AI-fordelingen
 
 ## Dashboard
 
-Ud over Discord kører der et lille webdashboard, så du kan se fundene samlet i
-stedet for at scrolle i en chat. Det starter automatisk med `docker compose up`
-og ligger på port 8080:
+Ud over Discord kører der et webdashboard, så fundene kan ses samlet i stedet
+for at blive scrollet forbi i en chat. Det starter med `docker compose up` og
+ligger på port 8080.
 
 ```bash
 docker compose up -d          # scraper + dashboard
@@ -178,37 +180,85 @@ docker compose up -d          # scraper + dashboard
 PYTHONPATH=src python -m auction_hunter web --port 8080
 ```
 
-| Side | Hvad den viser |
+| Fane | Hvad den gør |
 |---|---|
-| `/` | Aktive fund — dem hvor auktionen stadig løber |
-| `/expired` | Fund hvis auktion sluttede inden for de seneste 48 timer |
+| **Fund** | Aktive fund, grupperet pr. dag med tid tilbage |
+| **Udløbet** | Fund hvis auktion sluttede inden for 48 timer |
+| **Arkiv** | Fritekstsøgning i *alt* agenten har set |
+| **Interesser** | Redigér profilen og test en titel mod reglerne |
+| **Assistent** | Spørg om arkivet i almindeligt sprog |
+| **Statistik** | Hvilke kategorier støjer, og hvad er der sket |
 
-Begge sider kan filtreres på kategori og pris, og sorteres efter tid eller
-pris. Forsiden har desuden et filter for auktioner der slutter inden for et
-døgn, og sortering efter hvad der slutter først — det er som regel det man skal
-handle på.
+### Arkivet
 
-Tiden tilbage vises på hvert fund og skifter farve: rød under 6 timer, orange
-under et døgn.
+Agenten gemmer hvert lot den ser, ikke kun dem der rammer profilen — omkring
+2.200 pr. kørsel, hvoraf en håndfuld bliver til fund. Arkivfanen leder i dem
+alle, så man kan slå op om noget har været til salg, selvom det aldrig udløste
+en besked.
+
+Søgningen bruger SQLites FTS5 med begge danske foldninger, så både
+`hoejttaler` og `hojttaler` finder `højttaler`. Der kan filtreres på pris,
+status, kategori, hvornår lot'et blev set, og om det blev til et fund.
+
+### Interesser
+
+Profilen kan redigeres direkte fra siden: tilføj og fjern nøgleord på hvert
+niveau, ret prisloft, og styr udelukkelser.
+
+Ændringerne skrives **linje for linje** i `config/interests.yml`, så filens
+kommentarer bevares. De bærer beslutningerne bag profilen — hvorfor `disk`
+ikke er et nøgleord, hvorfor `server` ligger i `strong` — og et
+PyYAML-gennemløb ville smide dem alle væk. Agenten genlæser filen ved hver
+kørsel, så en ændring slår igennem inden for 15 minutter uden genstart.
+
+Feltet **Test en titel** kører den rigtige matcher på en titel og viser hvilke
+nøgleord der blev ramt, eller hvad der manglede. Det er den hurtigste vej til
+at forstå hvorfor noget slap igennem eller blev væk.
+
+### Assistent
+
+Spørg i almindeligt sprog: *«har der været Sennheiser-forstærkere under 1.000
+kr?»* eller *«vis pladespillere som ikke blev til fund»*.
+
+Modellen skriver aldrig SQL. Den oversætter spørgsmålet til det samme
+strukturerede filter som søgeformularen bruger, og Python bygger
+forespørgslen. En prompt-injektion i en lot-titel kan derfor ikke nå
+databasen — det værste der kan ske er en mærkelig søgning.
+
+Assistenten bruger samme nøgle som AI-trinnet (`CLASSIFIER_API_KEY`). Uden
+nøgle virker siden stadig, men som en almindelig nøgleordssøgning.
 
 ### Markering til AI-træning
 
 Hvert fund har tre knapper: **Ikke interesseret**, **Budt** og **Købt**. De
-gemmes i tabellen `feedback` og er tænkt som træningsdata — et menneskeligt
-svar på om nøgleordene og AI-trinnet ramte rigtigt. Klik igen for at fortryde.
+gemmes i tabellen `feedback` som træningsdata — et menneskeligt svar på om
+nøgleordene og AI-trinnet ramte rigtigt. Klik igen for at fortryde.
 
-Bud og køb sker sjældent, men `/expired` gør det overkommeligt: der står kun
-det der faktisk er afgjort for nylig, så du kan markere en dags fund ad gangen
-i stedet for at grave i hele historikken.
+Bud og køb sker sjældent, men Udløbet-fanen gør det overkommeligt: der står
+kun det der er afgjort for nylig, så en dags fund kan markeres ad gangen.
 
-Træningsdata trækkes ud med:
+Statistikfanen viser **støjandelen** pr. kategori — hvor stor en del af dens
+fund du har afvist. En høj andel betyder at kategoriens nøgleord er for brede.
+Markeringerne hentes som CSV derfra.
+
+### Adgangskode
+
+Dashboardet kan redigere interesseprofilen, så det bør ikke stå åbent — heller
+ikke på et hjemmenetværk. Sæt `WEB_PASSWORD` i `.env`:
 
 ```bash
-sqlite3 data/auction_hunter.db \
-  "SELECT action, title FROM feedback ORDER BY created_at DESC"
+WEB_PASSWORD=vælg-noget-langt-her
+# Så sessioner overlever en genstart:
+WEB_SECRET_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(48))")
 ```
 
-Dashboardet skriver kun til `feedback`. Al anden tilstand ejes af agenten.
+Uden `WEB_PASSWORD` kører siden åbent, og det logges som en advarsel ved
+opstart. Adgangskoden kan også læses fra en fil eller en anden variabel,
+som de øvrige hemmeligheder.
+
+Siden sætter `noindex,nofollow` og er ikke tænkt til at ligge på internettet.
+At genudgive auktionshusets data offentligt er noget andet end at scrape til
+eget brug.
 
 ## Hemmeligheder
 
@@ -279,7 +329,7 @@ uden det.
 | `runner.py` | Kører loopet og binder delene sammen |
 | `secrets.py` | Læser hemmeligheder fra miljø, fil eller indirekte |
 | `fees.py` | Beregner bud og samlet pris inkl. gebyr |
-| `web.py` | Webdashboard: fund, filtrering, feedback |
+| `web/` | Webdashboard: faner, søgning, redigering, assistent |
 | `cli.py` | Kommandolinjen |
 
 Hukommelsen ligger i SQLite (`data/auction_hunter.db`) og gør tre ting: den

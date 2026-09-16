@@ -11,6 +11,7 @@ Dansk projekt. Skriv kode, kommentarer, commit-beskeder og docs på dansk.
 .venv/bin/python -m auction_hunter check          # konfig + Discord-test
 .venv/bin/python -m auction_hunter dump-config    # fuld effektiv konfig
 .venv/bin/python -m auction_hunter web            # dashboard på :8080
+.venv/bin/python -m pytest tests/test_web_*.py    # kun dashboardet
 PYTHONPATH=src .venv/bin/python tools/evaluate.py # mål mod snapshot
 ```
 
@@ -36,6 +37,23 @@ støj i alle kategorier og blev fikset ved at indføre `brands`. Læg aldrig et
 mærke i `strong`.
 
 **`exclude` vinder over alt.** Læg støjende ord der, ikke i weak.
+
+**Webben må kun skrive to steder.** Dashboardet skriver til `feedback` og til
+`config/interests.yml`. Alt andet ejer agenten. Sider læser gennem
+`queries.ro_conn`, som åbner databasen i read-only-tilstand, så en fejl i en
+rute ikke kan ødelægge hukommelsen.
+
+**Sprogmodellen i `web/chat.py` skriver aldrig SQL.** Den leverer et
+struktureret filter med samme felter som søgeformularen, og Python bygger
+forespørgslen. Uden den grænse ville en prompt-injektion i en lot-titel kunne
+nå databasen. `SearchQuery.normalized()` retter ugyldige værdier til deres
+standard i stedet for at fejle.
+
+**`interests.yml` redigeres linje for linje.** `web/yamledit.py` rører kun de
+linjer der skal ændres. Kommentarerne bærer beslutningerne, og en
+PyYAML-round-trip ville smide dem væk — det var derfor `tools/tune.py` blev
+fjernet. Testene i `tests/test_web_yamledit.py` vogter at en tilføjelse
+efterfulgt af en fjernelse giver en byte-identisk fil.
 
 **`distinct_forms` dedupliker varianter.** `strømforsyning` og
 `stroemforsyning` er samme ord; uden dedup omgik de to-træfs-reglen.
@@ -112,6 +130,17 @@ mod den, aldrig mod et snapshot.
   rigtige adresse står i `data-src` eller `srcset`. `Scraper._image_url`
   håndterer begge og gør relative adresser absolutte. Er billedfeltet tomt i én
   kørsel, beholder `record_lot` det gamle i stedet for at overskrive med tomt.
+- **Søgeindekset har to danske foldninger.** `normalize` giver `hoejttaler`,
+  `normalize_loose` giver `hojttaler`. Begge indekseres i `lots_fts.normalized`,
+  fordi folk skriver begge dele. Brug aldrig `normalize_loose` til
+  nøgleordsmatchning — den er for upræcis til at afgøre om et lot er
+  interessant.
+- **Klonede kort i frontenden må ikke tælles med.** `app.js` kloner synlige
+  kort ind i `#flat-list` ved anden sortering end 'nyeste'. Alle opslag skal
+  scopes til `#cards-container`, ellers vokser listen for hvert klik.
+- **Web-afhængighederne er valgfri.** Agenten skal kunne importeres uden
+  FastAPI; derfor importerer `web/__init__.py` dovent, og `cli.cmd_web` fanger
+  `ImportError` med en brugbar besked.
 - Scraperen henter **kun titler**, ingen beskrivelser. En LLM kan derfor ikke
   vurdere stand eller om et par er komplet.
 - Auktionshusets vilkår tillader kun ét scrape hvert 15. minut

@@ -205,7 +205,12 @@ class OpenAICompatibleClient:
         self.max_retries = max_retries
         self.transport = transport
 
-    def complete(self, *, system: str, user: str) -> str:
+    def complete(self, *, system: str, user: str, max_tokens: int = 120) -> str:
+        """Ét kald til modellen.
+
+        ``max_tokens`` er lavt som standard, fordi klassificeringen kun skal
+        svare med et lille JSON-objekt. Chatten i webdashboardet sætter den op.
+        """
         url = f"{self.base_url}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -219,7 +224,7 @@ class OpenAICompatibleClient:
             ],
             # temperature 0 gør svaret så stabilt som muligt, så cachen holder.
             "temperature": 0,
-            "max_tokens": 120,
+            "max_tokens": max_tokens,
         }
 
         last_error: Exception | None = None

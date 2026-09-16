@@ -27,6 +27,7 @@ from typing import Iterator
 
 from .matcher import Match
 from .scraper import Lot
+from .textmatch import normalize, normalize_loose
 
 log = logging.getLogger(__name__)
 
@@ -127,6 +128,18 @@ CREATE TABLE IF NOT EXISTS feedback (
     PRIMARY KEY (lot_id, category_key)
 );
 CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback(created_at);
+
+-- Fritekst-indeks over alle sete lots, ikke kun dem der matchede.
+-- 'normalized' indeholder titlen kørt gennem textmatch, så en søgning på
+-- 'hojttaler' også finder 'højttaler'. Tabellen fyldes fra record_lot og er
+-- derfor altid i sync med 'lots'.
+CREATE VIRTUAL TABLE IF NOT EXISTS lots_fts USING fts5(
+    lot_id UNINDEXED,
+    title,
+    normalized,
+    auction_title,
+    tokenize='unicode61 remove_diacritics 2'
+);
 """
 
 # Kolonner der er kommet til efter de første databaser blev oprettet.
@@ -149,6 +162,46 @@ def _migrate(conn: sqlite3.Connection) -> None:
         if existing and column not in existing:
             log.info("Migrerer: tilføjer %s.%s", table, column)
             conn.execute(statement)
+
+    _backfill_search_index(conn)
+
+
+def _search_text(title: str) -> str:
+    """Den søgbare form af en titel.
+
+    Begge danske foldninger indekseres: ``normalize`` giver 'hoejttaler' og
+    ``normalize_loose`` giver 'hojttaler'. FTS5 deler på mellemrum, så begge
+    former bliver til søgbare ord, og brugeren kan skrive hvad der falder dem
+    naturligt.
+    """
+    strict = normalize(title)
+    loose = normalize_loose(title)
+    return strict if strict == loose else f"{strict} {loose}"
+
+
+def _backfill_search_index(conn: sqlite3.Connection) -> None:
+    """Fyld søgeindekset for lots der blev gemt før indekset fandtes.
+
+    Kører kun når der faktisk mangler noget, så en database der er i sync
+    betaler prisen for ét COUNT og ikke mere.
+    """
+    lots = conn.execute("SELECT COUNT(*) FROM lots").fetchone()[0]
+    indexed = conn.execute("SELECT COUNT(*) FROM lots_fts").fetchone()[0]
+    if lots == indexed:
+        return
+
+    log.info("Bygger søgeindeks: %d lots mangler", lots - indexed)
+    conn.execute("DELETE FROM lots_fts")
+    conn.execute(
+        """INSERT INTO lots_fts (lot_id, title, normalized, auction_title)
+           SELECT lot_id, title, '', auction_title FROM lots"""
+    )
+    # Den normaliserede form beregnes i Python; SQLite kan ikke folde dansk.
+    rows = conn.execute("SELECT lot_id, title FROM lots").fetchall()
+    conn.executemany(
+        "UPDATE lots_fts SET normalized=? WHERE lot_id=?",
+        [(_search_text(row["title"] or ""), row["lot_id"]) for row in rows],
+    )
 
 # Hvor længe historik holdes. Auktioner løber i uger, så et halvt år er rigeligt
 # til at se et mønster, og grænsen holder databasen fra at vokse i det uendelige
@@ -286,6 +339,21 @@ class Store:
                     """INSERT OR REPLACE INTO price_history (lot_id, observed_at, bid, total)
                        VALUES (?,?,?,?)""",
                     (lot.lot_id, utcnow_precise(), lot.current_bid, total),
+                )
+
+            # Søgeindekset. Kun titlen kan ændre sig, så den billige vej er at
+            # slette og indsætte igen — FTS5 har ingen UPDATE der virker på en
+            # ekstern nøgle.
+            indexed = conn.execute(
+                "SELECT title FROM lots_fts WHERE lot_id=?", (lot.lot_id,)
+            ).fetchone()
+            if indexed is None or indexed["title"] != lot.title:
+                if indexed is not None:
+                    conn.execute("DELETE FROM lots_fts WHERE lot_id=?", (lot.lot_id,))
+                conn.execute(
+                    """INSERT INTO lots_fts (lot_id, title, normalized, auction_title)
+                       VALUES (?,?,?,?)""",
+                    (lot.lot_id, lot.title, _search_text(lot.title), lot.auction_title),
                 )
 
     def record_lots(self, lots: list[Lot], totals: dict[str, int | None] | None = None) -> None:

@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% from "_card.html" import card %}
+{% set q = result.query %}
+
+{% block stats %}
+<div class="stats-bar">
+  <div class="stat"><strong>{{ archive.total }}</strong>lots i arkivet</div>
+  <div class="stat accent"><strong>{{ archive.matched }}</strong>blev til fund</div>
+  <div class="stat"><strong>{{ archive.unmatched }}</strong>uden for profilen</div>
+  <div class="stat"><strong>{{ archive.indexed }}</strong>søgbare</div>
+</div>
+{% endblock %}
+
+{% block controls %}
+<div class="controls">
+  <form method="get" action="/archive">
+    <div class="filter-row">
+      <div class="searchbox">
+        <input type="search" name="q" value="{{ q.text }}" autofocus
+               placeholder="Søg i alt hvad agenten har set — fx sennheiser, nas, pladespiller">
+        <button class="primary" type="submit">Søg</button>
+      </div>
+    </div>
+
+    <div class="filter-row">
+      <span class="filter-label">Status</span>
+      <select name="status">
+        {% for choice in status_choices %}
+        <option value="{{ choice }}" {% if q.status == choice %}selected{% endif %}>
+          {{ {'alle':'Alle','aktive':'Kun aktive','afsluttede':'Kun afsluttede'}[choice] }}
+        </option>
+        {% endfor %}
+      </select>
+
+      <div class="filter-sep"></div>
+      <span class="filter-label">Match</span>
+      <select name="matched">
+        {% for choice in match_choices %}
+        <option value="{{ choice }}" {% if q.matched == choice %}selected{% endif %}>
+          {{ {'alle':'Alle','kun_fund':'Kun fund','kun_ikke_fund':'Kun ikke-fund'}[choice] }}
+        </option>
+        {% endfor %}
+      </select>
+
+      <div class="filter-sep"></div>
+      <span class="filter-label">Kategori</span>
+      <select name="category">
+        <option value="">Alle</option>
+        {% for cat in categories %}
+        <option value="{{ cat }}" {% if q.category == cat %}selected{% endif %}>{{ cat }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="filter-row">
+      <span class="filter-label">Pris</span>
+      <input type="number" name="min_price" min="0" placeholder="Fra" class="pill-input"
+             value="{{ q.min_price or '' }}">
+      <span class="filter-label">–</span>
+      <input type="number" name="max_price" min="0" placeholder="Til" class="pill-input"
+             value="{{ q.max_price or '' }}">
+      <span class="filter-label">kr</span>
+
+      <div class="filter-sep"></div>
+      <span class="filter-label">Set inden for</span>
+      <select name="days_back">
+        <option value="">Altid</option>
+        {% for days, label in [(1,'1 dag'),(7,'7 dage'),(30,'30 dage'),(90,'3 måneder'),(365,'1 år')] %}
+        <option value="{{ days }}" {% if q.days_back == days %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+
+      <div class="filter-sep"></div>
+      <span class="filter-label">Sorter</span>
+      <select name="sort">
+        {% for choice in sort_choices %}
+        <option value="{{ choice }}" {% if q.sort == choice %}selected{% endif %}>
+          {{ {'relevans':'Relevans','nyeste':'Nyeste','slutter':'Slutter først',
+              'pris_op':'Pris ↑','pris_ned':'Pris ↓'}[choice] }}
+        </option>
+        {% endfor %}
+      </select>
+
+      <button class="ghost" type="submit">Anvend</button>
+      <a class="reset-btn" href="/archive">Nulstil</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block content %}
+<section>
+  {% if q.is_empty %}
+    <h2>Hele arkivet</h2>
+    <p class="chat-intro">
+      Agenten gemmer hvert lot den ser, ikke kun dem der rammer interesseprofilen.
+      Her kan du lede i alt sammen — også det der aldrig blev til en besked i Discord.
+      Søgningen folder danske tegn, så <code>hojttaler</code> finder <code>højttaler</code>.
+    </p>
+  {% else %}
+    <h2>Resultat <span class="count">{{ result.total }}</span></h2>
+  {% endif %}
+
+  {% if result.rows %}
+    <div class="result-summary">
+      Viser {{ result.rows|length }} af {{ result.total }}
+      {%- if result.pages > 1 %} &middot; side {{ result.page }} af {{ result.pages }}{% endif %}
+    </div>
+    {% for row in rows %}{{ card(row) }}{% endfor %}
+
+    {% if result.pages > 1 %}
+    <div class="pager">
+      {% if result.has_prev %}
+        <a href="{{ page_url(result.page - 1) }}">← Forrige</a>
+      {% else %}
+        <span class="disabled">← Forrige</span>
+      {% endif %}
+      <span class="current">{{ result.page }} / {{ result.pages }}</span>
+      {% if result.has_next %}
+        <a href="{{ page_url(result.page + 1) }}">Næste →</a>
+      {% else %}
+        <span class="disabled">Næste →</span>
+      {% endif %}
+    </div>
+    {% endif %}
+  {% else %}
+    <p class="empty">
+      {% if q.is_empty %}Skriv noget i søgefeltet for at lede i arkivet.
+      {% else %}Ingen lots matcher søgningen.{% endif %}
+    </p>
+  {% endif %}
+</section>
+{% endblock %}

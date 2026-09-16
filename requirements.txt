@@ -2,3 +2,10 @@ requests==2.34.2
 beautifulsoup4==4.15.0
 lxml==5.4.0
 PyYAML==6.0.2
+
+# Webdashboard. Agenten selv kører uden dem, men 'auction_hunter web' kræver dem.
+fastapi==0.141.1
+uvicorn==0.53.0
+jinja2==3.1.6
+itsdangerous==2.2.0
+python-multipart==0.0.32

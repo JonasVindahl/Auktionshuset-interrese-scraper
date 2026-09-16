@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex,nofollow">
+<title>{% block title %}Auktionshuset Hunter{% endblock %}</title>
+<link rel="stylesheet" href="/static/app.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏷</text></svg>">
+</head>
+<body>
+
+<header class="topbar">
+  <a href="/" class="brand">🏷 <span>Hunter</span></a>
+  <nav class="tabs">
+    {% for href, label in nav %}
+      <a href="{{ href }}" class="tab {% if path == href %}active{% endif %}">{{ label }}</a>
+    {% endfor %}
+  </nav>
+  <span class="pulse" title="Seneste kørsel af agenten">
+    <span class="dot {% if stale %}stale{% endif %}"></span>{{ pulse }}
+  </span>
+</header>
+
+{% block stats %}
+{% if counts %}
+<div class="stats-bar">
+  <div class="stat"><strong>{{ counts.lots }}</strong>lots i arkivet</div>
+  <div class="stat"><strong>{{ counts.notifications }}</strong>fund sendt</div>
+  {% if counts.marked %}<div class="stat"><strong>{{ counts.marked }}</strong>markeret</div>{% endif %}
+  {% if counts.pending_review %}<div class="stat"><strong>{{ counts.pending_review }}</strong>til gennemsyn</div>{% endif %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block controls %}{% endblock %}
+
+<main>
+  {% if message %}<div class="banner ok">{{ message }}</div>{% endif %}
+  {% if error %}<div class="banner err">{{ error }}</div>{% endif %}
+  {% block content %}{% endblock %}
+</main>
+
+<footer>
+  Fund sendes til Discord &middot; markeringer gemmes lokalt til AI-træning
+  &middot; <a href="/logout">log ud</a>
+</footer>
+
+<script src="/static/app.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
