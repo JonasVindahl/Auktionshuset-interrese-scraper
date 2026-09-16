@@ -987,10 +987,6 @@ details[open]>.cat-body{animation:reveal var(--dur-base) var(--ease-out) both}
 .bar-fill.is-neutral{background:var(--accent-solid)}
 .bar-row.is-price .bar-label::before{display:none}
 .bar-row.is-price .bar-label{color:var(--text-2)}
-.tag-brand{
-  font-size:var(--fs-caption);font-weight:600;color:var(--text-2);
-  background:var(--surface-3);border-radius:var(--r-1);padding:2px 8px;
-}
 .tag-vat{
   font-size:var(--fs-caption);font-weight:600;color:var(--ok);
   background:var(--ok-soft);border-radius:var(--r-1);padding:2px 8px;cursor:help;

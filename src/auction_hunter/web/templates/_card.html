@@ -41,8 +41,6 @@
 
     <p class="card-meta">
       {%- if row.category %}<span class="tag-cat" data-cat="{{ row.category }}" title="{{ row.category }}">{{ category_labels.get(row.category, row.category) }}</span>{% endif %}
-      {%- set brands = brands_in(row.title) %}
-      {%- if brands %}<span class="tag-brand" title="Mærke fundet i titlen">{{ brands[:2]|join(', ') }}</span>{% endif %}
       {%- if is_vat_exempt(row.auction) %}<span class="tag-vat" title="Momsfri auktion: salæret er momsbelagt, hammerprisen ikke">momsfri</span>{% endif %}
       {%- if row.lot_number %}<span class="meta-item">Lot {{ row.lot_number }}</span>{% endif %}
       {%- if show_seen and row.seen_rel %}<span class="meta-item" title="{{ row.seen_full }}">set {{ row.seen_rel }}</span>{% endif %}

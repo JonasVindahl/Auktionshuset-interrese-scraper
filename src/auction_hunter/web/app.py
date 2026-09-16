@@ -29,7 +29,6 @@ from .. import images as images_mod
 from ..classifier import OpenAICompatibleClient
 from ..config import DEFAULT_CONFIG_PATH, ConfigError, load_config
 from ..fees import DEFAULT_OPENING_BID, is_vat_exempt
-from ..textmatch import find_keywords
 from ..secrets import SecretError, get_secret
 from . import auth, chat as chat_mod, queries, rows as rows_mod, search as search_mod
 from .formatting import date_label, kr, rel_past, time_left, timestamp
@@ -121,7 +120,6 @@ def llm_client() -> OpenAICompatibleClient | None:
 # sidekald. Derfor caches de få værdier webben skal bruge, på mtime og størrelse.
 _config_cache: dict[str, Any] = {
     "key": None, "labels": {}, "opening_bid": DEFAULT_OPENING_BID,
-    "brands": (), "brand_exact": (),
 }
 
 
@@ -140,21 +138,12 @@ def _config_values() -> tuple[dict[str, str], int]:
         config = load_config(path)
         labels = {category.key: category.label for category in config.categories}
         opening = config.opening_bid
-        brands = tuple(dict.fromkeys(
-            kw for category in config.categories for kw in category.brands
-        ))
-        brand_exact = tuple(dict.fromkeys(
-            kw for category in config.categories for kw in category.exact
-        ))
     except ConfigError:
         # Et tomt kort er et gyldigt svar: siden skal kunne vises, selvom filen
         # mangler eller er i stykker.
-        labels, opening, brands, brand_exact = {}, DEFAULT_OPENING_BID, (), ()
+        labels, opening = {}, DEFAULT_OPENING_BID
 
-    _config_cache.update(
-        key=key, labels=labels, opening_bid=opening,
-        brands=brands, brand_exact=brand_exact,
-    )
+    _config_cache.update(key=key, labels=labels, opening_bid=opening)
     return labels, opening
 
 
@@ -166,21 +155,6 @@ def category_labels() -> dict[str, str]:
 def opening_bid() -> int:
     """Første bud-grænsen, brugt til at vise hvad et lot uden bud koster."""
     return _config_values()[1]
-
-
-def brands_in(title: str) -> tuple[str, ...]:
-    """Hvilke kendte mærker nævnes i titlen?
-
-    Svarer på "hvilket firma" uden at hente noget ekstra fra auktionshuset:
-    mærkelisterne i interesseprofilen er allerede kuraterede, og et mærke i en
-    titel er det tætteste på en producent vi får uden at læse lot-siden.
-    """
-    _config_values()          # sørger for at cachen er fyldt
-    return find_keywords(
-        title,
-        tuple(_config_cache["brands"]),
-        exact=tuple(_config_cache["brand_exact"]),
-    )
 
 
 def archive_url(query: search_mod.SearchQuery, **changes: Any) -> str:
@@ -349,7 +323,6 @@ def create_app() -> FastAPI:
     templates.env.filters["timestamp"] = timestamp
     templates.env.globals["time_left"] = time_left
     templates.env.globals["rel_past"] = rel_past
-    templates.env.globals["brands_in"] = brands_in
     templates.env.globals["is_vat_exempt"] = is_vat_exempt
     templates.env.globals["nav"] = NAV
 
