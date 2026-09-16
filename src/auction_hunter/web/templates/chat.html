@@ -1,61 +1,86 @@
 {% extends "base.html" %}
-{% from "_card.html" import card %}
+{% from "_icons.html" import icon %}
+{% from "_card.html" import card with context %}
+
+{% set filter_labels = {
+  'søgeord': 'Søgeord', 'min_pris': 'Fra', 'maks_pris': 'Til',
+  'status': 'Status', 'kun': 'Match', 'dage_tilbage': 'Periode'
+} %}
+
+{% block title %}Assistent · Auktionshuset Hunter{% endblock %}
 
 {% block content %}
-<section>
-  <h2>Assistent</h2>
+<header class="page-head">
+  <h1>Assistent</h1>
+  <p class="page-meta">Stil et spørgsmål i almindeligt sprog, og få et svar bygget på arkivet.</p>
+</header>
 
-  <div class="panel panel-pad" style="margin-bottom:20px">
-    <form method="get" action="/chat" class="searchbox">
-      <input type="search" name="q" value="{{ question }}" autofocus
-             placeholder="Spørg om arkivet — fx: har der været Sennheiser-forstærkere under 1.000 kr?">
-      <button class="primary" type="submit">Spørg</button>
-    </form>
-
-    {% if not question %}
-    <p class="chat-intro" style="margin:14px 0 0">
-      Jeg leder i alt hvad agenten har set — også de lots der aldrig blev til et fund.
-      Spørgsmålet oversættes til en søgning; jeg skriver aldrig SQL selv, så en
-      mærkelig lot-titel kan ikke narre mig til noget.
-    </p>
-    <div class="suggestions">
-      {% for suggestion in [
-        'Har der været Sennheiser-forstærkere under 1.000 kr?',
-        'Hvilke NAS-enheder er der lige nu?',
-        'Hvad slutter inden for et døgn?',
-        'Vis pladespillere som ikke blev til fund',
-        'Hvad har været af servere de sidste 30 dage?'
-      ] %}
-      <a href="/chat?q={{ suggestion|urlencode }}">{{ suggestion }}</a>
-      {% endfor %}
-    </div>
-    {% endif %}
-
-    {% if not has_key %}
-    <div class="banner err" style="margin:14px 0 0">
-      <strong>CLASSIFIER_API_KEY er ikke sat.</strong>
-      Jeg svarer stadig, men uden sprogmodel: spørgsmålet bliver til en
-      nøgleordssøgning, og du får resultaterne rå i stedet for som prosa.
-    </div>
-    {% endif %}
+<form class="search-form" method="get" action="/chat">
+  <div class="search-field">
+    {{ icon('search', 17) }}
+    <input type="search" name="q" value="{{ question }}" data-search autofocus
+           placeholder="Spørg om arkivet" aria-label="Spørgsmål til arkivet">
   </div>
+  <button class="btn is-primary" type="submit">Spørg</button>
+</form>
 
-  {% if answer %}
-    <div class="chat-answer">{{ answer.text }}</div>
+{% if not has_key %}
+<p class="banner is-note" role="status">
+  {{ icon('info', 15) }}
+  <span><strong>CLASSIFIER_API_KEY er ikke sat.</strong> Du kan stadig søge: spørgsmålet bliver til en nøgleordssøgning, og du får lot'ene direkte i stedet for et skrevet svar.</span>
+</p>
+{% endif %}
 
-    {% if answer.filter_used %}
-    <div class="chat-filter">
-      Søgte efter:
-      {% for key, value in answer.filter_used.items() %}{{ key }}={{ value }}{% if not loop.last %} · {% endif %}{% endfor %}
-    </div>
-    {% endif %}
-
-    {% if rows %}
-    <div style="margin-top:20px">
-      <h2>Fundne lots <span class="count">{{ rows|length }}</span></h2>
-      {% for row in rows %}{{ card(row) }}{% endfor %}
-    </div>
-    {% endif %}
+{% if answer %}
+<div class="answer">
+  <p class="answer-text">{{ answer.text }}</p>
+  {% if answer.filter_used %}
+  <p class="answer-filter">
+    <span class="answer-filter-label">Søgte efter</span>
+    {% for key, value in answer.filter_used.items() %}
+    <span class="tag">{{ filter_labels.get(key, key) }}: {{ value }}</span>
+    {% endfor %}
+  </p>
   {% endif %}
+</div>
+
+{% if rows %}
+<section class="section">
+  <h2 class="section-title">Fundne lots <span class="count">{{ rows|length }}</span></h2>
+  {% for row in rows %}{{ card(row, show_seen=True) }}{% endfor %}
 </section>
+{% else %}
+<p class="empty">Ingen lots i arkivet matcher spørgsmålet.</p>
+{% endif %}
+
+<section class="section">
+  <h2 class="section-title">Prøv også</h2>
+  <div class="suggestions">
+    {% for suggestion in [
+      'Hvilke NAS-enheder er der lige nu?',
+      'Hvad slutter inden for et døgn?',
+      'Vis pladespillere som ikke blev til fund',
+      'Hvad har været af servere de sidste 30 dage?'
+    ] %}
+    <a href="/chat?q={{ suggestion|urlencode }}">{{ suggestion }}</a>
+    {% endfor %}
+  </div>
+</section>
+
+{% else %}
+<section class="section">
+  <p class="hint">Jeg leder i alt hvad agenten har set, også de lots der aldrig blev til et fund. Spørgsmålet oversættes til en søgning, og det er Python der bygger den. En mærkelig lot-titel kan derfor ikke narre mig til at hente noget andet end lots.</p>
+  <div class="suggestions">
+    {% for suggestion in [
+      'Har der været Sennheiser-forstærkere under 1.000 kr?',
+      'Hvilke NAS-enheder er der lige nu?',
+      'Hvad slutter inden for et døgn?',
+      'Vis pladespillere som ikke blev til fund',
+      'Hvad har været af servere de sidste 30 dage?'
+    ] %}
+    <a href="/chat?q={{ suggestion|urlencode }}">{{ suggestion }}</a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
 {% endblock %}

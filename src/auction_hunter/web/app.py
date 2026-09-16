@@ -95,6 +95,86 @@ def llm_client() -> OpenAICompatibleClient | None:
     )
 
 
+def category_labels() -> dict[str, str]:
+    """Kategorinøgler oversat til de læsbare etiketter fra interesseprofilen.
+
+    Et tomt kort er et gyldigt svar: siden skal kunne vises, selvom
+    konfigurationsfilen mangler eller er i stykker.
+    """
+    try:
+        config = load_config(config_path())
+    except ConfigError:
+        return {}
+    return {category.key: category.label for category in config.categories}
+
+
+# Etiketter til de enkelte arkivfiltre, så opsummeringen bliver til dansk
+# frem for feltnavne.
+_ARCHIVE_SORT_LABELS = {
+    "nyeste": "nyeste",
+    "slutter": "slutter først",
+    "pris_op": "laveste pris",
+    "pris_ned": "højeste pris",
+}
+
+
+def filter_chips(query: search_mod.SearchQuery) -> list[dict[str, str]]:
+    """De aktive arkivfiltre som fjernbare chips.
+
+    Hver chip bærer et link til den samme søgning uden netop det filter. Det
+    gør oprydningen til ét klik, og den virker også uden JavaScript.
+    """
+    from urllib.parse import urlencode
+
+    labels = category_labels()
+
+    def link_without(drop: str) -> str:
+        params: dict[str, Any] = {
+            "q": query.text,
+            "min_price": query.min_price,
+            "max_price": query.max_price,
+            "status": query.status if query.status != "alle" else "",
+            "matched": query.matched if query.matched != "alle" else "",
+            "category": query.category,
+            "days_back": query.days_back,
+            "sort": query.sort if query.sort != "relevans" else "",
+        }
+        params.pop(drop, None)
+        clean = {key: value for key, value in params.items() if value}
+        return "/archive?" + urlencode(clean) if clean else "/archive"
+
+    chips: list[dict[str, str]] = []
+    if query.text:
+        chips.append({"label": f'"{query.text}"', "url": link_without("q")})
+    if query.min_price is not None:
+        chips.append({"label": f"fra {kr(query.min_price)}", "url": link_without("min_price")})
+    if query.max_price is not None:
+        chips.append({"label": f"til {kr(query.max_price)}", "url": link_without("max_price")})
+    if query.status in ("aktive", "afsluttede"):
+        chips.append({"label": f"kun {query.status}", "url": link_without("status")})
+    if query.matched == "kun_fund":
+        chips.append({"label": "kun fund", "url": link_without("matched")})
+    elif query.matched == "kun_ikke_fund":
+        chips.append({"label": "kun ikke-fund", "url": link_without("matched")})
+    if query.category:
+        chips.append({
+            "label": labels.get(query.category, query.category),
+            "url": link_without("category"),
+        })
+    if query.days_back:
+        unit = "dag" if query.days_back == 1 else "dage"
+        chips.append({
+            "label": f"set inden for {query.days_back} {unit}",
+            "url": link_without("days_back"),
+        })
+    if query.sort != "relevans":
+        chips.append({
+            "label": "sorteret: " + _ARCHIVE_SORT_LABELS.get(query.sort, query.sort),
+            "url": link_without("sort"),
+        })
+    return chips
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="Auktionshuset Hunter", docs_url=None, redoc_url=None)
     app.add_middleware(
@@ -125,6 +205,7 @@ def create_app() -> FastAPI:
         return templates.TemplateResponse(
             request, name,
             {"pulse": pulse, "stale": stale, "counts": counts,
+             "category_labels": category_labels(),
              "path": request.url.path, **context},
         )
 
@@ -278,6 +359,7 @@ def create_app() -> FastAPI:
             result=result,
             rows=rows_mod.prepare_all(result.rows, seen_field="first_seen", db_path=db_path()),
             archive=stats, categories=categories, page_url=page_url,
+            filters=filter_chips(result.query),
             status_choices=search_mod.STATUS_CHOICES,
             match_choices=search_mod.MATCH_CHOICES,
             sort_choices=search_mod.SORT_CHOICES,

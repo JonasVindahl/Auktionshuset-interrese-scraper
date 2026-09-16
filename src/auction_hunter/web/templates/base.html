@@ -1,3 +1,4 @@
+{% from "_icons.html" import icon %}
 <!doctype html>
 <html lang="da">
 <head>
@@ -7,47 +8,45 @@
 <meta name="robots" content="noindex,nofollow">
 <title>{% block title %}Auktionshuset Hunter{% endblock %}</title>
 <link rel="stylesheet" href="/static/app.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏷</text></svg>">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a35a12' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 11.4V5.6A2.6 2.6 0 0 1 5.6 3h5.8L21 12.6 12.6 21 3 11.4Z'/%3E%3Ccircle cx='8' cy='8' r='1.35'/%3E%3C/svg%3E">
 </head>
 <body>
+<a class="skip-link" href="#main">Spring til indhold</a>
 
 <header class="topbar">
-  <a href="/" class="brand">🏷 <span>Hunter</span></a>
-  <nav class="tabs">
+  <a class="brand" href="/">
+    {{ icon('mark', 19, 'brand-mark') }}
+    <span class="brand-name">Auktionshuset <em>Hunter</em></span>
+  </a>
+
+  <nav class="nav" aria-label="Hovedmenu">
     {% for href, label in nav %}
-      <a href="{{ href }}" class="tab {% if path == href %}active{% endif %}">{{ label }}</a>
+    <a href="{{ href }}" class="nav-link{% if path == href %} is-active{% endif %}"
+       {% if path == href %}aria-current="page"{% endif %}>{{ label }}{% if href == '/' and counts and counts.pending_review %}<span class="nav-badge" title="{{ counts.pending_review }} til gennemsyn">{{ counts.pending_review }}</span>{% endif %}</a>
     {% endfor %}
   </nav>
-  <span class="pulse" title="Seneste kørsel af agenten">
-    <span class="dot {% if stale %}stale{% endif %}"></span>{{ pulse }}
-  </span>
+
+  <p class="agent-status" title="Seneste kørsel af agenten">
+    <span class="dot{% if stale %} is-stale{% endif %}" aria-hidden="true"></span>
+    <span class="agent-status-text">{{ pulse }}</span>
+  </p>
 </header>
 
-{% block stats %}
-{% if counts %}
-<div class="stats-bar">
-  <div class="stat"><strong>{{ counts.lots }}</strong>lots i arkivet</div>
-  <div class="stat"><strong>{{ counts.notifications }}</strong>fund sendt</div>
-  {% if counts.marked %}<div class="stat"><strong>{{ counts.marked }}</strong>markeret</div>{% endif %}
-  {% if counts.pending_review %}<div class="stat"><strong>{{ counts.pending_review }}</strong>til gennemsyn</div>{% endif %}
-</div>
-{% endif %}
-{% endblock %}
-
-{% block controls %}{% endblock %}
-
-<main>
-  {% if message %}<div class="banner ok">{{ message }}</div>{% endif %}
-  {% if error %}<div class="banner err">{{ error }}</div>{% endif %}
+<main id="main" class="page">
+  {% if message %}<p class="banner is-ok" role="status">{{ icon('check', 15) }}<span>{{ message }}</span></p>{% endif %}
+  {% if error %}<p class="banner is-err" role="alert">{{ icon('alert', 15) }}<span>{{ error }}</span></p>{% endif %}
   {% block content %}{% endblock %}
 </main>
 
-<footer>
-  Fund sendes til Discord &middot; markeringer gemmes lokalt til AI-træning
-  &middot; <a href="/logout">log ud</a>
+<footer class="site-foot">
+  <p>Fund sendes til Discord. Markeringer gemmes lokalt som træningsdata til AI-trinnet.</p>
+  <p class="site-foot-links">
+    <a href="/export/feedback.csv">{{ icon('download', 14) }} Hent markeringer som CSV</a>
+    <a href="/logout">{{ icon('logout', 14) }} Log ud</a>
+  </p>
 </footer>
 
-<script src="/static/app.js"></script>
+<script src="/static/app.js" defer></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

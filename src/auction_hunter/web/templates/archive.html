@@ -1,133 +1,136 @@
 {% extends "base.html" %}
-{% from "_card.html" import card %}
+{% from "_icons.html" import icon %}
+{% from "_card.html" import card with context %}
 {% set q = result.query %}
+{% set advanced = q.min_price or q.max_price or q.status != 'alle' or q.matched != 'alle' or q.category or q.days_back or q.sort != 'relevans' %}
 
-{% block stats %}
-<div class="stats-bar">
-  <div class="stat"><strong>{{ archive.total }}</strong>lots i arkivet</div>
-  <div class="stat accent"><strong>{{ archive.matched }}</strong>blev til fund</div>
-  <div class="stat"><strong>{{ archive.unmatched }}</strong>uden for profilen</div>
-  <div class="stat"><strong>{{ archive.indexed }}</strong>søgbare</div>
-</div>
-{% endblock %}
+{% block title %}Arkiv · Auktionshuset Hunter{% endblock %}
 
-{% block controls %}
-<div class="controls">
-  <form method="get" action="/archive">
-    <div class="filter-row">
-      <div class="searchbox">
-        <input type="search" name="q" value="{{ q.text }}" autofocus
-               placeholder="Søg i alt hvad agenten har set — fx sennheiser, nas, pladespiller">
-        <button class="primary" type="submit">Søg</button>
+{% block content %}
+<header class="page-head">
+  <h1>Arkiv</h1>
+  <p class="page-meta">
+    <span>{{ archive.total }} lots i arkivet</span>
+    <span class="meta-sep">·</span><span>{{ archive.matched }} blev til fund</span>
+    <span class="meta-sep">·</span><span>{{ archive.unmatched }} uden for profilen</span>
+  </p>
+</header>
+
+<form class="archive-form" method="get" action="/archive" data-autosubmit>
+  <div class="search-form">
+    <div class="search-field">
+      {{ icon('search', 17) }}
+      <input type="search" name="q" value="{{ q.text }}" data-search autofocus
+             placeholder="Søg i alt agenten har set" aria-label="Søg i arkivet">
+    </div>
+    <button class="btn is-primary" type="submit">Søg</button>
+  </div>
+
+  {% if filters %}
+  <div class="active-filters">
+    <span class="active-filters-label">Filtre</span>
+    {% for f in filters %}<a class="filter-chip" href="{{ f.url }}">{{ f.label }}{{ icon('close', 12) }}</a>{% endfor %}
+    <a class="filter-clear" href="/archive">Ryd alle</a>
+  </div>
+  {% endif %}
+
+  <details class="filters" {% if advanced %}open{% endif %}>
+    <summary class="btn is-quiet">{{ icon('filter', 15) }} Flere filtre</summary>
+    <div class="filters-body">
+      <div class="field">
+        <label for="f-status">Status</label>
+        <select id="f-status" name="status">
+          {% for choice in status_choices %}
+          <option value="{{ choice }}" {% if q.status == choice %}selected{% endif %}>{{ {'alle':'Alle','aktive':'Kun aktive','afsluttede':'Kun afsluttede'}[choice] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="f-matched">Match</label>
+        <select id="f-matched" name="matched">
+          {% for choice in match_choices %}
+          <option value="{{ choice }}" {% if q.matched == choice %}selected{% endif %}>{{ {'alle':'Alle','kun_fund':'Kun fund','kun_ikke_fund':'Kun ikke-fund'}[choice] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="f-category">Kategori</label>
+        <select id="f-category" name="category">
+          <option value="">Alle</option>
+          {% for cat in categories %}
+          <option value="{{ cat }}" {% if q.category == cat %}selected{% endif %}>{{ category_labels.get(cat, cat) }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="f-days">Set inden for</label>
+        <select id="f-days" name="days_back">
+          <option value="">Altid</option>
+          {% for days, label in [(1,'1 dag'),(7,'7 dage'),(30,'30 dage'),(90,'3 måneder'),(365,'1 år')] %}
+          <option value="{{ days }}" {% if q.days_back == days %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <fieldset class="field field-price">
+        <legend>Pris i kroner</legend>
+        <div class="price-inputs">
+          <input type="number" name="min_price" min="0" inputmode="numeric" placeholder="Fra"
+                 value="{{ q.min_price or '' }}" aria-label="Laveste pris i kroner">
+          <span class="filter-dash">til</span>
+          <input type="number" name="max_price" min="0" inputmode="numeric" placeholder="Til"
+                 value="{{ q.max_price or '' }}" aria-label="Højeste pris i kroner">
+        </div>
+      </fieldset>
+
+      <div class="field">
+        <label for="f-sort">Rækkefølge</label>
+        <select id="f-sort" name="sort">
+          {% for choice in sort_choices %}
+          <option value="{{ choice }}" {% if q.sort == choice %}selected{% endif %}>{{ {'relevans':'Relevans','nyeste':'Nyeste','slutter':'Slutter først','pris_op':'Laveste pris','pris_ned':'Højeste pris'}[choice] }}</option>
+          {% endfor %}
+        </select>
       </div>
     </div>
 
-    <div class="filter-row">
-      <span class="filter-label">Status</span>
-      <select name="status">
-        {% for choice in status_choices %}
-        <option value="{{ choice }}" {% if q.status == choice %}selected{% endif %}>
-          {{ {'alle':'Alle','aktive':'Kun aktive','afsluttede':'Kun afsluttede'}[choice] }}
-        </option>
-        {% endfor %}
-      </select>
-
-      <div class="filter-sep"></div>
-      <span class="filter-label">Match</span>
-      <select name="matched">
-        {% for choice in match_choices %}
-        <option value="{{ choice }}" {% if q.matched == choice %}selected{% endif %}>
-          {{ {'alle':'Alle','kun_fund':'Kun fund','kun_ikke_fund':'Kun ikke-fund'}[choice] }}
-        </option>
-        {% endfor %}
-      </select>
-
-      <div class="filter-sep"></div>
-      <span class="filter-label">Kategori</span>
-      <select name="category">
-        <option value="">Alle</option>
-        {% for cat in categories %}
-        <option value="{{ cat }}" {% if q.category == cat %}selected{% endif %}>{{ cat }}</option>
-        {% endfor %}
-      </select>
+    <div class="filters-actions">
+      <button class="btn is-primary" type="submit">Anvend filtre</button>
+      <a class="btn is-quiet" href="/archive">Nulstil</a>
     </div>
+  </details>
+</form>
 
-    <div class="filter-row">
-      <span class="filter-label">Pris</span>
-      <input type="number" name="min_price" min="0" placeholder="Fra" class="pill-input"
-             value="{{ q.min_price or '' }}">
-      <span class="filter-label">–</span>
-      <input type="number" name="max_price" min="0" placeholder="Til" class="pill-input"
-             value="{{ q.max_price or '' }}">
-      <span class="filter-label">kr</span>
-
-      <div class="filter-sep"></div>
-      <span class="filter-label">Set inden for</span>
-      <select name="days_back">
-        <option value="">Altid</option>
-        {% for days, label in [(1,'1 dag'),(7,'7 dage'),(30,'30 dage'),(90,'3 måneder'),(365,'1 år')] %}
-        <option value="{{ days }}" {% if q.days_back == days %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
-
-      <div class="filter-sep"></div>
-      <span class="filter-label">Sorter</span>
-      <select name="sort">
-        {% for choice in sort_choices %}
-        <option value="{{ choice }}" {% if q.sort == choice %}selected{% endif %}>
-          {{ {'relevans':'Relevans','nyeste':'Nyeste','slutter':'Slutter først',
-              'pris_op':'Pris ↑','pris_ned':'Pris ↓'}[choice] }}
-        </option>
-        {% endfor %}
-      </select>
-
-      <button class="ghost" type="submit">Anvend</button>
-      <a class="reset-btn" href="/archive">Nulstil</a>
-    </div>
-  </form>
-</div>
-{% endblock %}
-
-{% block content %}
-<section>
-  {% if q.is_empty %}
-    <h2>Hele arkivet</h2>
-    <p class="chat-intro">
-      Agenten gemmer hvert lot den ser, ikke kun dem der rammer interesseprofilen.
-      Her kan du lede i alt sammen — også det der aldrig blev til en besked i Discord.
-      Søgningen folder danske tegn, så <code>hojttaler</code> finder <code>højttaler</code>.
-    </p>
-  {% else %}
-    <h2>Resultat <span class="count">{{ result.total }}</span></h2>
-  {% endif %}
-
+<section class="section">
   {% if result.rows %}
-    <div class="result-summary">
+    <p class="result-count">
       Viser {{ result.rows|length }} af {{ result.total }}
-      {%- if result.pages > 1 %} &middot; side {{ result.page }} af {{ result.pages }}{% endif %}
-    </div>
-    {% for row in rows %}{{ card(row) }}{% endfor %}
+      {%- if result.pages > 1 %} · side {{ result.page }} af {{ result.pages }}{% endif %}
+    </p>
+    {% for row in rows %}{{ card(row, show_seen=True) }}{% endfor %}
 
     {% if result.pages > 1 %}
-    <div class="pager">
+    <nav class="pager" aria-label="Sider">
       {% if result.has_prev %}
-        <a href="{{ page_url(result.page - 1) }}">← Forrige</a>
+        <a class="btn is-quiet" href="{{ page_url(result.page - 1) }}">{{ icon('arrow-left', 14) }} Forrige</a>
       {% else %}
-        <span class="disabled">← Forrige</span>
+        <span class="btn is-quiet is-disabled" aria-disabled="true">{{ icon('arrow-left', 14) }} Forrige</span>
       {% endif %}
-      <span class="current">{{ result.page }} / {{ result.pages }}</span>
+      <span class="pager-count">{{ result.page }} / {{ result.pages }}</span>
       {% if result.has_next %}
-        <a href="{{ page_url(result.page + 1) }}">Næste →</a>
+        <a class="btn is-quiet" href="{{ page_url(result.page + 1) }}">Næste {{ icon('arrow-right', 14) }}</a>
       {% else %}
-        <span class="disabled">Næste →</span>
+        <span class="btn is-quiet is-disabled" aria-disabled="true">Næste {{ icon('arrow-right', 14) }}</span>
       {% endif %}
-    </div>
+    </nav>
     {% endif %}
+  {% elif q.is_empty %}
+    <p class="empty">Skriv et søgeord eller vælg et filter for at lede i arkivet.</p>
+    <p class="hint">Søgningen folder danske tegn, så <code>hojttaler</code> finder <code>højttaler</code>. Arkivet rummer hvert lot agenten har set, også dem der aldrig ramte profilen.</p>
   {% else %}
-    <p class="empty">
-      {% if q.is_empty %}Skriv noget i søgefeltet for at lede i arkivet.
-      {% else %}Ingen lots matcher søgningen.{% endif %}
-    </p>
+    <p class="empty">Ingen lots matcher søgningen. Prøv et bredere søgeord, eller ryd filtrene.</p>
   {% endif %}
 </section>
 {% endblock %}

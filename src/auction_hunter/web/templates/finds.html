@@ -1,85 +1,116 @@
 {% extends "base.html" %}
-{% from "_card.html" import card %}
+{% from "_icons.html" import icon %}
+{% from "_card.html" import card with context %}
+{% set ending_soon = rows|selectattr('ends_in', 'gt', 0)|selectattr('ends_in', 'le', 86400)|list|length %}
 
-{% block controls %}
-<div class="controls">
-  <div class="filter-row">
-    <span class="filter-label">Kategori</span>
-    {% for cat in categories %}
-      <button class="chip" data-cat="{{ cat }}">{{ cat }}</button>
-    {% else %}
-      <span class="filter-label">ingen endnu</span>
-    {% endfor %}
-  </div>
-
-  <div class="filter-row">
-    {% if show_period %}
-      <span class="filter-label">Sendt</span>
-      <button class="chip active" data-period="all">Alle</button>
-      <button class="chip" data-period="today">I dag</button>
-      <button class="chip" data-period="week">7 dage</button>
-      <div class="filter-sep"></div>
-    {% endif %}
-    {% if show_ending %}
-      <button class="chip urgent" id="ending-chip">⏰ Slutter &lt; 24 t</button>
-      <div class="filter-sep"></div>
-    {% endif %}
-    <span class="filter-label">Pris</span>
-    <input id="price-min" type="number" min="0" placeholder="Fra" inputmode="numeric" class="pill-input">
-    <span class="filter-label">–</span>
-    <input id="price-max" type="number" min="0" placeholder="Til" inputmode="numeric" class="pill-input">
-    <span class="filter-label">kr</span>
-    <button class="reset-btn" id="reset-btn">Nulstil</button>
-  </div>
-
-  <div class="filter-row">
-    <span class="filter-label">Sorter</span>
-    <button class="sort-btn active" data-sort="newest">Nyeste</button>
-    <button class="sort-btn" data-sort="oldest">Ældste</button>
-    {% if show_ending %}<button class="sort-btn" data-sort="ending">Slutter først</button>{% endif %}
-    <button class="sort-btn" data-sort="price_desc">Pris ↓</button>
-    <button class="sort-btn" data-sort="price_asc">Pris ↑</button>
-  </div>
-</div>
-{% endblock %}
+{% block title %}{{ heading }} · Auktionshuset Hunter{% endblock %}
 
 {% block content %}
-<section>
-  <h2>{{ heading }}{% if rows %}<span class="count">{{ rows|length }}</span>{% endif %}</h2>
+<header class="page-head">
+  <h1>{{ heading }}</h1>
+  <p class="page-meta">
+    <span id="visible-count" role="status" aria-live="polite">{{ rows|length }} fund</span>
+    {%- if ending_soon %}<span class="meta-sep">·</span><span class="meta-urgent">{{ ending_soon }} slutter inden for et døgn</span>{% endif %}
+  </p>
+</header>
 
-  {% if not rows %}
-    <p class="empty">{{ empty }}</p>
-  {% else %}
-    <div id="visible-count"></div>
-    <div id="no-results">Ingen fund matcher filteret.</div>
-    <div id="cards-container">
-      {% for label, items in groups %}
-      <div class="date-group">
-        <div class="date-label">{{ label }}</div>
-        {% for row in items %}{{ card(row) }}{% endfor %}
-      </div>
-      {% endfor %}
-    </div>
-    <div id="flat-list" style="display:none"></div>
-  {% endif %}
-</section>
+{% if rows %}
+<div class="toolbar">
+  <div class="chip-row" role="group" aria-label="Filtrér på kategori">
+    {% for cat in categories %}
+    <button type="button" class="chip" data-cat="{{ cat }}" aria-pressed="false" title="Vis kun {{ category_labels.get(cat, cat) }}">{{ category_labels.get(cat, cat) }}</button>
+    {% endfor %}
+  </div>
+  <button type="button" class="btn is-quiet" id="filter-toggle" aria-expanded="false" aria-controls="filter-panel">
+    {{ icon('filter', 15) }}<span>Filtre</span><span class="filter-count" hidden></span>
+  </button>
+</div>
 
-{% if reviews %}
-<section>
-  <h2>Til gennemsyn <span class="count">{{ reviews|length }}</span></h2>
-  {% for review in reviews %}
-  {% set rel, full = rel_past(review.created_at) %}
-  <div class="card">
-    <div class="body">
-      <div><span class="tag-maybe">måske</span></div>
-      {% if review.url %}<a href="{{ review.url }}" target="_blank" rel="noopener">{% endif %}
-        <div class="title">{{ review.title }}</div>
-      {% if review.url %}</a>{% endif %}
-      {% if review.reason %}<div class="meta">{{ review.reason }}</div>{% endif %}
-      <div class="auction-name" title="{{ full }}">{{ rel }}</div>
+<div class="active-filters" id="active-filters" hidden></div>
+
+<div class="filter-panel" id="filter-panel" hidden>
+  {% if show_period %}
+  <div class="filter-group">
+    <span class="filter-label" id="filter-sendt">Sendt</span>
+    <div class="chip-row" role="group" aria-labelledby="filter-sendt">
+      <button type="button" class="chip" data-period="all" aria-pressed="true">Alle</button>
+      <button type="button" class="chip" data-period="today" aria-pressed="false">I dag</button>
+      <button type="button" class="chip" data-period="week" aria-pressed="false">7 dage</button>
     </div>
   </div>
+  {% endif %}
+
+  {% if show_ending %}
+  <div class="filter-group">
+    <span class="filter-label" id="filter-tid">Tid tilbage</span>
+    <div class="chip-row" role="group" aria-labelledby="filter-tid">
+      <button type="button" class="chip" id="ending-chip" aria-pressed="false">{{ icon('clock', 13) }} Slutter inden for 24 timer</button>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="filter-group">
+    <span class="filter-label" id="filter-pris">Pris</span>
+    <div class="chip-row" role="group" aria-labelledby="filter-pris">
+      <input id="price-min" type="number" min="0" inputmode="numeric" placeholder="Fra" class="input is-narrow" aria-label="Laveste pris i kroner">
+      <span class="filter-dash">til</span>
+      <input id="price-max" type="number" min="0" inputmode="numeric" placeholder="Til" class="input is-narrow" aria-label="Højeste pris i kroner">
+      <span class="filter-unit">kr</span>
+    </div>
+  </div>
+
+  <div class="filter-group filter-group-wide">
+    <span class="filter-label" id="filter-sort">Rækkefølge</span>
+    <div class="chip-row" role="group" aria-labelledby="filter-sort">
+      <button type="button" class="chip sort-btn" data-sort="newest" aria-pressed="true">Nyeste</button>
+      <button type="button" class="chip sort-btn" data-sort="oldest" aria-pressed="false">Ældste</button>
+      {% if show_ending %}<button type="button" class="chip sort-btn" data-sort="ending" aria-pressed="false">Slutter først</button>{% endif %}
+      <button type="button" class="chip sort-btn" data-sort="price_desc" aria-pressed="false">Højeste pris</button>
+      <button type="button" class="chip sort-btn" data-sort="price_asc" aria-pressed="false">Laveste pris</button>
+    </div>
+  </div>
+
+  <div class="filter-group filter-group-end">
+    <button type="button" class="btn is-quiet" id="reset-btn">Nulstil filtre</button>
+  </div>
+</div>
+
+<p class="empty" id="no-results" hidden>Ingen fund matcher filteret.</p>
+
+<div id="cards-container">
+  {% for label, items in groups %}
+  <section class="date-group">
+    <h2 class="date-label">{{ label }}</h2>
+    {% for row in items %}{{ card(row, show_seen=(not show_period)) }}{% endfor %}
+  </section>
   {% endfor %}
+</div>
+<div id="flat-list" class="flat-list" hidden></div>
+
+{% else %}
+<p class="empty">{{ empty }}</p>
+{% endif %}
+
+{% if reviews %}
+<section class="section">
+  <h2 class="section-title">Til gennemsyn <span class="count">{{ reviews|length }}</span></h2>
+  <p class="section-note">Lots hvor AI-trinnet svarede måske. De er ikke sendt til Discord endnu.</p>
+  <div class="review-list">
+    {% for review in reviews %}
+    {% set rel, full = rel_past(review.created_at) %}
+    <article class="review">
+      <p class="review-head">
+        <span class="tag-maybe">måske</span>
+        <span class="meta-item" title="{{ full }}">{{ rel }}</span>
+      </p>
+      <h3 class="review-title">
+        {%- if review.url %}<a href="{{ review.url }}" target="_blank" rel="noopener">{{ review.title }}</a>
+        {%- else %}{{ review.title }}{%- endif %}
+      </h3>
+      {% if review.reason %}<p class="review-reason">{{ review.reason }}</p>{% endif %}
+    </article>
+    {% endfor %}
+  </div>
 </section>
 {% endif %}
 {% endblock %}
