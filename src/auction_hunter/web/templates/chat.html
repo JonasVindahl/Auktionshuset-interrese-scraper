@@ -45,6 +45,11 @@
     {% endfor %}
   </p>
   {% endif %}
+  {% if answer.archive_url %}
+  <p class="answer-actions">
+    <a class="btn is-quiet" href="{{ answer.archive_url }}">{{ icon('filter', 14) }} Åbn i arkivet med disse filtre</a>
+  </p>
+  {% endif %}
 </div>
 
 {% if rows %}

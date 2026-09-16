@@ -833,7 +833,11 @@ def create_app() -> FastAPI:
         if q.strip():
             conn = ro_conn(db_path())
             try:
-                answer = chat_mod.ask(conn, client, q, show_all=alle)
+                # Kategorinøglerne gives til filterbyggeriet, så modellen kan
+                # vælge en kategori i stedet for kun at gætte på ord.
+                config = _safe_config()
+                keys = [c.key for c in config.categories] if config else None
+                answer = chat_mod.ask(conn, client, q, show_all=alle, categories=keys)
             finally:
                 conn.close()
         return page(

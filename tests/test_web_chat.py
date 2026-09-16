@@ -270,3 +270,50 @@ def test_tomt_valg_giver_ingen_raekker(conn):
     answer = ask(conn, client, "hvad?")
     assert answer.rows == []
     assert answer.selected is True
+
+
+# -- udvidelse, redning og arkiv-link --------------------------------------
+
+def test_soegeord_udvides_og_slaas_sammen_med_or():
+    client = FakeClient(json.dumps({"soegeord": ["nvme", "ssd", "nas", "nuc"]}))
+    query, degraded = build_filter(client, "ting der normalt har SSD eller NVMe")
+    assert query.any_words is True
+    assert query.text == "nvme ssd nas nuc"
+    assert degraded is False
+
+
+def test_alle_ord_kraever_and():
+    client = FakeClient(json.dumps({"soegeord": ["sennheiser", "hd650"], "alle_ord": True}))
+    query, _ = build_filter(client, "Sennheiser HD650")
+    assert query.any_words is False
+
+
+def test_modellen_kan_vaelge_kategori():
+    client = FakeClient(json.dumps({"soegeord": ["nas"], "kategori": "it_tech"}))
+    query, _ = build_filter(client, "NAS", categories=["it_tech", "audio_hifi"])
+    assert query.category == "it_tech"
+    assert "it_tech" in client.calls[0]["user"]
+
+
+def test_arkivet_link_baerer_filteret():
+    from auction_hunter.web.chat import archive_url
+    from auction_hunter.web.search import SearchQuery
+
+    url = archive_url(SearchQuery(text="nas nuc", category="it_tech", max_price=2000))
+    assert url.startswith("/archive?")
+    assert "q=nas+nuc" in url
+    assert "category=it_tech" in url
+    assert "max_price=2000" in url
+
+
+def test_tomt_soegeresultat_reddes_af_de_andre_filtre(conn):
+    # Modellen vælger et søgeord der ikke findes, men en kategori der gør.
+    client = FakeClient(
+        json.dumps({"soegeord": ["findes-slet-ikke-xyz"], "kategori": "it_tech"}),
+        json.dumps({"valgte": [1], "svar": "Her er hvad der matcher."}),
+    )
+    answer = ask(conn, client, "noget med it", categories=["it_tech"])
+    assert answer.total > 0
+    assert answer.rows
+    assert "søgeordene" in answer.text
+    assert answer.archive_url.startswith("/archive?")

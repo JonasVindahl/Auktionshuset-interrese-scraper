@@ -24,7 +24,8 @@ import json
 import logging
 import re
 import sqlite3
-from dataclasses import dataclass, field
+from urllib.parse import urlencode
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from ..classifier import LLMError, OpenAICompatibleClient
@@ -47,11 +48,17 @@ FILTER_SYSTEM = (
     "Du oversætter et dansk spørgsmål om et auktionsarkiv til et JSON-filter. "
     "Svar KUN med JSON, ingen forklaring.\n\n"
     "Felter (alle valgfri):\n"
-    '  text        søgeord, fx "sennheiser forstærker"\n'
+    "  soegeord    liste af ord der skal søges efter i lot-titlerne. Ordene "
+    "lægges sammen med OR, så ét ord er nok. Udvid spørgsmålet med de "
+    "produkttyper og mærker der ville svare på det, ikke kun de ord brugeren "
+    "selv skrev. Spørger nogen efter 'ting der normalt har SSD eller NVMe', så "
+    "medtag også nas, nuc, minipc, server, laptop, synology og lignende.\n"
+    "  alle_ord    true hvis ALLE ordene skal stå i titlen (AND). Standard false.\n"
     "  min_price   heltal, kroner\n"
     "  max_price   heltal, kroner\n"
     '  status      "alle" | "aktive" | "afsluttede"\n'
     '  matched     "alle" | "kun_fund" | "kun_ikke_fund"\n'
+    "  kategori    en af kategorinøglerne\n"
     "  days_back   heltal, hvor mange dage tilbage\n"
     '  sort        "relevans" | "nyeste" | "slutter" | "pris_op" | "pris_ned"\n\n'
     'Brug matched="kun_ikke_fund" når brugeren spørger om noget der IKKE blev '
@@ -107,6 +114,7 @@ class ChatAnswer:
     considered: int = 0         # hvor mange kandidater modellen fik at vælge fra
     selected: bool = False      # True når modellen selv valgte rækkerne
     total: int = 0              # hvor mange arkivet matchede i alt
+    archive_url: str = ""       # samme filter, aabnet i arkivets eget UI
 
 
 def _extract_json(raw: str) -> dict:
@@ -147,12 +155,18 @@ def _fallback_filter(question: str) -> SearchQuery:
     return SearchQuery(text=" ".join(words[:6]), any_words=True)
 
 
-def build_filter(client: OpenAICompatibleClient | None, question: str) -> tuple[SearchQuery, bool]:
+def build_filter(
+    client: OpenAICompatibleClient | None,
+    question: str,
+    categories: list[str] | None = None,
+) -> tuple[SearchQuery, bool]:
     """(filter, degraded). Falder tilbage til nøgleordssøgning uden model."""
     if client is None:
         return _fallback_filter(question), True
+    # Kategorinøglerne gives med i brugerbeskeden, så systemprompten er stabil.
+    hint = ("\n\nKategorinøgler: " + ", ".join(categories)) if categories else ""
     try:
-        raw = client.complete(system=FILTER_SYSTEM, user=question, max_tokens=200)
+        raw = client.complete(system=FILTER_SYSTEM, user=question + hint, max_tokens=300)
         data = _extract_json(raw)
     except (LLMError, ValueError, json.JSONDecodeError) as exc:
         log.warning("Kunne ikke bygge filter med modellen: %s", exc)
@@ -167,14 +181,24 @@ def build_filter(client: OpenAICompatibleClient | None, question: str) -> tuple[
         except (TypeError, ValueError):
             return None
 
+    # soegeord er listen; text holdes som bagudkompatibelt alias.
+    words = data.get("soegeord")
+    if isinstance(words, list):
+        text = " ".join(str(w) for w in words)
+    else:
+        text = str(data.get("text") or "")
+
     query = SearchQuery(
-        text=str(data.get("text") or "")[:200],
+        text=text[:200],
         min_price=as_int("min_price"),
         max_price=as_int("max_price"),
         status=str(data.get("status") or "alle"),
         matched=str(data.get("matched") or "alle"),
+        category=str(data.get("kategori") or data.get("category") or ""),
         days_back=as_int("days_back"),
         sort=str(data.get("sort") or "relevans"),
+        # OR som standard: modellen udvider selv med beslægtede produkttyper.
+        any_words=not bool(data.get("alle_ord")),
     ).normalized()
 
     # Et tomt filter ville hente hele arkivet uden grund.
@@ -223,12 +247,40 @@ def _selected_rows(rows: list[sqlite3.Row], valgte: Any) -> list[sqlite3.Row]:
     return picked
 
 
+def archive_url(query: SearchQuery) -> str:
+    """Samme filter som assistenten brugte, åbnet i arkivets eget UI.
+
+    Arkivet er stedet hvor filtrene kan rettes, så et svar der bygger på en
+    forkert fortolkning er ét klik fra at blive rigtigt.
+    """
+    params: dict[str, object] = {}
+    if query.text:
+        params["q"] = query.text
+    if query.min_price:
+        params["min_price"] = query.min_price
+    if query.max_price:
+        params["max_price"] = query.max_price
+    if query.status != "alle":
+        params["status"] = query.status
+    if query.matched != "alle":
+        params["matched"] = query.matched
+    if query.category:
+        params["category"] = query.category
+    if query.days_back:
+        params["days_back"] = query.days_back
+    if query.sort != "relevans":
+        params["sort"] = query.sort
+    qs = urlencode(params)
+    return f"/archive?{qs}" if qs else "/archive"
+
+
 def ask(
     conn: sqlite3.Connection,
     client: OpenAICompatibleClient | None,
     question: str,
     *,
     show_all: bool = False,
+    categories: list[str] | None = None,
 ) -> ChatAnswer:
     """Besvar et spørgsmål om arkivet.
 
@@ -240,9 +292,30 @@ def ask(
     if not question:
         return ChatAnswer(text="Stil et spørgsmål, så leder jeg i arkivet.")
 
-    query, degraded = build_filter(client, question)
+    query, degraded = build_filter(client, question, categories)
     result = search(conn, query)
+
+    # Ordene fandtes ikke i nogen titel. Slip teksten men behold de
+    # strukturerede filtre, så et spørgsmål der peger i den rigtige retning
+    # ikke ender i ingenting.
+    note = ""
+    if result.total == 0 and query.text:
+        relaxed = replace(query, text="")
+        if not relaxed.is_empty:
+            alternative = search(conn, relaxed)
+            if alternative.total:
+                result, query = alternative, relaxed
+                note = ("Jeg fandt intet på selve søgeordene, så her er alt "
+                        "der matcher resten af filtrene.")
+
     candidates = result.rows[:MAX_CANDIDATES]
+    url = archive_url(query)
+
+    def finish(answer: ChatAnswer) -> ChatAnswer:
+        answer.archive_url = url
+        if note:
+            answer.text = f"{note}\n\n{answer.text}"
+        return answer
 
     # Værdierne formateres, så de kan læses som dansk og ikke som feltnavne.
     filter_used = {
@@ -259,7 +332,7 @@ def ask(
     }
 
     if client is None:
-        return ChatAnswer(
+        return finish(ChatAnswer(
             text=(
                 f"Fandt {result.total} lots. "
                 "AI-svar kræver at CLASSIFIER_API_KEY er sat — indtil da viser "
@@ -269,17 +342,17 @@ def ask(
             filter_used=filter_used,
             degraded=True,
             total=result.total,
-        )
+        ))
 
     if show_all or not candidates:
-        return ChatAnswer(
+        return finish(ChatAnswer(
             text=f"Fandt {result.total} lots." if candidates else
                  "Ingen lots i arkivet matcher spørgsmålet.",
             rows=candidates,
             filter_used=filter_used,
             considered=len(candidates),
             total=result.total,
-        )
+        ))
 
     user = (
         f"Spørgsmål: {question}\n\n"
@@ -291,30 +364,30 @@ def ask(
         raw = client.complete(system=ANSWER_SYSTEM, user=user, max_tokens=700)
     except LLMError as exc:
         log.warning("Kunne ikke formulere svar: %s", exc)
-        return ChatAnswer(
+        return finish(ChatAnswer(
             text=f"Fandt {result.total} lots, men kunne ikke nå sprogmodellen.",
             rows=candidates,
             filter_used=filter_used,
             degraded=True,
             total=result.total,
-        )
+        ))
 
     # Modellen skal svare med JSON, men gør det ikke altid. Kan svaret ikke
     # læses, vises hele søgeresultatet og teksten bruges som den er.
     try:
         payload = _extract_json(raw)
     except (ValueError, json.JSONDecodeError):
-        return ChatAnswer(
+        return finish(ChatAnswer(
             text=raw.strip(),
             rows=candidates,
             filter_used=filter_used,
             considered=len(candidates),
             total=result.total,
-        )
+        ))
 
     picked = _selected_rows(candidates, payload.get("valgte"))
     text = str(payload.get("svar") or "").strip() or raw.strip()
-    return ChatAnswer(
+    return finish(ChatAnswer(
         text=text,
         rows=picked,
         filter_used=filter_used,
@@ -322,7 +395,7 @@ def ask(
         considered=len(candidates),
         selected=True,
         total=result.total,
-    )
+    ))
 
 
 # -- forslag til manglende noegleord ---------------------------------------
