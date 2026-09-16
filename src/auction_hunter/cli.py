@@ -189,6 +189,12 @@ def cmd_config(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_web(args: argparse.Namespace) -> int:
+    from .web import serve
+    serve(host=args.host, port=args.port, db_path=args.db)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="auction_hunter", description=__doc__)
     parser.add_argument("--config", default=os.environ.get("CONFIG_PATH"), help="sti til interests.yml")
@@ -228,6 +234,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("check", help="vis konfiguration og test Discord").set_defaults(func=cmd_check)
     sub.add_parser("dump-config", help="vis fuld effektiv konfiguration").set_defaults(func=cmd_config)
+
+    p_web = sub.add_parser("web", help="start read-only webdashboard")
+    p_web.add_argument("--host", default=os.environ.get("WEB_HOST", "0.0.0.0"))
+    p_web.add_argument("--port", type=int, default=int(os.environ.get("WEB_PORT", "8080")))
+    p_web.set_defaults(func=cmd_web)
 
     return parser
 

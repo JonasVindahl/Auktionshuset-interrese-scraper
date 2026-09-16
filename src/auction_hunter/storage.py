@@ -113,6 +113,19 @@ CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+-- Manuel feedback på sendte fund: skip/bid/bought.
+-- Bruges til AI-træning og til at markere hvad der er gjort.
+-- En ny tabel er sikker at tilføje uden at røre eksisterende data.
+CREATE TABLE IF NOT EXISTS feedback (
+    lot_id       TEXT NOT NULL,
+    category_key TEXT NOT NULL,
+    action       TEXT NOT NULL,
+    title        TEXT NOT NULL DEFAULT '',
+    created_at   TEXT NOT NULL,
+    PRIMARY KEY (lot_id, category_key)
+);
+CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback(created_at);
 """
 
 # Hvor længe historik holdes. Auktioner løber i uger, så et halvt år er rigeligt
