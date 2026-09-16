@@ -21,7 +21,7 @@
 <div class="lot-page">
   <div class="lot-page-media">
     <div class="thumb is-large">
-      <span class="thumb-fallback">{{ icon('image', 34) }}</span>
+      <span class="thumb-fallback">{{ icon('image', 44) }}</span>
       {%- if row.image %}
       <img src="{{ row.image }}" alt="" decoding="async" referrerpolicy="no-referrer">
       {%- endif %}
@@ -49,14 +49,14 @@
   </div>
 
   <div class="lot-page-facts">
-    <dl class="metrics is-compact">
-      <div class="metric">
-        <dt>{{ 'Reel pris' if not row.price_label else 'Åbner ved' }}</dt>
-        <dd class="is-accent">{{ row.price }}</dd>
-      </div>
-      <div class="metric"><dt>Bud</dt><dd>{{ row.bid_text }}</dd></div>
-      <div class="metric"><dt>Hammerslag</dt><dd class="is-small">{{ row.ends_at_text or '–' }}</dd></div>
-    </dl>
+    <div class="lot-price">
+      <p class="overline">{{ 'Reel pris' if not row.price_label else 'Åbner ved' }}</p>
+      <p class="lot-price-value">{{ row.price }}</p>
+      <dl class="lot-price-sub">
+        <div><dt>Bud</dt><dd>{{ row.bid_text }}</dd></div>
+        <div><dt>Hammerslag</dt><dd>{{ row.ends_at_text or '–' }}</dd></div>
+      </dl>
+    </div>
     {% if row.flags %}
     <h2 class="section-title">Stand</h2>
     <p class="flag-row">
@@ -94,6 +94,17 @@
       </p>
     </div>
     {% endif %}
+
+    <section class="lot-origin">
+      <h2 class="section-title">Om lot'et</h2>
+      <dl class="deflist">
+        {% if row.auction %}<div><dt>Auktion</dt><dd>{{ row.auction }}</dd></div>{% endif %}
+        {% if row.lot_number %}<div><dt>Lot</dt><dd>{{ row.lot_number }}</dd></div>{% endif %}
+        {% if row.category %}<div><dt>Kategori</dt><dd>{{ category_labels.get(row.category, row.category) }}</dd></div>{% endif %}
+        {% if row.seen_rel %}<div><dt>Set</dt><dd>{{ row.seen_rel }}</dd></div>{% endif %}
+        <div><dt>Kilde</dt><dd>{{ 'auktionshuset.dk' if row.url else 'ukendt' }}</dd></div>
+      </dl>
+    </section>
   </div>
 
   <aside class="lot-page-comps">

@@ -15,6 +15,7 @@
 <a class="skip-link" href="#main">Spring til indhold</a>
 
 <header class="topbar">
+  <div class="topbar-inner">
   <a class="brand" href="/">
     {{ icon('mark', 19, 'brand-mark') }}
     <span class="brand-name">Auktionshuset <em>Hunter</em></span>
@@ -31,6 +32,7 @@
     <span class="dot{% if stale %} is-stale{% endif %}" aria-hidden="true"></span>
     <span class="agent-status-text">{{ pulse }}</span>
   </p>
+  </div>
 </header>
 
 <main id="main" class="page {% block page_class %}{% endblock %}">

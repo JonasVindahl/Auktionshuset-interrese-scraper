@@ -145,7 +145,9 @@ def test_date_label_i_dag():
 
 
 def test_date_label_i_gaar():
-    assert date_label(iso_in(days=-1, hours=-2)) == "I går"
+    # Praecis 24 timer siden er altid gaarsdagens dato. "-1 dag og 2 timer"
+    # kunne lande to kalenderdage tilbage hvis testen koerte efter midnat.
+    assert date_label(iso_in(days=-1)) == "I går"
 
 
 def test_date_label_denne_uge():
