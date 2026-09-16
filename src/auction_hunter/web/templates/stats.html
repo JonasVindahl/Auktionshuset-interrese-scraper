@@ -11,7 +11,16 @@
     <div class="stat"><strong>
       {%- if archive.total %}{{ (100 * archive.matched / archive.total)|round(1) }}%{% else %}–{% endif -%}
     </strong>rammeprocent</div>
+    {% if images.count %}
+    <div class="stat"><strong>{{ images.mb }} MB</strong>{{ images.count }} billeder</div>
+    {% endif %}
   </div>
+  {% if images.count %}
+  <p style="color:var(--faint);font-size:.78rem;margin-top:10px">
+    Billeder hentes kun for fund, og kun mens lot'et er aktivt — auktionshuset
+    fjerner dem når auktionen lukker. De ryddes automatisk efter 180 dage.
+  </p>
+  {% endif %}
 </section>
 
 <section>

@@ -132,6 +132,45 @@ def test_arkiv_paginering_bevarer_filtre(client):
     assert response.status_code == 200
 
 
+# Browseren sender hvert felt i formularen med, også de tomme. Uden at tomme
+# strenge oversættes til None svarer FastAPI 422 på en helt almindelig søgning.
+BROWSER_FORM = {
+    "q": "nas", "min_price": "", "max_price": "", "status": "alle",
+    "matched": "alle", "category": "", "days_back": "", "sort": "relevans",
+}
+
+
+def test_arkiv_taaler_tom_formular(client):
+    """Regression: en søgning uden prisfilter gav 422."""
+    response = client.get("/archive", params=BROWSER_FORM)
+    assert response.status_code == 200, response.text[:400]
+
+
+def test_arkiv_taaler_helt_tom_formular(client):
+    """Samme, men også uden søgeord."""
+    response = client.get("/archive", params={**BROWSER_FORM, "q": ""})
+    assert response.status_code == 200
+
+
+@pytest.mark.parametrize("field", ["min_price", "max_price", "days_back"])
+def test_arkiv_taaler_enkelt_tomt_talfelt(client, field):
+    params = {**BROWSER_FORM, field: ""}
+    assert client.get("/archive", params=params).status_code == 200
+
+
+def test_arkiv_taaler_tom_side(client):
+    assert client.get("/archive", params={**BROWSER_FORM, "page": ""}).status_code == 200
+
+
+def test_arkiv_bruger_udfyldte_talfelter(client):
+    """Tomme felter ignoreres, men udfyldte skal stadig virke."""
+    response = client.get("/archive", params={
+        **BROWSER_FORM, "q": "", "min_price": "1000", "max_price": "",
+    })
+    assert response.status_code == 200
+    assert "Havemøbler" not in response.text     # koster 280 kr
+
+
 # -- markeringer -----------------------------------------------------------
 
 def test_feedback_gemmes_og_vises(client):
@@ -225,6 +264,25 @@ def test_aendr_prisloft_via_web(client, sample_config):
     with open(sample_config, encoding="utf-8") as handle:
         data = yaml.safe_load(handle)
     assert data["categories"]["it_tech"]["max_price"] == 9500
+
+
+def test_tomt_prisloft_giver_besked_ikke_serverfejl(client, sample_config):
+    """Et tomt felt er brugerfejl, ikke 422."""
+    response = client.post(
+        "/interests/price", data={"category": "it_tech", "max_price": ""},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert "error" in response.headers["location"]
+
+
+def test_prisloft_der_ikke_er_et_tal(client, sample_config):
+    response = client.post(
+        "/interests/price", data={"category": "it_tech", "max_price": "mange"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert "error" in response.headers["location"]
 
 
 def test_urimeligt_prisloft_afvises(client, sample_config):
@@ -418,3 +476,60 @@ def test_healthz_paa_manglende_database(tmp_path, monkeypatch):
     monkeypatch.setenv("DB_PATH", str(tmp_path / "findes-ikke.db"))
     monkeypatch.delenv("WEB_PASSWORD", raising=False)
     assert TestClient(create_app()).get("/healthz").status_code == 503
+
+
+# -- cachede billeder ------------------------------------------------------
+
+def _cache_image(db_path: str, lot_id: str) -> bytes:
+    """Læg et rigtigt billede i cachen, som en kørsel ville have gjort."""
+    from tests.test_images import PNG  # noqa: PLC0415
+
+    from auction_hunter import images
+
+    path = images.cache_path(db_path, lot_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(PNG)
+    return PNG
+
+
+def test_cachet_billede_udleveres(client, sample_db):
+    data = _cache_image(sample_db, "a1")
+    response = client.get("/image/a1")
+    assert response.status_code == 200
+    assert response.content == data
+    assert response.headers["content-type"] == "image/png"
+
+
+def test_ucachet_billede_giver_404(client):
+    """404 er meningen: skabelonen falder tilbage til den levende adresse."""
+    assert client.get("/image/findes-ikke").status_code == 404
+
+
+def test_kort_peger_paa_cachet_billede(client, sample_db):
+    """Når billedet er hentet, skal siden bruge det og ikke auktionshusets."""
+    _cache_image(sample_db, "a1")
+    body = client.get("/").text
+    assert 'src="/image/a1"' in body
+    assert "auktionshuset.dk/i/1.jpg" not in body
+
+
+def test_kort_bruger_levende_adresse_uden_cache(client):
+    assert "auktionshuset.dk/i/1.jpg" in client.get("/").text
+
+
+def test_udloebet_lot_viser_stadig_sit_billede(client, sample_db):
+    """Hele pointen: originalen er død, men vores kopi lever."""
+    _cache_image(sample_db, "a3")        # Dell PowerEdge, sluttede for 5 t siden
+    body = client.get("/expired").text
+    assert 'src="/image/a3"' in body
+
+
+def test_billede_kraever_login(locked_client, sample_db):
+    _cache_image(sample_db, "a1")
+    assert locked_client.get("/image/a1").status_code in (303, 401)
+
+
+def test_billedrute_taaler_ondsindet_lot_id(client):
+    """lot_id kommer fra auktionshusets HTML og må ikke kunne læse filer."""
+    for evil in ["..%2F..%2F..%2Fetc%2Fpasswd", "....//....//etc/passwd"]:
+        assert client.get(f"/image/{evil}").status_code in (404, 400)

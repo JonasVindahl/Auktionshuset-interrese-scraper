@@ -106,8 +106,10 @@ mod den, aldrig mod et snapshot.
   Pris-historik skrives kun ved ændring (ellers ~3-8 GB/år), historik ryddes
   dagligt efter 180 dage, og `alert_if_blind` sender en Discord-advarsel hvis
   antallet af lots styrter sammen — ellers ser et brudt HTML-udtræk ud som
-  "ingen fund i dag" i det uendelige. Oprydning må aldrig røre `lots` eller
-  `notifications`; det er dedup'ens grundlag.
+  "ingen fund i dag" i det uendelige. Oprydning må aldrig røre `notifications`;
+  den tabel alene er dedup'ens grundlag (`already_notified` slår kun op der).
+  `lots` kan i princippet ryddes for afsluttede lots uden at gensende noget,
+  men den er arkivets indhold, og arkivet er hele pointen med søgefanen.
 - **`price_history.observed_at` har mikrosekunder.** Primærnøglen er
   `(lot_id, observed_at)`, så sekund-præcision tabte prisændringer der faldt i
   samme sekund.
@@ -130,6 +132,20 @@ mod den, aldrig mod et snapshot.
   rigtige adresse står i `data-src` eller `srcset`. `Scraper._image_url`
   håndterer begge og gør relative adresser absolutte. Er billedfeltet tomt i én
   kørsel, beholder `record_lot` det gamle i stedet for at overskrive med tomt.
+- **Databasen vokser langsomt nok til at den ikke skal ryddes.** 836 bytes pr.
+  lot i alt (623 i `lots`, 281 i `lots_fts`, resten i historik). Ved ~200 nye
+  lots om dagen er det ~58 MB efter et år og under 300 MB efter fem. Billeder
+  gemmes ikke — kun deres adresse, 120 bytes. Byg ikke oprydning af `lots`
+  uden at måle først.
+- **De 48 timer på /expired er et visningsvindue, ikke en sletning.** Intet
+  fjernes efter 48 timer; fanen viser bare det vindue hvor det giver mening at
+  markere «budt/købt».
+- **Billedadressen dør når lot'et lukker.** Derfor henter `images.py`
+  miniaturen mens lot'et er aktivt, og kun for lots i `notifications` eller
+  `review_queue` — ikke for de ~2.200 der scrapes. Filnavnet er et hash af
+  `lot_id`, som kommer fra et HTML-attribut og aldrig må bruges som filnavn
+  direkte. `looks_complete` tjekker at filen har sin kendte afslutning, fordi
+  en afbrudt overførsel stadig har de rigtige magiske bytes i starten.
 - **Søgeindekset har to danske foldninger.** `normalize` giver `hoejttaler`,
   `normalize_loose` giver `hojttaler`. Begge indekseres i `lots_fts.normalized`,
   fordi folk skriver begge dele. Brug aldrig `normalize_loose` til
@@ -155,3 +171,13 @@ mod den, aldrig mod et snapshot.
 - Type hints overalt; `from __future__ import annotations`.
 - Kode på engelsk, brugerrettet tekst og docs på dansk.
 - Kommentarer forklarer *hvorfor*, ikke hvad koden gør.
+- **Tomme formularfelter er ikke ugyldige tal.** En HTML-formular sender hvert
+  felt med, også de tomme. Et `int | None`-parameter i FastAPI afviser `""` med
+  422, så en helt almindelig søgning uden prisfilter fejlede. Brug `OptionalInt`
+  fra `web/app.py` til alle heltalsfelter der kommer fra en formular, og bemærk
+  at `Query(...)` som *default* overskriver Annotated-metadataen — `Query` skal
+  ind i `Annotated[...]` når typen har en `BeforeValidator`.
+- **Test formularer som browseren sender dem.** Testene ramte ikke fejlen
+  ovenfor, fordi de sendte enkeltparametre med rigtige værdier. En formular
+  sender *alle* felter, inklusive de tomme. `BROWSER_FORM` i
+  `tests/test_web_app.py` er den form der skal testes mod.

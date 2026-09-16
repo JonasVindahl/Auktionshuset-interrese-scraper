@@ -228,6 +228,22 @@ databasen — det værste der kan ske er en mærkelig søgning.
 Assistenten bruger samme nøgle som AI-trinnet (`CLASSIFIER_API_KEY`). Uden
 nøgle virker siden stadig, men som en almindelig nøgleordssøgning.
 
+### Billeder
+
+Auktionshuset fjerner et lots billede i samme øjeblik auktionen lukker. Det er
+præcis der billedet er mest værd — Udløbet-fanen er hvor man skal genkende hvad
+man overvejede at byde på.
+
+Agenten henter derfor miniaturen mens lot'et stadig er aktivt, og kun for de
+lots der er blevet til et fund eller ligger til gennemsyn. De øvrige ~2.200
+hentes aldrig. Billederne ligger i `data/images/` ved siden af databasen, fylder
+omkring 30 KB pr. fund, og ryddes automatisk når lot'et har været afsluttet i
+180 dage.
+
+Alt ved det er fail-open: kan billedet ikke hentes, vises pladsholderen som før,
+og en død billedserver kan hverken vælte en kørsel eller en side. Slå det fra
+med `CACHE_IMAGES=0`.
+
 ### Markering til AI-træning
 
 Hvert fund har tre knapper: **Ikke interesseret**, **Budt** og **Købt**. De
@@ -329,6 +345,7 @@ uden det.
 | `runner.py` | Kører loopet og binder delene sammen |
 | `secrets.py` | Læser hemmeligheder fra miljø, fil eller indirekte |
 | `fees.py` | Beregner bud og samlet pris inkl. gebyr |
+| `images.py` | Lokal cache af lot-billeder |
 | `web/` | Webdashboard: faner, søgning, redigering, assistent |
 | `cli.py` | Kommandolinjen |
 

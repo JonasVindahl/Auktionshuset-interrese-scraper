@@ -12,15 +12,19 @@ import io
 import logging
 import os
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from pydantic import BeforeValidator
+from fastapi.responses import (
+    HTMLResponse, RedirectResponse, Response, StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.status import HTTP_303_SEE_OTHER
 
+from .. import images as images_mod
 from ..classifier import OpenAICompatibleClient
 from ..config import ConfigError, load_config
 from ..secrets import SecretError, get_secret
@@ -42,6 +46,22 @@ NAV = (
     ("/chat", "Assistent"),
     ("/stats", "Statistik"),
 )
+
+
+def _blank_to_none(value: Any) -> Any:
+    """Tom streng betyder 'ikke udfyldt', ikke 'ugyldigt tal'.
+
+    En HTML-formular sender hvert felt med, også de tomme. Uden denne
+    oversættelse svarer FastAPI 422 på en søgning hvor prisfelterne bare står
+    tomme — altså på den helt almindelige brug af søgeformularen.
+    """
+    if isinstance(value, str) and not value.strip():
+        return None
+    return value
+
+
+# Et heltalsfelt der må stå tomt i en formular.
+OptionalInt = Annotated[int | None, BeforeValidator(_blank_to_none)]
 
 
 def db_path() -> str:
@@ -160,7 +180,7 @@ def create_app() -> FastAPI:
         finally:
             conn.close()
         categories = sorted({r["category_key"] for r in active if r["category_key"]})
-        prepared = rows_mod.prepare_all(active)
+        prepared = rows_mod.prepare_all(active, db_path=db_path())
         return page(
             request, "finds.html",
             rows=prepared, groups=rows_mod.group_by_date(prepared),
@@ -179,7 +199,7 @@ def create_app() -> FastAPI:
         finally:
             conn.close()
         categories = sorted({r["category_key"] for r in gone if r["category_key"]})
-        prepared = rows_mod.prepare_all(gone)
+        prepared = rows_mod.prepare_all(gone, db_path=db_path())
         return page(
             request, "finds.html",
             rows=prepared, groups=rows_mod.group_by_date(prepared),
@@ -214,14 +234,16 @@ def create_app() -> FastAPI:
     def archive(
         request: Request,
         q: str = Query("", max_length=200),
-        min_price: int | None = None,
-        max_price: int | None = None,
+        min_price: OptionalInt = None,
+        max_price: OptionalInt = None,
         status: str = "alle",
         matched: str = "alle",
         category: str = "",
-        days_back: int | None = None,
+        days_back: OptionalInt = None,
         sort: str = "relevans",
-        page_no: int = Query(1, alias="page", ge=1),
+        page_no: Annotated[
+            int | None, BeforeValidator(_blank_to_none), Query(alias="page")
+        ] = 1,
         _: None = Depends(require_login),
     ) -> HTMLResponse:
         conn = queries.ro_conn(db_path())
@@ -229,7 +251,7 @@ def create_app() -> FastAPI:
             result = search_mod.search(conn, search_mod.SearchQuery(
                 text=q, min_price=min_price, max_price=max_price,
                 status=status, matched=matched, category=category,
-                days_back=days_back, sort=sort, page=page_no,
+                days_back=days_back, sort=sort, page=page_no or 1,
             ))
             stats = search_mod.archive_stats(conn)
             categories = search_mod.categories_seen(conn)
@@ -254,7 +276,7 @@ def create_app() -> FastAPI:
         return page(
             request, "archive.html",
             result=result,
-            rows=rows_mod.prepare_all(result.rows, seen_field="first_seen"),
+            rows=rows_mod.prepare_all(result.rows, seen_field="first_seen", db_path=db_path()),
             archive=stats, categories=categories, page_url=page_url,
             status_choices=search_mod.STATUS_CHOICES,
             match_choices=search_mod.MATCH_CHOICES,
@@ -369,17 +391,22 @@ def create_app() -> FastAPI:
     @app.post("/interests/price")
     def interests_price(
         category: str = Form(...),
-        max_price: int = Form(...),
+        max_price: str = Form(""),
         _: None = Depends(require_login),
     ) -> RedirectResponse:
-        if not 0 < max_price <= 10_000_000:
+        # Feltet kan stå tomt, og et tomt felt er ikke en serverfejl.
+        try:
+            limit = int(max_price.strip())
+        except ValueError:
+            return _interests_redirect(error="Prisloftet skal være et helt tal.")
+        if not 0 < limit <= 10_000_000:
             return _interests_redirect(error="Prisloftet skal være mellem 1 og 10.000.000.")
         try:
             handle = interests_file()
-            handle.set_scalar(("categories", category, "max_price"), max_price)
+            handle.set_scalar(("categories", category, "max_price"), limit)
             handle.save()
             return _interests_redirect(
-                message=f"Prisloftet for {category} er nu {kr(max_price)}."
+                message=f"Prisloftet for {category} er nu {kr(limit)}."
             )
         except (EditError, OSError) as exc:
             return _interests_redirect(error=str(exc))
@@ -402,7 +429,7 @@ def create_app() -> FastAPI:
         return page(
             request, "chat.html",
             question=q, answer=answer,
-            rows=rows_mod.prepare_all(answer.rows, seen_field="first_seen") if answer else [],
+            rows=rows_mod.prepare_all(answer.rows, seen_field="first_seen", db_path=db_path()) if answer else [],
             has_key=llm_client() is not None,
         )
 
@@ -421,6 +448,11 @@ def create_app() -> FastAPI:
             }
         finally:
             conn.close()
+        count, total = images_mod.usage(db_path())
+        context["images"] = {
+            "count": count,
+            "mb": round(total / 1024 / 1024, 1),
+        }
         return page(request, "stats.html", **context)
 
     @app.get("/export/feedback.csv")
@@ -445,6 +477,29 @@ def create_app() -> FastAPI:
             iter([buffer.getvalue()]),
             media_type="text/csv",
             headers={"Content-Disposition": 'attachment; filename="feedback.csv"'},
+        )
+
+    @app.get("/image/{lot_id}")
+    def lot_image(lot_id: str, _: None = Depends(require_login)) -> Response:
+        """Udlever et cachet lot-billede.
+
+        Auktionshuset fjerner billedet når lot'et lukker, så det cachede er
+        det eneste der overlever. Findes der intet, svares 404 og skabelonen
+        falder tilbage til den levende adresse.
+        """
+        cached = images_mod.read_cached(db_path(), lot_id)
+        if cached is None:
+            raise HTTPException(404, "intet cachet billede")
+        data, media_type = cached
+        return Response(
+            content=data,
+            media_type=media_type,
+            headers={
+                # Filen ændrer sig aldrig: den er gemt netop fordi originalen
+                # forsvinder.
+                "Cache-Control": "public, max-age=604800, immutable",
+                "Content-Length": str(len(data)),
+            },
         )
 
     @app.get("/healthz")
