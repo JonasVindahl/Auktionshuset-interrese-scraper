@@ -38,7 +38,10 @@ from .search import SearchQuery, search
 log = logging.getLogger(__name__)
 
 MAX_QUESTION_LENGTH = 500
-MAX_RESULTS_TO_MODEL = 12
+# Hvor mange kandidater modellen må se på. Søgeresultatet er allerede begrænset
+# til en side, og hver række koster omkring 22 tokens, så 40 rækker er under
+# 900 tokens — det er ikke her omkostningen ligger.
+MAX_CANDIDATES = 40
 
 FILTER_SYSTEM = (
     "Du oversætter et dansk spørgsmål om et auktionsarkiv til et JSON-filter. "
@@ -56,12 +59,18 @@ FILTER_SYSTEM = (
     "byde på nu."
 )
 
+# Modellen vælger selv hvilke af kandidaterne der er svar på spørgsmålet.
+# Søgningen er grov med vilje — den skal hellere give for meget end for lidt —
+# og modellen er det led der kan se om et lot reelt besvarer spørgsmålet.
 ANSWER_SYSTEM = (
     "Du er en hjælpsom assistent for en dansk auktionsagent. "
-    "Du får et spørgsmål og de lots databasen fandt. "
-    "Svar kort og konkret på dansk. Nævn priser og hvornår ting slutter når det "
-    "er relevant. Find ikke på lots der ikke står i listen. "
-    "Er listen tom, så sig det ligeud."
+    "Du får et spørgsmål og en nummereret liste af lots fra databasen. "
+    "Svar KUN med JSON: {\"valgte\": [1, 4], \"svar\": \"kort tekst på dansk\"}.\n\n"
+    "valgte   numrene på de lots der reelt besvarer spørgsmålet, i den "
+    "rækkefølge de skal vises. Vælg kun dem der er et svar; er ingen "
+    "relevante, så brug en tom liste.\n"
+    "svar     højst tre sætninger. Nævn priser og hvornår ting slutter når det "
+    "er relevant. Find ikke på lots der ikke står i listen."
 )
 
 EXPLAIN_SYSTEM = (
@@ -78,7 +87,10 @@ class ChatAnswer:
     text: str
     rows: list[sqlite3.Row] = field(default_factory=list)
     filter_used: dict[str, Any] = field(default_factory=dict)
-    degraded: bool = False   # True når modellen ikke kunne nås
+    degraded: bool = False      # True når modellen ikke kunne nås
+    considered: int = 0         # hvor mange kandidater modellen fik at vælge fra
+    selected: bool = False      # True når modellen selv valgte rækkerne
+    total: int = 0              # hvor mange arkivet matchede i alt
 
 
 def _extract_json(raw: str) -> dict:
@@ -156,31 +168,65 @@ def build_filter(client: OpenAICompatibleClient | None, question: str) -> tuple[
 
 
 def _rows_for_model(rows: list[sqlite3.Row]) -> str:
-    """Kompakt gengivelse af søgeresultatet til modellen."""
+    """Kompakt, nummereret gengivelse af søgeresultatet til modellen.
+
+    Numrene er dem modellen svarer med, så den kan pege på rækker i stedet for
+    at skulle gengive titler.
+    """
     if not rows:
         return "(ingen lots fundet)"
     lines = []
-    for row in rows[:MAX_RESULTS_TO_MODEL]:
+    for number, row in enumerate(rows, start=1):
         price = kr(row["last_total"] or row["last_bid"])
         left, _, _ = time_left(row["ends_at"])
         status = left or "ukendt sluttidspunkt"
         matched = "matchede profilen" if row["was_match"] else "ikke et fund"
-        lines.append(f"- {row['title']} | {price} | {status} | {matched}")
+        lines.append(f"{number}. {row['title']} | {price} | {status} | {matched}")
     return "\n".join(lines)
+
+
+def _selected_rows(rows: list[sqlite3.Row], valgte: Any) -> list[sqlite3.Row]:
+    """Omsæt modellens numre til rækker. Ukendte numre ignoreres.
+
+    Modellen kan svare med hvad som helst, så numrene valideres frem for at
+    stole på dem. Et ugyldigt nummer må ikke kunne vælte siden.
+    """
+    if not isinstance(valgte, list):
+        return []
+    picked: list[sqlite3.Row] = []
+    seen: set[int] = set()
+    for value in valgte:
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            continue
+        if number in seen or not 1 <= number <= len(rows):
+            continue
+        seen.add(number)
+        picked.append(rows[number - 1])
+    return picked
 
 
 def ask(
     conn: sqlite3.Connection,
     client: OpenAICompatibleClient | None,
     question: str,
+    *,
+    show_all: bool = False,
 ) -> ChatAnswer:
-    """Besvar et spørgsmål om arkivet."""
+    """Besvar et spørgsmål om arkivet.
+
+    Modellen vælger selv hvilke af kandidaterne der er svar på spørgsmålet.
+    Fejler den, eller beder brugeren om alt, vises hele søgeresultatet i
+    stedet — det må ikke koste et fund at modellen svigter.
+    """
     question = question.strip()[:MAX_QUESTION_LENGTH]
     if not question:
         return ChatAnswer(text="Stil et spørgsmål, så leder jeg i arkivet.")
 
     query, degraded = build_filter(client, question)
     result = search(conn, query)
+    candidates = result.rows[:MAX_CANDIDATES]
 
     # Værdierne formateres, så de kan læses som dansk og ikke som feltnavne.
     filter_used = {
@@ -203,32 +249,63 @@ def ask(
                 "AI-svar kræver at CLASSIFIER_API_KEY er sat — indtil da viser "
                 "jeg resultaterne direkte."
             ),
-            rows=result.rows,
+            rows=candidates,
             filter_used=filter_used,
             degraded=True,
+            total=result.total,
+        )
+
+    if show_all or not candidates:
+        return ChatAnswer(
+            text=f"Fandt {result.total} lots." if candidates else
+                 "Ingen lots i arkivet matcher spørgsmålet.",
+            rows=candidates,
+            filter_used=filter_used,
+            considered=len(candidates),
+            total=result.total,
         )
 
     user = (
         f"Spørgsmål: {question}\n\n"
-        f"Databasen fandt {result.total} lots. De første:\n"
-        f"{_rows_for_model(result.rows)}"
+        f"Databasen fandt {result.total} lots. Her er {len(candidates)},\n"
+        f"nummereret fra 1:\n"
+        f"{_rows_for_model(candidates)}"
     )
     try:
-        text = client.complete(system=ANSWER_SYSTEM, user=user, max_tokens=500)
+        raw = client.complete(system=ANSWER_SYSTEM, user=user, max_tokens=700)
     except LLMError as exc:
         log.warning("Kunne ikke formulere svar: %s", exc)
         return ChatAnswer(
             text=f"Fandt {result.total} lots, men kunne ikke nå sprogmodellen.",
-            rows=result.rows,
+            rows=candidates,
             filter_used=filter_used,
             degraded=True,
+            total=result.total,
         )
 
+    # Modellen skal svare med JSON, men gør det ikke altid. Kan svaret ikke
+    # læses, vises hele søgeresultatet og teksten bruges som den er.
+    try:
+        payload = _extract_json(raw)
+    except (ValueError, json.JSONDecodeError):
+        return ChatAnswer(
+            text=raw.strip(),
+            rows=candidates,
+            filter_used=filter_used,
+            considered=len(candidates),
+            total=result.total,
+        )
+
+    picked = _selected_rows(candidates, payload.get("valgte"))
+    text = str(payload.get("svar") or "").strip() or raw.strip()
     return ChatAnswer(
-        text=text.strip(),
-        rows=result.rows,
+        text=text,
+        rows=picked,
         filter_used=filter_used,
         degraded=degraded,
+        considered=len(candidates),
+        selected=True,
+        total=result.total,
     )
 
 

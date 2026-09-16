@@ -687,6 +687,7 @@ def create_app() -> FastAPI:
     def chat_page(
         request: Request,
         q: str = Query("", max_length=chat_mod.MAX_QUESTION_LENGTH),
+        alle: bool = False,
         _: None = Depends(require_login),
     ) -> HTMLResponse:
         answer = None
@@ -696,12 +697,12 @@ def create_app() -> FastAPI:
         if q.strip():
             conn = ro_conn(db_path())
             try:
-                answer = chat_mod.ask(conn, client, q)
+                answer = chat_mod.ask(conn, client, q, show_all=alle)
             finally:
                 conn.close()
         return page(
             request, "chat.html",
-            question=q, answer=answer,
+            question=q, answer=answer, show_all=alle,
             rows=rows_mod.prepare_all(answer.rows, seen_field="first_seen", db_path=db_path(), opening_bid=opening_bid()) if answer else [],
             has_key=client is not None,
         )

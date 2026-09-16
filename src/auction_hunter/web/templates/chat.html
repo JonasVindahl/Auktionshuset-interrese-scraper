@@ -47,11 +47,26 @@
 
 {% if rows %}
 <section class="section">
-  <h2 class="section-title">Fundne lots <span class="count">{{ rows|length }}</span></h2>
+  <h2 class="section-title">
+    {% if answer.selected %}Modellen valgte{% else %}Fundne lots{% endif %}
+    <span class="count">{{ rows|length }}</span>
+  </h2>
+  {% if answer.selected and answer.considered > rows|length %}
+  <p class="result-count">
+    Søgningen gav {{ answer.considered }} kandidater, og {{ rows|length }} af dem er et svar
+    på spørgsmålet.
+    <a href="/chat?q={{ question|urlencode }}&alle=1">Vis alle {{ answer.considered }}</a>
+  </p>
+  {% elif show_all and answer.considered > rows|length %}
+  <p class="result-count">Viser alle {{ rows|length }} kandidater søgningen gav.</p>
+  {% endif %}
   <div class="lot-grid">
     {% for row in rows %}{{ card(row, show_seen=True, index=loop.index0) }}{% endfor %}
   </div>
 </section>
+{% elif answer %}
+<p class="empty">Modellen fandt ingen af de {{ answer.considered }} kandidater relevant.
+  <a href="/chat?q={{ question|urlencode }}&alle=1">Vis alle</a>.</p>
 {% else %}
 <p class="empty">Ingen lots i arkivet matcher spørgsmålet.</p>
 {% endif %}

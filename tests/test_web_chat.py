@@ -214,3 +214,59 @@ def test_explain_bruger_den_rigtige_matcher(sample_config):
     assert explain_title(config, title).matched == bool(
         match_lot(lot, config, opening_bid=config.opening_bid)
     )
+
+
+# -- modellen vælger selv rækkerne ------------------------------------------
+
+def test_modellen_vaelger_hvilke_lots_der_vises(conn):
+    """Søgningen er grov; modellen er det led der kan se om et lot er et svar."""
+    client = FakeClient(
+        json.dumps({"days_back": 30}),
+        json.dumps({"valgte": [1], "svar": "Kun det første lot er relevant."}),
+    )
+    answer = ask(conn, client, "hvad er relevant?")
+    assert answer.selected is True
+    assert len(answer.rows) == 1
+    assert answer.considered > 1
+    assert answer.text == "Kun det første lot er relevant."
+
+
+def test_ugyldige_numre_ignoreres(conn):
+    """Modellen kan svare med hvad som helst; et dårligt nummer må ikke vælte siden."""
+    client = FakeClient(
+        json.dumps({"text": "sennheiser"}),
+        json.dumps({"valgte": [0, 99, "x", None, 1, 1, -1], "svar": "Et lot."}),
+    )
+    answer = ask(conn, client, "hvad?")
+    assert len(answer.rows) == 1
+    assert answer.selected is True
+
+
+def test_ulaeseligt_svar_viser_alt(conn):
+    """Kan svaret ikke læses, vises hele søgeresultatet med teksten som den er."""
+    client = FakeClient(json.dumps({"text": "sennheiser"}), "Det kan jeg ikke svare på.")
+    answer = ask(conn, client, "hvad?")
+    assert answer.selected is False
+    assert len(answer.rows) == answer.considered
+    assert "ikke svare" in answer.text
+
+
+def test_vis_alle_springer_modellens_valg_over(conn):
+    client = FakeClient(
+        json.dumps({"days_back": 30}),
+        json.dumps({"valgte": [1], "svar": "Et lot."}),
+    )
+    answer = ask(conn, client, "hvad?", show_all=True)
+    assert answer.selected is False
+    assert len(answer.rows) == answer.considered
+    assert len(answer.rows) > 1
+
+
+def test_tomt_valg_giver_ingen_raekker(conn):
+    client = FakeClient(
+        json.dumps({"text": "sennheiser"}),
+        json.dumps({"valgte": [], "svar": "Ingen af dem er et svar."}),
+    )
+    answer = ask(conn, client, "hvad?")
+    assert answer.rows == []
+    assert answer.selected is True
