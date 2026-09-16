@@ -312,6 +312,43 @@ def lot_detail(conn: sqlite3.Connection, lot_id: str) -> sqlite3.Row | None:
     ).fetchone()
 
 
+def lots_by_ids(conn: sqlite3.Connection, lot_ids: list[str]) -> list[sqlite3.Row]:
+    """Samme raekkeform som soegningen, men for et bestemt saet lot_id'er.
+
+    Bruges naar en gemt assistent-besked skal vise sine kort igen: beskeden
+    gemmer lot_id'erne, ikke et oejebliksbillede af priserne.
+    """
+    if not lot_ids or not has_schema(conn, "lots", "notifications"):
+        return []
+    image = "l.image_url" if has_column(conn, "lots", "image_url") else "''"
+    details_flags = ("l.details_flags" if has_column(conn, "lots", "details_flags")
+                     else "'' AS details_flags")
+    feedback_join = (
+        "LEFT JOIN feedback f ON f.lot_id = l.lot_id"
+        if has_table(conn, "feedback") else ""
+    )
+    feedback_col = "COALESCE(f.action,'')" if feedback_join else "''"
+    marks = ",".join("?" * len(lot_ids))
+    rows = conn.execute(
+        f"""
+        SELECT DISTINCT l.lot_id, l.title, l.url, l.auction_title, l.lot_number,
+               l.first_seen, l.last_seen, l.ends_at,
+               l.first_bid, l.last_bid, l.last_total, {details_flags},
+               {image} AS image_url,
+               n.category_key, n.sent_at, n.cost,
+               {feedback_col} AS feedback_action,
+               CASE WHEN n.lot_id IS NULL THEN 0 ELSE 1 END AS was_match
+        FROM lots l
+        LEFT JOIN notifications n ON n.lot_id = l.lot_id
+        {feedback_join}
+        WHERE l.lot_id IN ({marks})
+        """,
+        list(lot_ids),
+    ).fetchall()
+    by_id = {row["lot_id"]: row for row in rows}
+    return [by_id[lot_id] for lot_id in lot_ids if lot_id in by_id]
+
+
 def table_counts(conn: sqlite3.Connection) -> dict[str, int]:
     """Rækkeantal pr. tabel. Driftssiden skal kunne se hvad der vokser."""
     counts: dict[str, int] = {}

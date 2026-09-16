@@ -278,6 +278,12 @@ spørgsmålet handler om. Så hentes lot'ets egne sammenlignelige salg og dets
 prisforløb, og de vises som et panel under svaret: typisk, laveste og højeste,
 hvert tidligere salg med pris og dato, og pris-kurven.
 
+Assistenten er en **samtale**. Hver tur gemmes i `data/conversations.db`, en fil
+for sig, så webben aldrig skriver i agentens database. Modellen får kun de
+sidste seks beskeder og det forrige filter, så prisen pr. tur ikke vokser med
+samtalens længde. **Ny samtale** starter forfra, og gamle samtaler ryddes efter
+90 dage.
+
 ### Billeder
 
 Auktionshuset fjerner et lots billede i samme øjeblik auktionen lukker. Det er

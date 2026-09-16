@@ -143,6 +143,7 @@ class ChatAnswer:
     total: int = 0              # hvor mange arkivet matchede i alt
     archive_url: str = ""       # samme filter, aabnet i arkivets eget UI
     valuation: Valuation | None = None   # naar spoergsmaalet er hvad noget er vaerd
+    meta: dict = field(default_factory=dict)   # det der gemmes i samtalen
 
 
 def _extract_json(raw: str) -> dict:
@@ -183,16 +184,35 @@ def _fallback_filter(question: str) -> SearchQuery:
     return SearchQuery(text=" ".join(words[:6]), any_words=True)
 
 
+def _history_lines(history: list[dict] | None, limit: int = 4) -> str:
+    """De sidste beskeder, korte. Vinduet holdes lille, saa prisen er flad."""
+    if not history:
+        return ""
+    return "\n".join(
+        f"{'Bruger' if m.get('role') == 'user' else 'Assistent'}: "
+        f"{str(m.get('content') or '')[:200]}"
+        for m in history[-limit:]
+    )
+
+
 def build_filter(
     client: OpenAICompatibleClient | None,
     question: str,
     categories: list[str] | None = None,
+    history: list[dict] | None = None,
+    previous: dict | None = None,
 ) -> tuple[SearchQuery, bool]:
     """(filter, degraded). Falder tilbage til nøgleordssøgning uden model."""
     if client is None:
         return _fallback_filter(question), True
     # Kategorinøglerne gives med i brugerbeskeden, så systemprompten er stabil.
     hint = ("\n\nKategorinøgler: " + ", ".join(categories)) if categories else ""
+    earlier = _history_lines(history)
+    if earlier:
+        hint += f"\n\nTidligere samtale:\n{earlier}"
+    if previous:
+        hint += ("\n\nForrige filter (behold felterne medmindre spørgsmålet "
+                 "ændrer dem): " + json.dumps(previous, ensure_ascii=False))
     try:
         raw = client.complete(system=FILTER_SYSTEM, user=question + hint, max_tokens=300)
         data = _extract_json(raw)
@@ -373,6 +393,46 @@ def archive_url(query: SearchQuery) -> str:
     return f"/archive?{qs}" if qs else "/archive"
 
 
+def _filter_dict(query: SearchQuery) -> dict:
+    """Det strukturerede filter, saa naeste tur kan bygge videre paa det."""
+    return {
+        key: value for key, value in {
+            "soegeord": query.text,
+            "min_price": query.min_price,
+            "max_price": query.max_price,
+            "status": query.status if query.status != "alle" else None,
+            "matched": query.matched if query.matched != "alle" else None,
+            "kategori": query.category or None,
+            "days_back": query.days_back,
+            "sort": query.sort if query.sort != "relevans" else None,
+            "alle_ord": True if not query.any_words else None,
+        }.items() if value is not None
+    }
+
+
+def _valuation_dict(valuation: Valuation) -> dict:
+    comps = valuation.comps
+    return {
+        "lot_id": valuation.lot_id,
+        "title": valuation.title,
+        "url": valuation.url,
+        "total": valuation.total,
+        "series": list(valuation.series),
+        "comps": None if comps is None else {
+            "count": comps.count,
+            "median": comps.median,
+            "low": comps.low,
+            "high": comps.high,
+            "items": [
+                {"lot_id": sale.lot_id, "title": sale.title, "hammer": sale.hammer,
+                 "total": sale.total, "ended_at": sale.ended_at,
+                 "shared": list(sale.shared)}
+                for sale in comps.items
+            ],
+        },
+    }
+
+
 def ask(
     conn: sqlite3.Connection,
     client: OpenAICompatibleClient | None,
@@ -380,6 +440,8 @@ def ask(
     *,
     show_all: bool = False,
     categories: list[str] | None = None,
+    history: list[dict] | None = None,
+    previous: dict | None = None,
 ) -> ChatAnswer:
     """Besvar et spørgsmål om arkivet.
 
@@ -391,7 +453,9 @@ def ask(
     if not question:
         return ChatAnswer(text="Stil et spørgsmål, så leder jeg i arkivet.")
 
-    query, degraded = build_filter(client, question, categories)
+    query, degraded = build_filter(
+        client, question, categories, history=history, previous=previous
+    )
     result = search(conn, query)
 
     # Ordene fandtes ikke i nogen titel. Slip teksten men behold de
@@ -412,6 +476,13 @@ def ask(
 
     def finish(answer: ChatAnswer) -> ChatAnswer:
         answer.archive_url = url
+        answer.meta = {
+            "filter": _filter_dict(query),
+            "filter_used": answer.filter_used,
+            "selected": [row["lot_id"] for row in answer.rows],
+        }
+        if answer.valuation is not None:
+            answer.meta["valuation"] = _valuation_dict(answer.valuation)
         if note:
             answer.text = f"{note}\n\n{answer.text}"
         return answer
@@ -460,12 +531,14 @@ def ask(
     ) if line]
     context = ("\n" + "\n".join(context_lines) + "\n") if context_lines else ""
 
+    earlier = _history_lines(history)
     user = (
-        f"Spørgsmål: {question}\n\n"
-        f"Databasen fandt {result.total} lots. Her er {len(candidates)},\n"
-        f"nummereret fra 1:\n"
-        f"{_rows_for_model(candidates)}"
-        f"{context}"
+        (f"Tidligere samtale:\n{earlier}\n\n" if earlier else "")
+        + f"Spørgsmål: {question}\n\n"
+        + f"Databasen fandt {result.total} lots. Her er {len(candidates)},\n"
+        + f"nummereret fra 1:\n"
+        + f"{_rows_for_model(candidates)}"
+        + f"{context}"
     )
     try:
         raw = client.complete(system=ANSWER_SYSTEM, user=user, max_tokens=700)

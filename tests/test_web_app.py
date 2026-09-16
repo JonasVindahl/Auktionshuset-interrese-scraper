@@ -337,9 +337,51 @@ def test_test_en_udelukket_titel(client):
 
 def test_chat_uden_noegle_svarer_alligevel(client):
     """Uden API-nøgle falder assistenten tilbage til nøgleordssøgning."""
-    body = client.get("/chat", params={"q": "har der været nogen Sennheiser?"}).text
-    assert "CLASSIFIER_API_KEY" in body
-    assert "Sennheiser" in body
+    response = client.post(
+        "/chat", data={"q": "har der været nogen Sennheiser?", "c": ""}
+    )
+    assert response.status_code == 200
+    assert "CLASSIFIER_API_KEY" in response.text
+    assert "Sennheiser" in response.text
+
+
+def test_chat_husker_samtalen(client, monkeypatch):
+    """Anden tur skal bære det forrige filter videre til modellen."""
+    import auction_hunter.web.app as appmod
+
+    seen: list[str] = []
+
+    class Sequence:
+        def complete(self, *, system: str, user: str, max_tokens: int = 120) -> str:
+            seen.append(user)
+            return ('{"kategori": "it_tech"}' if "Forrige filter" not in user
+                    else '{"kategori": "it_tech"}')
+
+    monkeypatch.setattr(appmod, "llm_client", lambda: Sequence())
+    client.post("/chat", data={"q": "hvad er der af it?", "c": ""})
+
+    monkeypatch.setattr(appmod, "llm_client", lambda: Sequence())
+    # Anden tur fortsætter den seneste samtale, og skal se det forrige filter.
+    response = client.post("/chat", data={"q": "og hvad med dem under 1000?", "c": ""})
+    assert response.status_code == 200
+    assert any("Forrige filter" in user for user in seen)
+
+
+def test_ny_samtale_starter_forfra(client, monkeypatch):
+    import auction_hunter.web.app as appmod
+
+    class Sequence:
+        def complete(self, *, system: str, user: str, max_tokens: int = 120) -> str:
+            return '{"kategori": "it_tech"}'
+
+    monkeypatch.setattr(appmod, "llm_client", lambda: Sequence())
+    client.post("/chat", data={"q": "foerste samtale", "c": ""})
+    response = client.post("/chat/new")
+    assert response.status_code == 200
+    # Den nye samtale er tom, saa beskeden fra den foerste er ikke i traaden.
+    # Titlen maa gerne staa i historik-listen.
+    assert "<p>foerste samtale</p>" not in response.text
+    assert "Spørg arkivet" in response.text
 
 
 def test_chat_uden_spoergsmaal_viser_forslag(client):
@@ -347,7 +389,26 @@ def test_chat_uden_spoergsmaal_viser_forslag(client):
 
 
 def test_chat_taaler_langt_input(client):
-    assert client.get("/chat", params={"q": "a" * 5000}).status_code in (200, 422)
+    # Spoergsmaalet klippes til MAX_QUESTION_LENGTH i ruten.
+    assert client.post("/chat", data={"q": "a" * 5000, "c": ""}).status_code == 200
+
+
+def test_chat_ignorerer_ugyldigt_samtale_id(client):
+    for value in ("abc", "999999", "-3", ""):
+        assert client.get("/chat", params={"c": value}).status_code == 200
+
+
+def test_chat_tomt_spoergsmaal_laver_ingen_besked(client):
+    response = client.post("/chat", data={"q": "   ", "c": ""})
+    assert response.status_code == 200
+    assert "turn-user" not in response.text
+
+
+def test_samtalefilen_ligger_ved_siden_af_agentens(client, sample_db):
+    from pathlib import Path
+
+    client.post("/chat", data={"q": "hej", "c": ""})
+    assert (Path(sample_db).parent / "conversations.db").exists()
 
 
 # -- statistik -------------------------------------------------------------
@@ -561,6 +622,6 @@ def test_chat_viser_vurderingspanel(client, monkeypatch):
                     '"sammenlign": 1}')
 
     monkeypatch.setattr(appmod, "llm_client", lambda: Sequence())
-    response = client.get("/chat?q=hvad er den vaerd")
+    response = client.post("/chat", data={"q": "hvad er den vaerd", "c": ""})
     assert response.status_code == 200
     assert "Hvad samme slags er gået for" in response.text
