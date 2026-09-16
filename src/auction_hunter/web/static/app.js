@@ -265,9 +265,16 @@
       });
 
       if (counter) {
-        counter.textContent = visible === total
+        const text = visible === total
           ? total + ' fund'
           : visible + ' af ' + total + ' fund';
+        if (counter.textContent !== text) {
+          counter.textContent = text;
+          // Et enkelt bump så øjet fanger at tallet skiftede. Ikke count-up.
+          counter.classList.remove('is-changed');
+          void counter.offsetWidth;
+          counter.classList.add('is-changed');
+        }
       }
       if (noResults) noResults.hidden = visible !== 0;
 

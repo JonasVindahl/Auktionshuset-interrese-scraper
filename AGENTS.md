@@ -73,13 +73,27 @@ loftet udskydes til næste kørsel; de sendes aldrig ufiltreret.
 `templates/_icons.html`. Kategoriernes `emoji`-felt i `interests.yml` læses
 ikke længere af skabelonerne, men feltet er urørt.
 
-**Alt visuelt er tokens i `static/app.css`.** Farver, radius og fonte ligger på
-`:root`, og kun værdierne skifter i mørk tilstand. De tre tekstniveauer
-`--text`, `--muted` og `--faint` er valgt så alle tre er over 4.5:1 på både
-`--surface` og `--raised`. Ændrer man en farve, skal kontrasten regnes efter.
-`--border-input` er den mørkere kant på formularfelter, og `--on-accent` er
-tekstfarven på accentbaggrunde. Hvid tekst på den lyse amber i mørk tilstand
-giver kun 2.4:1 og må ikke bruges.
+**Alt visuelt står i `DESIGN.md` og som tokens i `static/app.css`.** Læs
+DESIGN.md før du rører farver, typografi, spacing eller bevægelse; den forklarer
+hvorfor tallene er som de er, og hvilke regler der ikke må brydes.
+
+Kort: UI-skriften er **Onest** (variabel, selvhostet) og display-skriften
+**Bricolage Grotesque**, som kun bruges over 24 px. Plus Jakarta Sans blev målt
+og forkastet, fordi dens mellemrum er 0,17 em og fik "Slutter om 1 dag 8 t" til
+at læse som "Slutterom 1 dag 8 t". Der er fire tekstniveauer, og `--text-4` må
+**kun** bruges til ikoner og streger; al tekst skal være mindst `--text-3`
+(4,6:1). Den lyse primærknap bruger `--accent` med `--on-accent`, fordi
+brand-amberen med hvid tekst kun giver 2,3:1. Kategorifarverne kommer fra
+Okabe-Ito og har en prik-variant til grafik og en tekstvariant til etiketten.
+
+**Bevægelse er en del af systemet.** Varigheder og kurver er tokens
+(`--dur-*`, `--ease-*`). Der animeres kun `transform` og `opacity`, aldrig
+`transition: all` eller layout-egenskaber. Kort får en forskudt indgang via
+`--i`, som sættes i skabelonen og begrænses til 9.
+
+**Kortets struktur.** `.card` er billede plus indhold, og `.card-row` holder
+fakta og handlinger på samme linje, så højden styres af billedet og der ikke
+opstår et tomt bånd i bunden.
 
 **Kontrakten mellem skabelon, CSS og `app.js` er id'er og data-attributter:**
 `#cards-container`, `#flat-list`, `#no-results`, `#visible-count`,

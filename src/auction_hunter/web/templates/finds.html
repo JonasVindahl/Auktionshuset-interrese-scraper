@@ -80,7 +80,7 @@
   {% for label, items in groups %}
   <section class="date-group">
     <h2 class="date-label">{{ label }}</h2>
-    {% for row in items %}{{ card(row, show_seen=(not show_period)) }}{% endfor %}
+    {% for row in items %}{{ card(row, show_seen=(not show_period), index=loop.index0) }}{% endfor %}
   </section>
   {% endfor %}
 </div>

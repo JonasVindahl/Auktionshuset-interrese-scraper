@@ -116,7 +116,7 @@
 
 <section class="section">
   {% if result.rows %}
-    {% for row in rows %}{{ card(row, show_seen=True) }}{% endfor %}
+    {% for row in rows %}{{ card(row, show_seen=True, index=loop.index0) }}{% endfor %}
 
     {% if result.pages > 1 %}
     <nav class="pager" aria-label="Sider">

@@ -3,8 +3,8 @@
 
     Informationsrækkefølgen er bevidst: titel, dernæst pris og tid tilbage
     (det man beslutter ud fra), og først derefter de stille metadata. -#}
-{% macro card(row, show_seen=False) -%}
-<article class="card"
+{% macro card(row, show_seen=False, index=0) -%}
+<article class="card" style="--i:{{ index if index < 9 else 9 }}"
      data-cat="{{ row.category }}"
      data-ts="{{ row.ts }}"
      data-price="{{ row.cost }}"
@@ -25,6 +25,7 @@
       {%- else %}{{ row.title }}{%- endif %}
     </h3>
 
+    <div class="card-row">
     <p class="card-facts">
       <span class="price">{{ row.price }}</span>
       {%- if row.rise %}<span class="price-rise" title="Stigning siden første registrerede bud">+{{ row.rise }}</span>{% endif %}
@@ -36,9 +37,7 @@
       {%- if row.was_match is defined and not row.was_match %}<span class="meta-item tag-miss">ikke et fund</span>{% endif %}
     </p>
 
-    {% if row.auction %}<p class="card-sub" title="{{ row.auction }}">{{ row.auction }}</p>{% endif %}
-
-    <div class="card-actions">
+      <div class="card-actions">
       {# Den synlige tekst er også det tilgængelige navn. En aria-label der
          ikke indeholder den synlige tekst bryder Label in Name (WCAG 2.5.3). #}
       {%- for action, label, tip, ic in [
@@ -53,7 +52,10 @@
         {{ icon(ic, 13) }}<span>{{ label }}</span>
       </button>
       {%- endfor %}
+      </div>
     </div>
+
+    {% if row.auction %}<p class="card-sub" title="{{ row.auction }}">{{ row.auction }}</p>{% endif %}
   </div>
 </article>
 {%- endmacro %}

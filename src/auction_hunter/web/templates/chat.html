@@ -8,6 +8,7 @@
 } %}
 
 {% block title %}Assistent · Auktionshuset Hunter{% endblock %}
+{% block page_class %}is-narrow{% endblock %}
 
 {% block content %}
 <header class="page-head">
@@ -47,7 +48,7 @@
 {% if rows %}
 <section class="section">
   <h2 class="section-title">Fundne lots <span class="count">{{ rows|length }}</span></h2>
-  {% for row in rows %}{{ card(row, show_seen=True) }}{% endfor %}
+  {% for row in rows %}{{ card(row, show_seen=True, index=loop.index0) }}{% endfor %}
 </section>
 {% else %}
 <p class="empty">Ingen lots i arkivet matcher spørgsmålet.</p>
