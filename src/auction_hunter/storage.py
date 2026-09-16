@@ -43,7 +43,8 @@ CREATE TABLE IF NOT EXISTS lots (
     first_bid     INTEGER,
     last_bid      INTEGER,
     last_total    INTEGER,
-    ends_at       TEXT
+    ends_at       TEXT,
+    image_url     TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS price_history (
@@ -128,6 +129,27 @@ CREATE TABLE IF NOT EXISTS feedback (
 CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback(created_at);
 """
 
+# Kolonner der er kommet til efter de første databaser blev oprettet.
+# ``CREATE TABLE IF NOT EXISTS`` rører ikke en eksisterende tabel, så en ny
+# kolonne skal tilføjes eksplicit — ellers fejler agenten først i drift, på en
+# database der har kørt i månedsvis.
+MIGRATIONS: tuple[tuple[str, str, str], ...] = (
+    ("lots", "image_url", "ALTER TABLE lots ADD COLUMN image_url TEXT NOT NULL DEFAULT ''"),
+)
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Tilføj manglende kolonner til en eksisterende database.
+
+    Idempotent: kolonnen tilføjes kun hvis den ikke allerede findes, så det er
+    gratis at køre ved hver opstart.
+    """
+    for table, column, statement in MIGRATIONS:
+        existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if existing and column not in existing:
+            log.info("Migrerer: tilføjer %s.%s", table, column)
+            conn.execute(statement)
+
 # Hvor længe historik holdes. Auktioner løber i uger, så et halvt år er rigeligt
 # til at se et mønster, og grænsen holder databasen fra at vokse i det uendelige
 # — uden den ville pris-historikken alene blive flere GB om året.
@@ -172,6 +194,7 @@ class Store:
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA foreign_keys=ON")
         self.conn.executescript(SCHEMA)
+        _migrate(self.conn)
         self.conn.commit()
 
     @contextmanager
@@ -230,19 +253,25 @@ class Store:
             if row is None:
                 conn.execute(
                     """INSERT INTO lots (lot_id, auction_id, auction_title, title, url,
-                       lot_number, first_seen, last_seen, first_bid, last_bid, last_total, ends_at)
-                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                       lot_number, first_seen, last_seen, first_bid, last_bid, last_total,
+                       ends_at, image_url)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (
                         lot.lot_id, lot.auction_id, lot.auction_title, lot.title, lot.url,
                         lot.lot_number, now, now, lot.current_bid, lot.current_bid, total, ends,
+                        lot.image_url,
                     ),
                 )
                 price_changed = True
             else:
+                # Billedet kan mangle i ét udtræk (lazy loading) uden at være
+                # forsvundet. Behold derfor det gamle, hvis det nye er tomt.
                 conn.execute(
                     """UPDATE lots SET last_seen=?, last_bid=?, last_total=?, ends_at=?,
-                       title=?, url=? WHERE lot_id=?""",
-                    (now, lot.current_bid, total, ends, lot.title, lot.url, lot.lot_id),
+                       title=?, url=?, image_url=COALESCE(NULLIF(?, ''), image_url)
+                       WHERE lot_id=?""",
+                    (now, lot.current_bid, total, ends, lot.title, lot.url,
+                     lot.image_url, lot.lot_id),
                 )
                 # Kun en faktisk prisændring er ny information. Uden dette skrev
                 # hver kørsel en række pr. lot pr. 15. minut, og historikken

@@ -10,6 +10,7 @@ Dansk projekt. Skriv kode, kommentarer, commit-beskeder og docs på dansk.
 .venv/bin/python -m auction_hunter scan           # se fund, gem/send intet
 .venv/bin/python -m auction_hunter check          # konfig + Discord-test
 .venv/bin/python -m auction_hunter dump-config    # fuld effektiv konfig
+.venv/bin/python -m auction_hunter web            # dashboard på :8080
 PYTHONPATH=src .venv/bin/python tools/evaluate.py # mål mod snapshot
 ```
 
@@ -95,6 +96,22 @@ mod den, aldrig mod et snapshot.
 - **Containeren kører som UID/GID 10001**, men `./data` oprettes af værten.
   Rettigheden skal sættes manuelt (`chown -R 10001:10001 data reports`), ellers
   fejler SQLite med "unable to open database file" ved første kørsel.
+- **`sqlite3.Row` har ingen `.get()`.** Den understøtter `row["kolonne"]` og
+  `row.keys()`, men ikke dict-metoder. `row.get(...)` kaster `AttributeError`
+  og nåede produktion én gang, fordi `web.py` ikke havde tests. Brug
+  `row["x"] if "x" in row.keys() else fallback`.
+- **`ends_at` kan ikke sammenlignes i SQL.** Feltet gemmes som ISO med offset
+  (`2026-09-16T14:30:00+02:00`), mens `datetime('now')` giver
+  `2026-09-16 12:05:24`. `T` sorterer efter mellemrum, så en
+  strengsammenligning melder at alt ligger i fremtiden. Filtrér i Python med
+  `_parse_dt`, ikke i en `WHERE`-klausul.
+- **En ny kolonne kræver en migration.** `CREATE TABLE IF NOT EXISTS` rører
+  ikke en eksisterende tabel. Nye kolonner tilføjes i `MIGRATIONS` i
+  `storage.py` og køres ved hver opstart af `Store`.
+- **Billeder er lazy-loadede.** `img.src` er ofte en base64-pladsholder, og den
+  rigtige adresse står i `data-src` eller `srcset`. `Scraper._image_url`
+  håndterer begge og gør relative adresser absolutte. Er billedfeltet tomt i én
+  kørsel, beholder `record_lot` det gamle i stedet for at overskrive med tomt.
 - Scraperen henter **kun titler**, ingen beskrivelser. En LLM kan derfor ikke
   vurdere stand eller om et par er komplet.
 - Auktionshusets vilkår tillader kun ét scrape hvert 15. minut
