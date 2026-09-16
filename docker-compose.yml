@@ -1,0 +1,37 @@
+services:
+  hunter:
+    build: .
+    image: auction-hunter:latest
+    container_name: auction-hunter
+    restart: unless-stopped
+
+    # Webhook og andre hemmeligheder læses fra .env, som ikke kommer i git.
+    env_file:
+      - .env
+
+    environment:
+      # Intervallet kan kun sættes op, aldrig under 900s (auktionsvilkår).
+      SCRAPE_INTERVAL_SECONDS: "900"
+      LOG_LEVEL: "INFO"
+
+    volumes:
+      # Hukommelsen (SQLite) og interesseprofilen lever uden for containeren,
+      # så de overlever genopbygning og kan redigeres direkte.
+      - ./data:/app/data
+      - ./config:/app/config:ro
+      - ./reports:/app/reports
+
+    # Ingen ports: agenten henter kun data ud og skal ikke nås udefra.
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
