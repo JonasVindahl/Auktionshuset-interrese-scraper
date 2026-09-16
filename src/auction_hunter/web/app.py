@@ -40,6 +40,7 @@ from . import (
     rows as rows_mod,
     search as search_mod,
     similar as similar_mod,
+    suggest as suggest_mod,
 )
 from .formatting import date_label, kr, rel_past, time_left, timestamp
 from .yamledit import EditError, InterestsFile, LEVELS
@@ -677,6 +678,22 @@ def create_app() -> FastAPI:
             except ConfigError as exc:
                 error = error or f"Konfigurationen kunne ikke læses: {exc}"
 
+        # Forslag fra feedbacken. Ren regelbaseret analyse, ingen model: den
+        # skal være billig og forudsigelig, og den foreslår aldrig selv et nyt
+        # nøgleord. Intet anvendes uden et klik.
+        suggestions: list = []
+        unmatched: list = []
+        try:
+            suggest_config = load_config(config_path())
+            suggest_conn = queries.ro_conn(db_path())
+            try:
+                suggestions = suggest_mod.noisy_keywords(suggest_conn, suggest_config)
+                unmatched = suggest_mod.unmatched_marks(suggest_conn, suggest_config)
+            finally:
+                suggest_conn.close()
+        except (ConfigError, sqlite3.Error, OSError):
+            pass
+
         # To-punkts-editoren viser én kategori ad gangen. Uden et gyldigt valg
         # falder den tilbage til den første, så siden aldrig står tom.
         selected = next(
@@ -690,6 +707,7 @@ def create_app() -> FastAPI:
             excludes=excludes, levels=LEVELS,
             message=message, error=error or read_error,
             test=test, trace=trace, explanation=explanation,
+            suggestions=suggestions, unmatched=unmatched,
             editable=os.access(config_path() or "config/interests.yml", os.W_OK),
         )
 

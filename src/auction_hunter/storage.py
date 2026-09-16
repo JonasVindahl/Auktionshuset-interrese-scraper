@@ -140,6 +140,16 @@ CREATE VIRTUAL TABLE IF NOT EXISTS lots_fts USING fts5(
     auction_title,
     tokenize='unicode61 remove_diacritics 2'
 );
+
+-- Et lot brugeren foelger kan stige i pris, og det er ny information. Tabellen
+-- husker hvilken pris der sidst blev sendt besked om, og hvornaar. alerted_at
+-- er tom naar raekken kun er en baseline: den foerste pris vi saa, som en
+-- senere stigning maales fra.
+CREATE TABLE IF NOT EXISTS price_alerts (
+    lot_id     TEXT PRIMARY KEY,
+    cost       INTEGER,
+    alerted_at TEXT NOT NULL DEFAULT ''
+);
 """
 
 # Kolonner der er kommet til efter de første databaser blev oprettet.
@@ -425,6 +435,50 @@ class Store:
             last_bid=row["last_bid"],
             notified=notified,
         )
+
+    # -- prisadvarsler -----------------------------------------------------
+
+    def feedback_actions(self, lot_ids: list[str]) -> dict[str, str]:
+        """Handling pr. lot, for de lots brugeren selv har markeret."""
+        if not lot_ids:
+            return {}
+        marks = ",".join("?" * len(lot_ids))
+        rows = self.conn.execute(
+            f"SELECT lot_id, action FROM feedback WHERE lot_id IN ({marks})", lot_ids
+        ).fetchall()
+        return {row["lot_id"]: row["action"] for row in rows}
+
+    def price_alert_state(
+        self, lot_ids: list[str]
+    ) -> dict[str, tuple[int | None, str | None]]:
+        """(sidst sete pris, hvornaar der sidst blev advaret) pr. lot."""
+        if not lot_ids:
+            return {}
+        marks = ",".join("?" * len(lot_ids))
+        rows = self.conn.execute(
+            f"SELECT lot_id, cost, alerted_at FROM price_alerts WHERE lot_id IN ({marks})",
+            lot_ids,
+        ).fetchall()
+        return {row["lot_id"]: (row["cost"], row["alerted_at"] or None) for row in rows}
+
+    def set_price_baseline(self, lot_id: str, cost: int | None) -> None:
+        """Opdatér den sete pris uden at roere advarselstidspunktet."""
+        with self._tx() as conn:
+            conn.execute(
+                """INSERT INTO price_alerts (lot_id, cost, alerted_at) VALUES (?,?, '')
+                   ON CONFLICT(lot_id) DO UPDATE SET cost=excluded.cost""",
+                (lot_id, cost),
+            )
+
+    def mark_price_alerted(self, lot_id: str, cost: int | None, alerted_at: str) -> None:
+        """Gem at der er sendt besked, saa cooldown regnes derfra."""
+        with self._tx() as conn:
+            conn.execute(
+                """INSERT INTO price_alerts (lot_id, cost, alerted_at) VALUES (?,?,?)
+                   ON CONFLICT(lot_id) DO UPDATE SET cost=excluded.cost,
+                   alerted_at=excluded.alerted_at""",
+                (lot_id, cost, alerted_at),
+            )
 
     # -- AI-klassificering -------------------------------------------------
 

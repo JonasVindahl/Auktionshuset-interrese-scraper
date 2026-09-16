@@ -14,7 +14,10 @@ Hvert 15. minut (auktionshusets vilkår tillader ikke hurtigere):
    samme ord
 3. Matcher mod interesseprofilen i `config/interests.yml`
 4. Fratrækker udelukkelser, så høretelefoner og tastaturer ikke støjer
-5. Slår op i SQLite-hukommelsen og beholder kun nye lots og prisændringer
+5. Slår op i SQLite-hukommelsen og beholder kun nye lots. Stiger prisen på et
+   lot du følger eller har budt på, giver det sin egen besked — højst hver 12.
+   time pr. lot, så en travl auktion ikke fylder kanalen (slås fra med
+   `PRICE_ALERTS=0`)
 6. Lader en sprogmodel vurdere de nye fund (valgfrit, se nedenfor) — støj
    afvises, og grænsetilfælde lægges i et samlet digest
 7. Sender fund til Discord som embeds, højst 10 pr. besked
@@ -224,6 +227,14 @@ kørsel, så en ændring slår igennem inden for 15 minutter uden genstart.
 Feltet **Test en titel** kører den rigtige matcher på en titel og viser hvilke
 nøgleord der blev ramt, eller hvad der manglede. Det er den hurtigste vej til
 at forstå hvorfor noget slap igennem eller blev væk.
+
+Sektionen **Forslag fra dine markeringer** læser din feedback og foreslår
+konkret at fjerne nøgleord der oftest fører til noget du afviser. Der skal
+mindst fem afviste lots bag et ord, så et enkelt underligt lot ikke fører til
+en ændring, og intet ændres uden et klik. Den viser også de lots du har budt
+på eller købt, som profilen ikke fangede, som et hint om et manglende
+nøgleord. Analysen er ren regelbaseret; sprogmodellen kommer først ind når
+forslagene skal formuleres og prioriteres.
 
 ### Assistent
 

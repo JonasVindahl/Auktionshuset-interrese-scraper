@@ -20,6 +20,34 @@ def store(tmp_path):
     s.close()
 
 
+# -- prisadvarsler ---------------------------------------------------------
+
+def test_prisadvarsel_tilstand_runder_tur(store):
+    assert store.feedback_actions(["x"]) == {}
+    assert store.price_alert_state(["x"]) == {}
+
+    store.set_price_baseline("x", 100)
+    assert store.price_alert_state(["x"]) == {"x": (100, None)}
+
+    store.mark_price_alerted("x", 120, "2026-09-16T12:00:00+00:00")
+    assert store.price_alert_state(["x"]) == {"x": (120, "2026-09-16T12:00:00+00:00")}
+
+    # En ny baseline opdaterer prisen men bevarer advarselstidspunktet.
+    store.set_price_baseline("x", 130)
+    assert store.price_alert_state(["x"]) == {"x": (130, "2026-09-16T12:00:00+00:00")}
+
+
+def test_feedback_handlinger_slaas_op_pr_lot(store):
+    for lot_id, action in (("a", "watch"), ("b", "skip")):
+        store.conn.execute(
+            "INSERT INTO feedback (lot_id, category_key, action, title, created_at)"
+            " VALUES (?,?,?,'x','2026-09-16T00:00:00+00:00')",
+            (lot_id, "it_tech", action),
+        )
+    store.conn.commit()
+    assert store.feedback_actions(["a", "b", "c"]) == {"a": "watch", "b": "skip"}
+
+
 def iso(days_ago: float = 0) -> str:
     return (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat(
         timespec="seconds"

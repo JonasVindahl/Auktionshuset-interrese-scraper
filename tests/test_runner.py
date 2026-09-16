@@ -7,13 +7,18 @@ rammes.
 """
 
 import json
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from auction_hunter.classifier import Classifier, ClassifierSettings, OpenAICompatibleClient
-from auction_hunter.config import ClassifierConfig, Config, Source
+from auction_hunter.config import Category, ClassifierConfig, Config, Source
+from auction_hunter.fees import PriceEstimate
+from auction_hunter.matcher import Match
 from auction_hunter.notifier import DiscordNotifier, NotifyResult
-from auction_hunter.runner import build_classifier, run_once
+from auction_hunter.runner import (
+    RunStats, build_classifier, maybe_price_alerts, run_once, select_price_alerts,
+)
 from auction_hunter.scraper import Auction, Lot
 from auction_hunter.storage import Store
 
@@ -505,3 +510,92 @@ class TestBlindness:
         stats = run_once(config, store, notifier,
                          scraper_factory=lambda c: FakeScraper())
         assert stats.notified > 0
+
+
+# -- prisadvarsler ---------------------------------------------------------
+
+NOW = datetime(2026, 9, 16, 12, 0, tzinfo=timezone.utc)
+
+
+def _match(lot_id, cost, *, ends_in_hours=24, title="Et lot", now=None):
+    now = now or datetime.now(timezone.utc)
+    lot = Lot(
+        lot_id=lot_id, title=title, url=f"https://x/{lot_id}", lot_number="1",
+        auction_id="A1", auction_title="Test", current_bid=cost, total_price=cost,
+        ends_at=now + timedelta(hours=ends_in_hours), image_url="", has_bids=True,
+    )
+    price = PriceEstimate(current_bid=cost, current_total=cost, entry_cost=50, vat_exempt=False)
+    category = Category(key="it_tech", label="IT / tech", emoji="", max_price=10000)
+    return Match(lot=lot, category=category, keywords=("switch",), price=price, over_budget=False)
+
+
+def _state(cost, *, hours_ago=None, now=NOW):
+    if hours_ago is None:
+        return (cost, None)
+    return (cost, (now - timedelta(hours=hours_ago)).isoformat(timespec="seconds"))
+
+
+def test_prisadvarsel_foerste_gang_er_kun_en_baseline():
+    assert select_price_alerts([_match("L1", 200, now=NOW)], {"L1": "watch"}, {}, now=NOW) == []
+
+
+def test_prisadvarsel_paa_stigning():
+    alerts = select_price_alerts(
+        [_match("L1", 200, now=NOW)], {"L1": "watch"}, {"L1": _state(150)}, now=NOW
+    )
+    assert len(alerts) == 1
+    assert alerts[0].old_cost == 150 and alerts[0].new_cost == 200
+
+
+def test_prisadvarsel_kun_for_fulgte_eller_budte():
+    states = {"L1": _state(150)}
+    assert select_price_alerts([_match("L1", 200, now=NOW)], {}, states, now=NOW) == []
+    assert select_price_alerts(
+        [_match("L1", 200, now=NOW)], {"L1": "bought"}, states, now=NOW
+    ) == []
+    assert len(select_price_alerts(
+        [_match("L1", 200, now=NOW)], {"L1": "bid"}, states, now=NOW
+    )) == 1
+
+
+def test_prisadvarsel_ved_uaendret_eller_faldende_pris():
+    states = {"L1": _state(150)}
+    assert select_price_alerts([_match("L1", 150, now=NOW)], {"L1": "watch"}, states, now=NOW) == []
+    assert select_price_alerts([_match("L1", 100, now=NOW)], {"L1": "watch"}, states, now=NOW) == []
+
+
+def test_prisadvarsel_respekterer_cooldown():
+    match = _match("L1", 200, now=NOW)
+    frisk = {"L1": _state(150, hours_ago=1)}
+    assert select_price_alerts([match], {"L1": "watch"}, frisk, now=NOW) == []
+    gammel = {"L1": _state(150, hours_ago=24)}
+    assert len(select_price_alerts([match], {"L1": "watch"}, gammel, now=NOW)) == 1
+
+
+def test_prisadvarsel_springer_afsluttede_lots_over():
+    match = _match("L1", 200, ends_in_hours=-2, now=NOW)
+    assert select_price_alerts([match], {"L1": "watch"}, {"L1": _state(150)}, now=NOW) == []
+
+
+def test_maybe_price_alerts_sender_en_gang_og_husker(tmp_path):
+    with Store(tmp_path / "t.db") as store:
+        store.set_price_baseline("L1", 150)
+        store.conn.execute(
+            "INSERT INTO feedback (lot_id, category_key, action, title, created_at)"
+            " VALUES ('L1','it_tech','watch','x','2026-09-16T00:00:00+00:00')"
+        )
+        store.conn.commit()
+
+        notifier = RecordingNotifier()
+        stats = RunStats()
+        maybe_price_alerts(store, notifier, [_match("L1", 200)], stats)
+        assert stats.price_alerts == 1
+        assert len(notifier.payloads) == 1
+
+        # Uden en ny stigning maa der ikke komme en besked mere.
+        notifier2 = RecordingNotifier()
+        stats2 = RunStats()
+        maybe_price_alerts(store, notifier2, [_match("L1", 200)], stats2)
+        assert stats2.price_alerts == 0
+        assert notifier2.payloads == []
+
