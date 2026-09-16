@@ -189,8 +189,12 @@ PYTHONPATH=src python -m auction_hunter web --port 8080
 | **Interesser** | Redigér profilen og test en titel mod reglerne |
 | **Assistent** | Spørg om arkivet i almindeligt sprog |
 | **Statistik** | Antal, støjandel og hvad fundene reelt koster |
+| **Drift** | Kørsler, databasens og billedcachens størrelse, og om hemmelighederne er sat |
 
-Principperne bag udseendet, farverne og bevægelsen står i DESIGN.md. Alle
+Listen kan vises som katalog med billeder eller som kompakt liste, og
+vælges med knappen i værktøjslinjen. Der er tastaturgenveje: `j` og `k` flytter
+markeringen, `Enter` åbner lot'et, `x`, `b` og `c` markerer, og `?` viser
+listen. Principperne bag udseendet, farverne og bevægelsen står i DESIGN.md. Alle
 beløb i dashboardet og i Discord er den reelle pris inkl. salær og moms. Et
 lot uden bud viser hvad første bud vil koste i stedet for 0 kr.
 

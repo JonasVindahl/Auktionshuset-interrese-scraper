@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
 {% from "_card.html" import card with context %}
+{% from "_view.html" import view_toggle %}
 {% set ending_soon = rows|selectattr('ends_in', 'gt', 0)|selectattr('ends_in', 'le', 86400)|list|length %}
 
 {% block title %}{{ heading }} · Auktionshuset Hunter{% endblock %}
@@ -30,9 +31,12 @@
     <button type="button" class="chip" data-cat="{{ cat }}" aria-pressed="false" title="Vis kun {{ category_labels.get(cat, cat) }}">{{ category_labels.get(cat, cat) }}</button>
     {% endfor %}
   </div>
-  <button type="button" class="btn is-quiet" id="filter-toggle" aria-expanded="false" aria-controls="filter-panel">
-    {{ icon('filter', 15) }}<span>Filtre</span><span class="filter-count" hidden></span>
-  </button>
+  <div class="toolbar-actions">
+    {{ view_toggle() }}
+    <button type="button" class="btn is-quiet" id="filter-toggle" aria-expanded="false" aria-controls="filter-panel">
+      {{ icon('filter', 15) }}<span>Filtre</span><span class="filter-count" hidden></span>
+    </button>
+  </div>
 </div>
 
 <div class="active-filters" id="active-filters" hidden></div>

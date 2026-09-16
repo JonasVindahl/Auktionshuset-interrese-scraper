@@ -396,6 +396,111 @@
     apply(true);
   }
 
+  /* ---- tastaturnavigation ------------------------------------------------ */
+
+  function initKeyboardNav() {
+    const help = document.getElementById('key-help');
+    const list = document.querySelector('#cards-container, .lot-grid');
+
+    function visibleCards() {
+      const scope = document.querySelector('#cards-container, .lot-grid');
+      if (!scope) return [];
+      return $$('.card', scope).filter(card => card.offsetParent !== null);
+    }
+
+    let index = -1;
+
+    function select(next) {
+      const items = visibleCards();
+      if (!items.length) return;
+      index = Math.max(0, Math.min(items.length - 1, next));
+      items.forEach((card, i) => card.classList.toggle('is-selected', i === index));
+      items[index].scrollIntoView({ block: 'nearest' });
+    }
+
+    function current() {
+      return visibleCards()[index] || null;
+    }
+
+    function act(action) {
+      const card = current();
+      if (!card) return;
+      const btn = card.querySelector('.fb-btn[data-action="' + action + '"]');
+      if (btn) btn.click();
+    }
+
+    function openSelected() {
+      const card = current();
+      if (!card) return;
+      const link = card.querySelector('.card-title a, .thumb-link');
+      if (link) window.open(link.href, '_blank', 'noopener');
+    }
+
+    if (list) {
+      document.addEventListener('keydown', event => {
+        const target = event.target;
+        const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA'
+          || target.tagName === 'SELECT' || target.isContentEditable);
+        if (typing || event.metaKey || event.ctrlKey || event.altKey) return;
+
+        switch (event.key) {
+          case 'j': event.preventDefault(); select(index + 1); break;
+          case 'k': event.preventDefault(); select(index - 1); break;
+          case 'Enter': event.preventDefault(); openSelected(); break;
+          case 'x': event.preventDefault(); act('skip'); break;
+          case 'b': event.preventDefault(); act('bid'); break;
+          case 'c': event.preventDefault(); act('bought'); break;
+          case '?': event.preventDefault(); if (help) help.hidden = false; break;
+          case 'Escape':
+            if (help && !help.hidden) { help.hidden = true; break; }
+            index = -1;
+            visibleCards().forEach(card => card.classList.remove('is-selected'));
+            break;
+          default: break;
+        }
+      });
+    }
+
+    $$('[data-keys-open]').forEach(btn => btn.addEventListener('click', () => {
+      if (help) help.hidden = false;
+    }));
+    $$('[data-keys-close]').forEach(btn => btn.addEventListener('click', () => {
+      if (help) help.hidden = true;
+    }));
+    if (help) {
+      help.addEventListener('click', event => {
+        if (event.target === help) help.hidden = true;
+      });
+    }
+  }
+
+  /* ---- visningstilstand ------------------------------------------------- */
+
+  function initView() {
+    const buttons = $$('.view-btn');
+    const root = document.documentElement;
+
+    function set(view) {
+      root.dataset.view = view;
+      buttons.forEach(btn => {
+        btn.setAttribute('aria-pressed', String(btn.dataset.view === view));
+      });
+      try {
+        localStorage.setItem('visning', view);
+      } catch (_) { /* privat tilstand er helt fint */ }
+    }
+
+    buttons.forEach(btn => btn.addEventListener('click', () => set(btn.dataset.view)));
+
+    let saved = null;
+    try {
+      saved = localStorage.getItem('visning');
+    } catch (_) {
+      saved = null;
+    }
+    set(saved === 'kompakt' ? 'kompakt' : 'katalog');
+  }
+
   /* ---- interesser: husk hvilke kategorier der var foldet ud -------------- */
 
   function initInterestBlocks() {
@@ -458,6 +563,8 @@
   }
 
   initFindPage();
+  initKeyboardNav();
+  initView();
   initInterestBlocks();
   initArchiveForm();
   initSearchShortcut();

@@ -48,6 +48,7 @@ NAV = (
     ("/interests", "Interesser"),
     ("/chat", "Assistent"),
     ("/stats", "Statistik"),
+    ("/drift", "Drift"),
 )
 
 
@@ -198,6 +199,18 @@ def status_tabs(query: search_mod.SearchQuery) -> list[dict[str, Any]]:
     ]
 
 
+def secret_status(name: str) -> str:
+    """Om en hemmelighed er sat. Aldrig værdien, kun tilstanden.
+
+    En hemmelighed der er sat men ikke kan læses er en fejl nogen skal se, ikke
+    noget der skal skjules bag "ikke sat".
+    """
+    try:
+        return "sat" if get_secret(name) else "ikke sat"
+    except SecretError:
+        return "sat, men kunne ikke læses"
+
+
 # Etiketter til sorterings-chippen, så opsummeringen bliver dansk frem for
 # feltnavne.
 _ARCHIVE_SORT_LABELS = {
@@ -326,6 +339,19 @@ def create_app() -> FastAPI:
     templates.env.globals["is_vat_exempt"] = is_vat_exempt
     templates.env.globals["nav"] = NAV
 
+    def with_series(rows: list[dict]) -> list[dict]:
+        """Læg prisforløbet på de forberedte rækker, i ét opslag."""
+        if not rows:
+            return rows
+        conn = ro_conn(db_path())
+        try:
+            series = queries.price_series(conn, [r["lot_id"] for r in rows])
+        finally:
+            conn.close()
+        for row in rows:
+            row["series"] = series.get(row["lot_id"], [])
+        return rows
+
     def page(request: Request, name: str, **context: Any) -> HTMLResponse:
         """Render en side med det fælles sidehoved allerede udfyldt."""
         conn = ro_conn(db_path())
@@ -404,7 +430,7 @@ def create_app() -> FastAPI:
         finally:
             conn.close()
         categories = sorted({r["category_key"] for r in active if r["category_key"]})
-        prepared = rows_mod.prepare_all(active, db_path=db_path(), opening_bid=opening_bid())
+        prepared = with_series(rows_mod.prepare_all(active, db_path=db_path(), opening_bid=opening_bid()))
         return page(
             request, "finds.html",
             rows=prepared, groups=rows_mod.group_by_date(prepared),
@@ -423,7 +449,7 @@ def create_app() -> FastAPI:
         finally:
             conn.close()
         categories = sorted({r["category_key"] for r in gone if r["category_key"]})
-        prepared = rows_mod.prepare_all(gone, db_path=db_path(), opening_bid=opening_bid())
+        prepared = with_series(rows_mod.prepare_all(gone, db_path=db_path(), opening_bid=opening_bid()))
         return page(
             request, "finds.html",
             rows=prepared, groups=rows_mod.group_by_date(prepared),
@@ -446,9 +472,9 @@ def create_app() -> FastAPI:
         finally:
             conn.close()
 
-        prepared = rows_mod.prepare_all(
+        prepared = with_series(rows_mod.prepare_all(
             rows, seen_field="created_at", db_path=db_path(), opening_bid=opening_bid()
-        )
+        ))
         groups = [
             (key, label, [r for r in prepared if r["feedback"] == key])
             for key, label in (("bought", "Købt"), ("bid", "Budt"), ("skip", "Afvist"))
@@ -529,7 +555,7 @@ def create_app() -> FastAPI:
         return page(
             request, "archive.html",
             result=result,
-            rows=rows_mod.prepare_all(result.rows, seen_field="first_seen", db_path=db_path(), opening_bid=opening_bid()),
+            rows=with_series(rows_mod.prepare_all(result.rows, seen_field="first_seen", db_path=db_path(), opening_bid=opening_bid())),
             archive=stats, categories=categories, page_url=page_url,
             filters=filter_chips(result.query),
             status_tabs=status_tabs(result.query),
@@ -703,7 +729,7 @@ def create_app() -> FastAPI:
         return page(
             request, "chat.html",
             question=q, answer=answer, show_all=alle,
-            rows=rows_mod.prepare_all(answer.rows, seen_field="first_seen", db_path=db_path(), opening_bid=opening_bid()) if answer else [],
+            rows=with_series(rows_mod.prepare_all(answer.rows, seen_field="first_seen", db_path=db_path(), opening_bid=opening_bid())) if answer else [],
             has_key=client is not None,
         )
 
@@ -730,6 +756,76 @@ def create_app() -> FastAPI:
             "mb": round(total / 1024 / 1024, 1),
         }
         return page(request, "stats.html", **context)
+
+    # -- drift -------------------------------------------------------------
+
+    @app.get("/drift", response_class=HTMLResponse)
+    def drift(request: Request, _: None = Depends(require_login)) -> HTMLResponse:
+        """Alt det der ellers kun står i loggen: kørsler, størrelser og tilstand."""
+        conn = ro_conn(db_path())
+        try:
+            tables = queries.table_counts(conn)
+            span = queries.memory_span(conn)
+            runs = queries.run_history(conn, limit=12)
+            pulse, stale = queries.last_run(conn)
+            blind_at = queries.meta_value(conn, "blind_alert_at")
+            normal_lots = queries.last_normal_lot_count(conn)
+            reviews = conn.execute(
+                "SELECT COUNT(*) FROM review_queue WHERE digested_at IS NULL"
+            ).fetchone()[0] if queries.has_table(conn, "review_queue") else 0
+        finally:
+            conn.close()
+
+        db = db_path()
+        try:
+            db_bytes = os.path.getsize(db)
+        except OSError:
+            db_bytes = 0
+        image_count, image_bytes = images_mod.usage(db)
+
+        config_file = config_path() or "config/interests.yml"
+        settings: dict[str, Any] = {
+            "path": config_file,
+            "readable": True,
+            "writable": os.access(config_file, os.W_OK),
+            "error": "",
+        }
+        try:
+            config = load_config(config_path())
+            settings |= {
+                "categories": len(config.categories),
+                "keywords": sum(
+                    len(c.strong) + len(c.weak) + len(c.brands) + len(c.exact)
+                    for c in config.categories
+                ),
+                "excludes": len(config.exclude),
+                "max_price": config.max_price,
+                "soft": config.soft_over_budget_factor,
+                "opening_bid": config.opening_bid,
+                "region": config.source.region_label,
+                "ai_enabled": config.classifier.enabled,
+                "ai_model": config.classifier.model,
+                "ai_base": config.classifier.base_url,
+            }
+        except ConfigError as exc:
+            settings |= {"readable": False, "error": str(exc)}
+
+        ai_key = secret_status("CLASSIFIER_API_KEY")
+        if ai_key == "ikke sat":
+            ai_key = secret_status("OPENAI_API_KEY")
+
+        return page(
+            request, "drift.html",
+            pulse=pulse, stale=stale, tables=tables, span=span, runs=runs,
+            blind_at=blind_at, normal_lots=normal_lots, reviews=reviews,
+            db_bytes=db_bytes, image_count=image_count, image_bytes=image_bytes,
+            settings=settings,
+            secrets={
+                "Discord-webhook": secret_status("DISCORD_WEBHOOK_URL"),
+                "AI-noegle": ai_key,
+                "Adgangskode": secret_status("WEB_PASSWORD"),
+            },
+        )
 
     @app.get("/export/feedback.csv")
     def export_feedback(_: None = Depends(require_login)) -> StreamingResponse:

@@ -997,3 +997,96 @@ details[open]>.cat-body{animation:reveal var(--dur-base) var(--ease-out) both}
 .field-price{grid-column:span 2}
 .price-inputs input{width:100%;min-width:84px}
 @media (max-width:600px){.field-price{grid-column:auto}}
+
+/* ---- visningstilstand: katalog eller kompakt liste ---- */
+.view-toggle{
+  display:inline-flex;gap:2px;padding:3px;flex:none;
+  background:var(--surface-3);border-radius:var(--r-2);box-shadow:var(--edge);
+}
+.view-btn{
+  display:flex;align-items:center;justify-content:center;
+  width:30px;height:26px;border:0;border-radius:var(--r-1);
+  background:transparent;color:var(--text-3);cursor:pointer;
+  transition:background-color var(--dur-fast) var(--ease-standard),
+             color var(--dur-fast) var(--ease-standard);
+}
+.view-btn:hover{color:var(--text)}
+.view-btn[aria-pressed=true]{background:var(--surface);color:var(--text);box-shadow:var(--e1)}
+
+/* ---- prisforloeb paa flisen ---- */
+.spark{display:inline-flex;align-items:center;color:var(--text-3);margin-left:2px}
+.spark.is-up{color:var(--urgent)}
+.spark.is-down{color:var(--ok)}
+.time-inline{
+  display:none;align-items:center;gap:4px;
+  font-size:var(--fs-caption);font-weight:600;color:var(--text-2);
+}
+.time-inline.urgent{color:var(--urgent)}
+.time-inline.soon{color:var(--warn)}
+.time-inline.ended,.time-inline.unknown{color:var(--text-3);font-weight:500}
+
+/* ---- kompakt liste: samme data, ni rækker mere pr. skaerm ---- */
+[data-view=kompakt] .lot-grid,
+[data-view=kompakt] .date-group,
+[data-view=kompakt] .flat-list{grid-template-columns:1fr;gap:6px}
+[data-view=kompakt] .card{
+  display:grid;grid-template-columns:44px minmax(0,1fr) auto;
+  align-items:center;gap:12px;padding:6px 10px;
+}
+[data-view=kompakt] .card:hover{transform:none}
+[data-view=kompakt] .card-media{
+  width:44px;height:44px;aspect-ratio:auto;border-radius:var(--r-2);
+}
+[data-view=kompakt] .card:hover .thumb img{transform:none}
+[data-view=kompakt] .badge-time,
+[data-view=kompakt] .badge-state{display:none}
+[data-view=kompakt] .time-inline{display:inline-flex}
+[data-view=kompakt] .card-body{padding:0;gap:1px}
+[data-view=kompakt] .card-title{font-size:.875rem;-webkit-line-clamp:1}
+[data-view=kompakt] .card-sub{display:none}
+[data-view=kompakt] .card-meta{margin:0}
+[data-view=kompakt] .card-actions{padding:0;border:0;margin:0}
+[data-view=kompakt] .card-actions .fb-btn{min-height:28px;padding:2px 8px}
+[data-view=kompakt] .card-actions .fb-btn span{display:none}
+@media (max-width:560px){
+  [data-view=kompakt] .card{grid-template-columns:40px minmax(0,1fr) auto;gap:9px}
+  [data-view=kompakt] .card-media{width:40px;height:40px}
+}
+.toolbar-actions{display:flex;gap:10px;align-items:center;flex:none}
+[data-view=kompakt] .card-facts{flex-wrap:nowrap;gap:10px}
+[data-view=kompakt] .time-inline{white-space:nowrap}
+[data-view=kompakt] .spark{margin-left:auto}
+
+/* markering fra tastaturnavigation */
+.card.is-selected{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ---- tastaturgenveje ---- */
+.linkish{
+  display:inline-flex;align-items:center;gap:6px;min-height:24px;padding:2px 0;
+  font:inherit;font-size:var(--fs-small);color:inherit;background:none;border:0;cursor:pointer;
+}
+.linkish:hover{color:var(--accent)}
+.key-help{position:fixed;inset:0;z-index:var(--z-modal);display:grid;place-items:center;
+  background:color-mix(in srgb,var(--bg) 55%,transparent);backdrop-filter:blur(3px);padding:var(--sp-5)}
+.key-help-card{width:100%;max-width:420px;padding:var(--sp-5);
+  background:var(--surface);border-radius:var(--r-4);box-shadow:var(--e4),var(--edge)}
+.key-help-card h2{font-family:var(--font-display);font-size:var(--fs-h3);margin-bottom:var(--sp-4)}
+.key-list{display:grid;gap:7px;margin-bottom:var(--sp-4)}
+.key-list > div{display:flex;align-items:baseline;gap:12px}
+.key-list dt{
+  min-width:52px;font-family:var(--font-mono);font-size:var(--fs-caption);font-weight:600;
+  color:var(--text);background:var(--surface-2);border-radius:var(--r-1);
+  padding:2px 8px;text-align:center;
+}
+.key-list dd{font-size:var(--fs-small);color:var(--text-2)}
+
+/* ---- drift: noegle/vaerdi-liste ---- */
+.deflist{display:grid;gap:1px;background:var(--border);border-radius:var(--r-4);
+  overflow:hidden;box-shadow:var(--e1);margin-top:var(--sp-4)}
+.deflist > div{display:flex;gap:var(--sp-4);justify-content:space-between;
+  align-items:baseline;background:var(--surface);padding:11px 17px}
+.deflist dt{font-size:var(--fs-small);color:var(--text-3);flex:none}
+.deflist dd{font-size:var(--fs-small);text-align:right;min-width:0;overflow-wrap:anywhere}
+.deflist .ic{vertical-align:-2px}
+tr.run-error td{background:var(--urgent-soft);color:var(--urgent);font-size:var(--fs-caption);
+  font-family:var(--font-mono);white-space:pre-wrap}

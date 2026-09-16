@@ -261,6 +261,65 @@ def save_feedback(
         conn.close()
 
 
+def table_counts(conn: sqlite3.Connection) -> dict[str, int]:
+    """Rækkeantal pr. tabel. Driftssiden skal kunne se hvad der vokser."""
+    counts: dict[str, int] = {}
+    for table in ("lots", "price_history", "notifications", "runs",
+                  "classifications", "review_queue", "feedback", "meta"):
+        if has_table(conn, table):
+            counts[table] = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+    return counts
+
+
+def memory_span(conn: sqlite3.Connection) -> dict[str, str | None]:
+    """Hvornår hukommelsen begynder og slutter."""
+    if not has_schema(conn, "lots"):
+        return {"first": None, "last": None}
+    row = conn.execute(
+        "SELECT MIN(first_seen) AS a, MAX(last_seen) AS b FROM lots"
+    ).fetchone()
+    return {"first": row["a"], "last": row["b"]}
+
+
+def meta_value(conn: sqlite3.Connection, key: str) -> str | None:
+    if not has_table(conn, "meta"):
+        return None
+    row = conn.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
+    return row["value"] if row else None
+
+
+def last_normal_lot_count(conn: sqlite3.Connection) -> int | None:
+    """Antal lots i den seneste kørsel der ikke var tom. Blindheds-tærsklen."""
+    if not has_table(conn, "runs"):
+        return None
+    row = conn.execute(
+        "SELECT lots FROM runs WHERE error IS NULL AND lots > 0 ORDER BY run_id DESC LIMIT 1"
+    ).fetchone()
+    return int(row["lots"]) if row else None
+
+
+def price_series(conn: sqlite3.Connection, lot_ids: list[str]) -> dict[str, list[int]]:
+    """Prisforløb pr. lot, ældste observation først.
+
+    Ét opslag for alle viste lots frem for ét pr. kort, ellers ville en side
+    med 50 kort give 50 forespørgsler. Kun faktiske prisændringer gemmes, så
+    serien er kort — derfor kan den tegnes direkte.
+    """
+    if not lot_ids or not has_table(conn, "price_history"):
+        return {}
+    marks = ",".join("?" * len(lot_ids))
+    rows = conn.execute(
+        f"""SELECT lot_id, COALESCE(total, bid) AS pris FROM price_history
+            WHERE lot_id IN ({marks}) ORDER BY lot_id, observed_at""",
+        lot_ids,
+    ).fetchall()
+    out: dict[str, list[int]] = {}
+    for row in rows:
+        if row["pris"]:
+            out.setdefault(row["lot_id"], []).append(int(row["pris"]))
+    return out
+
+
 def auctions_seen(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     """Hvilke auktioner arkivet dækker, med antal lots. Bruges til at filtrere
     på hvor et lot kommer fra."""

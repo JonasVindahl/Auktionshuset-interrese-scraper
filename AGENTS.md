@@ -91,6 +91,14 @@ Okabe-Ito og har en prik-variant til grafik og en tekstvariant til etiketten.
 `transition: all` eller layout-egenskaber. Kort får en forskudt indgang via
 `--i`, som sættes i skabelonen og begrænses til 9.
 
+**Fire ting i webfladen har egne kontrakter.** `data-view` på `<html>` skifter
+mellem `katalog` og `kompakt` og huskes i localStorage under `visning`.
+Tastaturgenvejene (j/k/Enter/x/b/c/?/Esc) ligger i `app.js`, markerer med
+`.is-selected` og hjælpearket er `#key-help`. Hvert kort kan have
+`row.series`, som er lot'ets prisforløb fra `price_history` og tegnes som en
+inline SVG-kurve. `/drift` samler kørsler, størrelser og tilstand; den viser
+kun om en hemmelighed er sat, aldrig værdien.
+
 **Kortets struktur.** `.card` er billede plus indhold, og `.card-row` holder
 fakta og handlinger på samme linje, så højden styres af billedet og der ikke
 opstår et tomt bånd i bunden.

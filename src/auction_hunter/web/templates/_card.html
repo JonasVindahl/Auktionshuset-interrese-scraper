@@ -23,7 +23,7 @@
       {%- if row.url %}<a class="thumb-link" href="{{ row.url }}" target="_blank" rel="noopener"
             aria-hidden="true" tabindex="-1"></a>{% endif %}
     </div>
-    {% if row.time_left %}<span class="badge-time {{ row.time_css }}">{{ icon('clock', 12) }}{{ row.time_left }}</span>{% endif %}
+    {% if row.time_left %}<span class="badge-time {{ row.time_css }}" aria-hidden="true">{{ icon('clock', 12) }}{{ row.time_left }}</span>{% endif %}
     {% if row.feedback %}<span class="badge-state is-{{ row.feedback }}">{{ state[row.feedback] }}</span>{% endif %}
   </div>
 
@@ -32,6 +32,22 @@
       {%- if row.price_label %}<span class="price-label" title="Prisen for første bud inkl. salær og moms">{{ row.price_label }}</span>{% endif %}
       <span class="price">{{ row.price }}</span>
       {%- if row.rise %}<span class="price-rise" title="Stigning siden første registrerede bud">+{{ row.rise }}</span>{% endif %}
+      {%- if row.time_left %}<span class="time-inline {{ row.time_css }}">{{ icon('clock', 12) }}{{ row.time_left }}</span>{% endif %}
+      {%- if row.series and row.series|length > 1 %}
+      {#- Prisforløbet tegnes som en lille kurve. Databasen har haft tallene
+          hele tiden; det er kun visningen der har manglet. -#}
+      {%- set lo = row.series|min %}
+      {%- set hi = row.series|max %}
+      {%- set span = (hi - lo) if hi > lo else 1 %}
+      <span class="spark{% if row.series[-1] > row.series[0] %} is-up{% elif row.series[-1] < row.series[0] %} is-down{% endif %}"
+            title="Prisforløb over {{ row.series|length }} observationer">
+        <svg width="66" height="18" viewBox="0 0 66 18" aria-hidden="true" focusable="false">
+          <polyline fill="none" stroke="currentColor" stroke-width="1.6"
+                    stroke-linejoin="round" stroke-linecap="round"
+                    points="{% for v in row.series %}{{ (loop.index0 / (row.series|length - 1) * 64)|round(1) }},{{ (15 - (v - lo) / span * 12)|round(1) }}{% if not loop.last %} {% endif %}{% endfor %}"/>
+        </svg>
+      </span>
+      {%- endif %}
     </p>
 
     <h3 class="card-title">
