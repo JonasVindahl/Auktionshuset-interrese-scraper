@@ -235,8 +235,14 @@ en ændring, og intet ændres uden et klik. Den viser også de lots du har budt
 på eller købt, som profilen ikke fangede, som et hint om et manglende
 nøgleord. Før du anvender et forslag, viser siden om det ville bryde et hårdt
 `yes`/`no`-krav i facitlisten (`config/match_expectations.jsonl`), så en
-ændring er en afvejning og ikke et gæt. Analysen er ren regelbaseret;
-sprogmodellen kommer først ind når forslagene skal formuleres og prioriteres.
+ændring er en afvejning og ikke et gæt. Analysen er ren regelbaseret.
+
+Knappen **Spørg modellen om manglende nøgleord** (`/interests?ai=1`) sender de
+køb profilen ikke fangede til sprogmodellen og beder om et nøgleord pr. titel.
+Den kører kun når du beder om det, så siden ikke spørger af sig selv. Python
+tjekker at ordet faktisk står i titlen, at kategorien og niveauet findes, og at
+ordet ikke allerede står der — et svar der ikke kan efterprøves, bliver ikke et
+forslag.
 
 ### Assistent
 

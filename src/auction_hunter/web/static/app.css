@@ -1270,6 +1270,7 @@ tr.run-error td{background:var(--urgent-soft);color:var(--urgent);font-size:var(
   font-size:var(--fs-overline);font-weight:700;text-transform:uppercase;
   letter-spacing:.1em;color:var(--urgent);
 }
+.suggest-action.is-add{color:var(--ok)}
 .suggest-where{font-size:var(--fs-caption);color:var(--text-3)}
 .suggest-why{grid-column:1/-1;margin:0;font-size:var(--fs-small);color:var(--text-2)}
 .suggest-impact{grid-column:1/-1;margin:0;font-size:var(--fs-caption);color:var(--text-3)}

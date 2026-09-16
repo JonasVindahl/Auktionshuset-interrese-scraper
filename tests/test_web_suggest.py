@@ -98,3 +98,70 @@ def test_annotate_impact_uden_facitliste_er_ukontrolleret():
     out = annotate_impact([forslag], _config(), [])
     assert out[0].checked is False
     assert out[0].breaks == ()
+
+
+# -- modellens forslag -----------------------------------------------------
+
+def test_from_model_godtager_et_gyldigt_forslag():
+    from auction_hunter.web.suggest import from_model
+
+    out = from_model(
+        [{"noegleord": "synology", "kategori": "it_tech", "niveau": "brands",
+          "grund": "mærkenavn"}],
+        _config(), ["Synology DS1817+ NAS"],
+    )
+    assert len(out) == 1
+    assert out[0].action == "add" and out[0].source == "model"
+    assert out[0].level == "brands"
+
+
+def test_from_model_afviser_det_den_ikke_kan_efterproeve():
+    from auction_hunter.web.suggest import from_model
+
+    titles = ["Synology DS1817+ NAS"]
+    forslag = [
+        {"noegleord": "synology", "kategori": "findes-ikke", "niveau": "brands"},
+        {"noegleord": "synology", "kategori": "it_tech", "niveau": "top"},
+        {"noegleord": "cisco", "kategori": "it_tech", "niveau": "brands"},
+        {"noegleord": "", "kategori": "it_tech", "niveau": "brands"},
+    ]
+    assert from_model(forslag, _config(), titles) == []
+
+
+def test_from_model_springer_ord_der_allerede_staar_over():
+    from auction_hunter.web.suggest import from_model
+
+    out = from_model(
+        [{"noegleord": "switch", "kategori": "it_tech", "niveau": "strong"}],
+        _config(), ["Switch TP-LINK TL-SG1016D"],
+    )
+    assert out == []
+
+
+def test_suggest_keywords_laeser_modellens_json():
+    from auction_hunter.classifier import OpenAICompatibleClient
+    from auction_hunter.web import chat
+
+    def transport(*, url, headers, payload, timeout):
+        return 200, {"choices": [{"message": {"content":
+            '{"forslag": [{"titel": "x", "noegleord": "synology", '
+            '"kategori": "it_tech", "niveau": "brands", "grund": "mærke"}]}'}}]}
+
+    client = OpenAICompatibleClient(
+        base_url="https://x/v1", api_key="k", model="m", transport=transport
+    )
+    entries = chat.suggest_keywords(_config(), client, ["Synology DS1817+ NAS"])
+    assert len(entries) == 1 and entries[0]["noegleord"] == "synology"
+
+
+def test_suggest_keywords_ved_fejl_giver_tomt():
+    from auction_hunter.classifier import OpenAICompatibleClient
+    from auction_hunter.web import chat
+
+    def transport(**kwargs):
+        raise RuntimeError("nede")
+
+    client = OpenAICompatibleClient(
+        base_url="https://x/v1", api_key="k", model="m", transport=transport
+    )
+    assert chat.suggest_keywords(_config(), client, ["Synology DS1817+ NAS"]) == []

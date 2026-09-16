@@ -650,6 +650,7 @@ def create_app() -> FastAPI:
         error: str = "",
         test: str = "",
         cat: str = "",
+        ai: bool = False,
         _: None = Depends(require_login),
     ) -> HTMLResponse:
         try:
@@ -684,6 +685,7 @@ def create_app() -> FastAPI:
         # nøgleord. Intet anvendes uden et klik.
         suggestions: list = []
         unmatched: list = []
+        suggest_config = None
         try:
             suggest_config = load_config(config_path())
             suggest_conn = queries.ro_conn(db_path())
@@ -699,6 +701,19 @@ def create_app() -> FastAPI:
         except (ConfigError, sqlite3.Error, OSError):
             pass
 
+        # Modellens forslag køres kun når man beder om det: det koster et kald,
+        # og siden skal ikke spørge af sig selv hver gang man kigger forbi.
+        ai_suggestions: list = []
+        if ai and unmatched and suggest_config is not None:
+            client = llm_client()
+            if client is not None:
+                titles = [row["title"] for row in unmatched]
+                entries = chat_mod.suggest_keywords(suggest_config, client, titles)
+                ai_suggestions = suggest_mod.from_model(entries, suggest_config, titles)
+                ai_suggestions = suggest_mod.annotate_impact(
+                    ai_suggestions, suggest_config, evaluate_mod.load_corpus()
+                )
+
         # To-punkts-editoren viser én kategori ad gangen. Uden et gyldigt valg
         # falder den tilbage til den første, så siden aldrig står tom.
         selected = next(
@@ -713,6 +728,7 @@ def create_app() -> FastAPI:
             message=message, error=error or read_error,
             test=test, trace=trace, explanation=explanation,
             suggestions=suggestions, unmatched=unmatched,
+            ai=ai, ai_suggestions=ai_suggestions,
             editable=os.access(config_path() or "config/interests.yml", os.W_OK),
         )
 

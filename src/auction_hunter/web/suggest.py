@@ -17,6 +17,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from .. import evaluate
+from ..textmatch import normalize
 from .queries import has_schema, keyword_noise
 
 # Mindste antal lots et nøgleord skal have været med i, før det må foreslås
@@ -30,22 +31,21 @@ MIN_SKIP_PCT = 60
 class Suggestion:
     """Et konkret, gennemprøveligt forslag til en ændring i profilen."""
 
-    action: str      # kun 'remove' i dette lag
+    action: str      # 'remove' eller 'add'
     keyword: str
     category: str
     level: str
-    seen: int
-    skip: int
-    pct: int
+    seen: int = 0
+    skip: int = 0
+    pct: int = 0
+    reason: str = ""
     # Hårde facitliste-krav som ændringen ville bryde, hvis den er tjekket.
     breaks: tuple[str, ...] = ()
     # False når facitlisten ikke kunne læses her, så visningen kan se forskel på
     # "ingen effekt" og "kunne ikke tjekkes".
     checked: bool = False
-
-    @property
-    def reason(self) -> str:
-        return f"{self.skip} af {self.seen} lots du fik, blev afvist"
+    # 'regel' for den regelbaserede analyse, 'model' for modellens forslag.
+    source: str = "regel"
 
 
 def _level_of(category: Any, keyword: str) -> str:
@@ -81,6 +81,56 @@ def noisy_keywords(
                 seen=row["seen"],
                 skip=row["skip"],
                 pct=row["pct"],
+                reason=f"{row['skip']} af {row['seen']} lots du fik, blev afvist",
+            )
+        )
+        if len(out) >= limit:
+            break
+    return out
+
+
+LEVELS = ("strong", "weak", "brands", "exact")
+
+
+def from_model(
+    entries: list[dict], config: Any, titles: list[str], *, limit: int = 6
+) -> list[Suggestion]:
+    """Validér modellens forslag mod den faktiske konfiguration.
+
+    Modellen må ikke kunne indføre et nøgleord der ikke står i en titel, en
+    kategori der ikke findes, eller et niveau der ikke findes. Alt andet er et
+    forslag vi ikke kan efterprøve, og så er det ikke et forslag.
+    """
+    if not entries or not titles:
+        return []
+
+    known = {cat.key: cat for cat in config.categories}
+    haystack = " \n ".join(normalize(title) for title in titles)
+    out: list[Suggestion] = []
+    seen: set[tuple[str, str, str]] = set()
+
+    for entry in entries:
+        keyword = str(entry.get("noegleord") or entry.get("nøgleord") or "").strip().lower()
+        category = str(entry.get("kategori") or "").strip()
+        level = str(entry.get("niveau") or "").strip().lower()
+        if not keyword or category not in known or level not in LEVELS:
+            continue
+        if normalize(keyword) not in haystack:
+            continue
+        if keyword in getattr(known[category], level):
+            continue
+        identity = (category, level, keyword)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        out.append(
+            Suggestion(
+                action="add",
+                keyword=keyword,
+                category=category,
+                level=level,
+                reason=str(entry.get("grund") or "modellens forslag").strip()[:200],
+                source="model",
             )
         )
         if len(out) >= limit:

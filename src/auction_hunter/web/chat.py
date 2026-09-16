@@ -73,6 +73,22 @@ ANSWER_SYSTEM = (
     "er relevant. Find ikke på lots der ikke står i listen."
 )
 
+SUGGEST_SYSTEM = (
+    "Du hjælper med at forbedre en dansk auktionsagents nøgleordsprofil. "
+    "Du får titler som brugeren selv har budt på eller købt, men som agenten "
+    "ikke fangede. Foreslå ét nøgleord pr. titel der ville have fanget den. "
+    "Svar KUN med JSON og intet andet."
+)
+
+
+SUGGEST_SYSTEM = (
+    "Du hjælper med at forbedre en dansk auktionsagents nøgleordsprofil. "
+    "Du får titler som brugeren selv har budt på eller købt, men som agenten "
+    "ikke fangede. Foreslå ét nøgleord pr. titel der ville have fanget den. "
+    "Svar KUN med JSON og intet andet."
+)
+
+
 EXPLAIN_SYSTEM = (
     "Du hjælper med at finjustere en dansk auktionsagents nøgleordsprofil. "
     "Du får en lot-titel og en analyse af hvorfor den matchede eller ikke "
@@ -307,6 +323,51 @@ def ask(
         selected=True,
         total=result.total,
     )
+
+
+# -- forslag til manglende noegleord ---------------------------------------
+
+def suggest_keywords(
+    config: Config,
+    client: OpenAICompatibleClient | None,
+    titles: list[str],
+    *,
+    limit: int = 6,
+) -> list[dict]:
+    """Lad modellen foreslå nøgleord for titler profilen ikke fangede.
+
+    Returnerer modellens rå forslag; valideringen mod den faktiske
+    konfiguration sker i suggest.from_model. Enhver fejl giver en tom liste,
+    for et teknisk problem må ikke gøre interessesiden ubrugelig.
+    """
+    if client is None or not titles:
+        return []
+
+    listing = "\n".join(f"{i}. {title}" for i, title in enumerate(titles[:12], start=1))
+    categories = ", ".join(cat.key for cat in config.categories)
+    user = (
+        "## Titler brugeren har budt på eller købt, som ikke blev fundet\n"
+        f"{listing}\n\n"
+        f"## Kategorier (nøgle)\n{categories}\n\n"
+        "## Opgave\n"
+        "Foreslå højst ét nøgleord pr. titel, og spring titlen over hvis intet\n"
+        "giver mening. Nøgleordet skal stå i titlen. strong er en konkret\n"
+        "produkttype, weak et bredt ord, brands et mærkenavn (aldrig i strong),\n"
+        "exact et mærke der også er en del af andre ord.\n\n"
+        'Svar med JSON: {"forslag": [{"titel": "...", "noegleord": "...", '
+        '"kategori": "<noegle>", "niveau": "strong|weak|brands|exact", '
+        '"grund": "kort begrundelse"}]}'
+    )
+    try:
+        raw = client.complete(system=SUGGEST_SYSTEM, user=user, max_tokens=800)
+        payload = _extract_json(raw)
+    except Exception as exc:  # fail-open, som resten af AI-trinnet
+        log.warning("Kunne ikke hente noegleordsforslag: %s", exc)
+        return []
+
+    rows = payload.get("forslag")
+    return ([row for row in rows if isinstance(row, dict)][:limit]
+            if isinstance(rows, list) else [])
 
 
 # -- forklaring af profilen ------------------------------------------------
