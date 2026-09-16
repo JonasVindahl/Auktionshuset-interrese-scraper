@@ -138,7 +138,7 @@
     </div>
     {% else %}
     <p class="hint">
-      <a class="btn" href="/interests?ai=1{% if selected %}&cat={{ selected.key }}{% endif %}">Spørg modellen om manglende nøgleord</a>
+      <a class="btn" href="/interests?ai=1{% if selected %}&cat={{ selected.key }}{% endif %}" data-busy>Spørg modellen om manglende nøgleord</a>
     </p>
     {% endif %}
   </details>

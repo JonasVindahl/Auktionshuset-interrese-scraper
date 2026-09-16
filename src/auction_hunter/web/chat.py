@@ -49,12 +49,15 @@ FILTER_SYSTEM = (
     "Du oversætter et dansk spørgsmål om et auktionsarkiv til et JSON-filter. "
     "Svar KUN med JSON, ingen forklaring.\n\n"
     "Felter (alle valgfri):\n"
-    "  soegeord    liste af ord der skal søges efter i lot-titlerne. Ordene "
-    "lægges sammen med OR, så ét ord er nok. Udvid spørgsmålet med de "
+    "  soegeord    liste af ENKELTE ord, ikke sætninger, og uden citationstegn. "
+    "Ordene lægges sammen med OR, så ét ord er nok. Udvid spørgsmålet med de "
     "produkttyper og mærker der ville svare på det, ikke kun de ord brugeren "
     "selv skrev. Spørger nogen efter 'ting der normalt har SSD eller NVMe', så "
     "medtag også nas, nuc, minipc, server, laptop, synology og lignende.\n"
-    "  alle_ord    true hvis ALLE ordene skal stå i titlen (AND). Standard false.\n"
+    "  alle_ord    næsten altid false. Sæt kun true når hele spørgsmålet er ét "
+    "bestemt modelnummer, fx 'sennheiser hd650', ellers giver AND et tomt svar.\n"
+    '  liste       "stigere" naar brugeren spoerger hvad der er steget mest i '
+    "pris, eller hvilke bud der er loebet op. Ellers udelades feltet.\n"
     "  min_price   heltal, kroner\n"
     "  max_price   heltal, kroner\n"
     '  status      "alle" | "aktive" | "afsluttede"\n'
@@ -79,9 +82,12 @@ ANSWER_SYSTEM = (
     "relevante, så brug en tom liste.\n"
     "svar     højst tre sætninger. Nævn priser og hvornår ting slutter når det "
     "er relevant. Find ikke på lots der ikke står i listen, og find ikke på "
-    "beløb. Du får også et prisoverblik over det fundne sæt og, når det "
-    "findes, hvad samme slags er gået for tidligere; brug de tal hvis "
-    "spørgsmålet handler om hvad noget er værd.\n"
+    "beløb. Hvis ingen af lot'ene besvarer spørgsmålet, så sig det direkte i "
+    "stedet for at vælge det nærmeste. Du ser kun den liste du har fået, så "
+    "påstå aldrig at noget slet ikke findes i arkivet. Du får også et "
+    "prisoverblik over det fundne sæt og, når det findes, hvad samme slags er "
+    "gået for tidligere; brug de tal hvis spørgsmålet handler om hvad noget er "
+    "værd.\n"
     "sammenlign  valgfrit. Nummeret på den kandidat spørgsmålet handler om, når "
     "det handler om hvad noget er værd. Så hentes arkivets tidligere salg af "
     "samme slags og lot'ets eget prisforløb og vises under svaret. Udelad "
@@ -229,12 +235,15 @@ def build_filter(
         except (TypeError, ValueError):
             return None
 
+    def clean(value: object) -> str:
+        return str(value).replace('"', " ").replace("'", " ").strip()
+
     # soegeord er listen; text holdes som bagudkompatibelt alias.
     words = data.get("soegeord")
     if isinstance(words, list):
-        text = " ".join(str(w) for w in words)
+        text = " ".join(part for part in (clean(word) for word in words) if part)
     else:
-        text = str(data.get("text") or "")
+        text = clean(data.get("text") or "")
 
     query = SearchQuery(
         text=text[:200],
@@ -247,6 +256,7 @@ def build_filter(
         sort=str(data.get("sort") or "relevans"),
         # OR som standard: modellen udvider selv med beslægtede produkttyper.
         any_words=not bool(data.get("alle_ord")),
+        liste=clean(data.get("liste") or "").lower(),
     ).normalized()
 
     # Et tomt filter ville hente hele arkivet uden grund.
@@ -406,6 +416,7 @@ def _filter_dict(query: SearchQuery) -> dict:
             "days_back": query.days_back,
             "sort": query.sort if query.sort != "relevans" else None,
             "alle_ord": True if not query.any_words else None,
+            "liste": query.liste or None,
         }.items() if value is not None
     }
 
@@ -456,26 +467,13 @@ def ask(
     query, degraded = build_filter(
         client, question, categories, history=history, previous=previous
     )
-    result = search(conn, query)
 
-    # Ordene fandtes ikke i nogen titel. Slip teksten men behold de
-    # strukturerede filtre, så et spørgsmål der peger i den rigtige retning
-    # ikke ender i ingenting.
     note = ""
-    if result.total == 0 and query.text:
-        relaxed = replace(query, text="")
-        if not relaxed.is_empty:
-            alternative = search(conn, relaxed)
-            if alternative.total:
-                result, query = alternative, relaxed
-                note = ("Jeg fandt intet på selve søgeordene, så her er alt "
-                        "der matcher resten af filtrene.")
-
-    candidates = result.rows[:MAX_CANDIDATES]
-    url = archive_url(query)
 
     def finish(answer: ChatAnswer) -> ChatAnswer:
-        answer.archive_url = url
+        # url og filter laeses fra query ved kald, saa en redning nedenfor
+        # afspejles baade i linket og i det viste filter.
+        answer.archive_url = archive_url(query)
         answer.meta = {
             "filter": _filter_dict(query),
             "filter_used": answer.filter_used,
@@ -486,6 +484,37 @@ def ask(
         if note:
             answer.text = f"{note}\n\n{answer.text}"
         return answer
+
+    # Rangordning i stedet for en soegning: "hvad er gaaet mest op i pris".
+    if query.liste == "stigere":
+        rows = queries.risers(conn, limit=12)
+        if not rows:
+            return finish(ChatAnswer(
+                text="Ingen lots i arkivet er steget i pris siden vi så dem først."
+            ))
+        top = rows[0]
+        rise = int(top["last_bid"] or 0) - int(top["first_bid"] or 0)
+        return finish(ChatAnswer(
+            text=(f"De største prisstigninger lige nu. Øverst ligger "
+                  f"{top['title']} med {kr(rise)} over det første bud vi så."),
+            rows=rows, selected=True, considered=len(rows), total=len(rows),
+        ))
+
+    result = search(conn, query)
+
+    # Et for stramt filter må ikke give "intet fundet", når et løsere ville
+    # give svar. At slippe søgeordene helt er derimod farligt: så svarer
+    # modellen på noget andet end der blev spurgt om, og det er værre end et
+    # ærligt tomt svar. Derfor kun AND til OR, aldrig teksten væk.
+    if result.total == 0 and query.text and not query.any_words:
+        relaxed = replace(query, any_words=True)
+        alternative = search(conn, relaxed)
+        if alternative.total:
+            result, query = alternative, relaxed
+            note = ("Jeg fandt intet med alle ordene, så jeg søgte efter dem "
+                    "hver for sig.")
+
+    candidates = result.rows[:MAX_CANDIDATES]
 
     # Værdierne formateres, så de kan læses som dansk og ikke som feltnavne.
     filter_used = {
