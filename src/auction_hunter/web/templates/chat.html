@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% from "_card.html" import card %}
+
+{% block content %}
+<section>
+  <h2>Assistent</h2>
+
+  <div class="panel panel-pad" style="margin-bottom:20px">
+    <form method="get" action="/chat" class="searchbox">
+      <input type="search" name="q" value="{{ question }}" autofocus
+             placeholder="Spørg om arkivet — fx: har der været Sennheiser-forstærkere under 1.000 kr?">
+      <button class="primary" type="submit">Spørg</button>
+    </form>
+
+    {% if not question %}
+    <p class="chat-intro" style="margin:14px 0 0">
+      Jeg leder i alt hvad agenten har set — også de lots der aldrig blev til et fund.
+      Spørgsmålet oversættes til en søgning; jeg skriver aldrig SQL selv, så en
+      mærkelig lot-titel kan ikke narre mig til noget.
+    </p>
+    <div class="suggestions">
+      {% for suggestion in [
+        'Har der været Sennheiser-forstærkere under 1.000 kr?',
+        'Hvilke NAS-enheder er der lige nu?',
+        'Hvad slutter inden for et døgn?',
+        'Vis pladespillere som ikke blev til fund',
+        'Hvad har været af servere de sidste 30 dage?'
+      ] %}
+      <a href="/chat?q={{ suggestion|urlencode }}">{{ suggestion }}</a>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if not has_key %}
+    <div class="banner err" style="margin:14px 0 0">
+      <strong>CLASSIFIER_API_KEY er ikke sat.</strong>
+      Jeg svarer stadig, men uden sprogmodel: spørgsmålet bliver til en
+      nøgleordssøgning, og du får resultaterne rå i stedet for som prosa.
+    </div>
+    {% endif %}
+  </div>
+
+  {% if answer %}
+    <div class="chat-answer">{{ answer.text }}</div>
+
+    {% if answer.filter_used %}
+    <div class="chat-filter">
+      Søgte efter:
+      {% for key, value in answer.filter_used.items() %}{{ key }}={{ value }}{% if not loop.last %} · {% endif %}{% endfor %}
+    </div>
+    {% endif %}
+
+    {% if rows %}
+    <div style="margin-top:20px">
+      <h2>Fundne lots <span class="count">{{ rows|length }}</span></h2>
+      {% for row in rows %}{{ card(row) }}{% endfor %}
+    </div>
+    {% endif %}
+  {% endif %}
+</section>
+{% endblock %}

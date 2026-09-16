@@ -1,0 +1,52 @@
+{#- Ét fund. Rækken er forberedt i Python (se app.prepare_rows). -#}
+{% macro card(row) -%}
+<div class="card"
+     data-cat="{{ row.category }}"
+     data-ts="{{ row.ts }}"
+     data-price="{{ row.cost }}"
+     data-endsin="{{ row.ends_in }}"
+     data-lot="{{ row.lot_id }}"
+     data-feedback="{{ row.feedback }}">
+  <div class="thumb">
+    {%- if row.image %}
+    <img src="{{ row.image }}" alt="" loading="lazy" referrerpolicy="no-referrer"
+         onerror="this.parentNode.innerHTML='&lt;div class=thumb-empty&gt;📦&lt;/div&gt;'">
+    {%- else %}
+    <div class="thumb-empty">📦</div>
+    {%- endif %}
+  </div>
+  <div class="body">
+    {% if row.url %}<a href="{{ row.url }}" target="_blank" rel="noopener">{% endif %}
+      <div class="title">{{ row.title }}</div>
+    {% if row.url %}</a>{% endif %}
+
+    <div class="price-row">
+      <span class="price">{{ row.price }}</span>
+      {%- if row.rise %}<span class="price-rise">+{{ row.rise }} siden første bud</span>{% endif %}
+      {%- if row.is_estimate %}<span class="price-note">estimat</span>{% endif %}
+    </div>
+
+    <div class="meta">
+      {% if row.category %}<span class="cat-tag">{{ row.category }}</span>{% endif %}
+      {% if row.time_left %}<span class="time-left {{ row.time_css }}">{{ row.time_left }}</span>{% endif %}
+      {% if row.lot_number %}<span>Lot {{ row.lot_number }}</span>{% endif %}
+      {% if row.seen_rel %}<span title="{{ row.seen_full }}">{{ row.seen_rel }}</span>{% endif %}
+      {% if row.was_match is defined and not row.was_match %}<span class="tag-miss">ikke et fund</span>{% endif %}
+    </div>
+
+    {% if row.auction %}<div class="auction-name" title="{{ row.auction }}">{{ row.auction }}</div>{% endif %}
+
+    <div class="fb-row">
+      {%- for action, label, tip in [
+        ('skip', '✕ Ikke interes.', 'Ikke interesseret'),
+        ('bid', '📌 Budt', 'Jeg har budt på det'),
+        ('bought', '✅ Købt', 'Jeg købte det')
+      ] %}
+      <button class="fb-btn {% if row.feedback == action %}active{% endif %}"
+              data-action="{{ action }}" data-lot-id="{{ row.lot_id }}"
+              data-cat-key="{{ row.category }}" title="{{ tip }}">{{ label }}</button>
+      {%- endfor %}
+    </div>
+  </div>
+</div>
+{%- endmacro %}

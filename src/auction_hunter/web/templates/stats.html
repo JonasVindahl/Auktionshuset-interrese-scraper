@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<section>
+  <h2>Arkivet</h2>
+  <div class="stats-bar" style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+    <div class="stat"><strong>{{ archive.total }}</strong>lots set i alt</div>
+    <div class="stat accent"><strong>{{ archive.matched }}</strong>blev til fund</div>
+    <div class="stat"><strong>{{ archive.unmatched }}</strong>uden for profilen</div>
+    <div class="stat"><strong>
+      {%- if archive.total %}{{ (100 * archive.matched / archive.total)|round(1) }}%{% else %}–{% endif -%}
+    </strong>rammeprocent</div>
+  </div>
+</section>
+
+<section>
+  <h2>Pr. kategori</h2>
+  <div class="panel">
+    <table>
+      <thead>
+        <tr>
+          <th>Kategori</th>
+          <th class="num">Sendt</th>
+          <th class="num">Købt</th>
+          <th class="num">Budt</th>
+          <th class="num">Afvist</th>
+          <th style="width:130px">Støjandel</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in by_category %}
+        <tr>
+          <td><span class="cat-tag">{{ row.category }}</span></td>
+          <td class="num">{{ row.sent }}</td>
+          <td class="num">{{ row.bought or '–' }}</td>
+          <td class="num">{{ row.bid or '–' }}</td>
+          <td class="num">{{ row.skipped or '–' }}</td>
+          <td>
+            {% if row.skipped %}
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="meter {% if row.noise_pct > 60 %}high{% elif row.noise_pct > 30 %}mid{% endif %}">
+                <span style="width:{{ row.noise_pct }}%"></span>
+              </div>
+              <span style="font-size:.76rem;color:var(--muted);min-width:34px">{{ row.noise_pct }}%</span>
+            </div>
+            {% else %}
+            <span style="color:var(--faint);font-size:.78rem">ikke vurderet</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="empty">Ingen fund sendt endnu.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if by_category %}
+  <p style="color:var(--faint);font-size:.78rem;margin-top:10px">
+    Støjandelen er hvor stor en del af kategoriens fund du har markeret
+    «ikke interesseret». En høj andel betyder at kategoriens nøgleord er for brede.
+  </p>
+  {% endif %}
+</section>
+
+{% if feedback %}
+<section>
+  <h2>Dine markeringer</h2>
+  <div class="stats-bar" style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+    <div class="stat"><strong>{{ feedback.get('bought', 0) }}</strong>købt</div>
+    <div class="stat"><strong>{{ feedback.get('bid', 0) }}</strong>budt</div>
+    <div class="stat"><strong>{{ feedback.get('skip', 0) }}</strong>afvist</div>
+  </div>
+  <p style="margin-top:12px">
+    <a class="ghost" href="/export/feedback.csv"
+       style="display:inline-block;padding:6px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:.82rem">
+      ↓ Hent som CSV
+    </a>
+    <span style="color:var(--faint);font-size:.78rem;margin-left:8px">
+      Træningsdata til AI-trinnet
+    </span>
+  </p>
+</section>
+{% endif %}
+
+{% if risers %}
+<section>
+  <h2>Største prisstigninger</h2>
+  <div class="panel">
+    <table>
+      <thead>
+        <tr><th>Lot</th><th class="num">Første bud</th><th class="num">Nu</th><th class="num">Stigning</th></tr>
+      </thead>
+      <tbody>
+        {% for row in risers %}
+        <tr>
+          <td>
+            {% if row.url %}<a href="{{ row.url }}" target="_blank" rel="noopener" style="text-decoration:underline">{% endif %}
+              {{ row.title[:70] }}
+            {% if row.url %}</a>{% endif %}
+          </td>
+          <td class="num">{{ row.first_bid|kr }}</td>
+          <td class="num">{{ row.last_bid|kr }}</td>
+          <td class="num" style="color:var(--urgent);font-weight:600">
+            +{{ (row.last_bid - row.first_bid)|kr }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+<section>
+  <h2>Seneste kørsler</h2>
+  <div class="panel">
+    <table>
+      <thead>
+        <tr>
+          <th>Tidspunkt</th>
+          <th class="num">Auktioner</th>
+          <th class="num">Lots</th>
+          <th class="num">Fund</th>
+          <th class="num">Nye</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for run in runs %}
+        {% set rel, full = rel_past(run.finished_at) %}
+        <tr>
+          <td title="{{ full }}">{{ rel }}</td>
+          <td class="num">{{ run.auctions }}</td>
+          <td class="num">{{ run.lots }}</td>
+          <td class="num">{{ run.matches }}</td>
+          <td class="num">{{ run.new_matches or '–' }}</td>
+          <td>
+            {% if run.error %}
+              <span style="color:var(--urgent)" title="{{ run.error }}">fejl</span>
+            {% elif run.lots == 0 %}
+              <span style="color:var(--warn)">ingen lots</span>
+            {% else %}
+              <span style="color:var(--accent)">ok</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="empty">Ingen kørsler registreret endnu.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

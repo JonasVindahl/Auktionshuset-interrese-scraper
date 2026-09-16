@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% set hints = {
+  'strong': 'matcher alene — konkrete produkttyper',
+  'weak':   'kræver to forskellige træffere',
+  'brands': 'kræver en produkttype ved siden af',
+  'exact':  'matcher kun som selvstændigt ord'
+} %}
+
+{% block content %}
+
+{% if not editable %}
+<div class="banner err">
+  Konfigurationsfilen er skrivebeskyttet. I Docker er <code>./config</code> monteret
+  med <code>:ro</code> — fjern det fra web-servicen i <code>docker-compose.yml</code>
+  for at kunne redigere herfra.
+</div>
+{% endif %}
+
+<section>
+  <h2>Test en titel</h2>
+  <div class="panel panel-pad">
+    <form method="get" action="/interests" class="searchbox">
+      <input type="search" name="test" value="{{ test }}"
+             placeholder="Indsæt en lot-titel og se hvorfor den matcher eller ej">
+      <button class="primary" type="submit">Test</button>
+    </form>
+
+    {% if trace %}
+    <div class="trace" style="margin-top:14px">
+      <div class="verdict {% if trace.matched %}yes{% else %}no{% endif %}">
+        {% if trace.matched %}✓ Matcher{% else %}✕ Matcher ikke{% endif %}
+      </div>
+      <div style="margin-top:6px">{{ trace.as_text() }}</div>
+      {% if explanation %}
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);white-space:pre-wrap">{{ explanation }}</div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+<section>
+  <h2>Kategorier <span class="count">{{ categories|length }}</span></h2>
+
+  {% for cat in categories %}
+  <div class="cat-card">
+    <div class="cat-head">
+      <h3>{{ cat.emoji }} {{ cat.label }} <span style="color:var(--faint);font-weight:400;font-size:.8rem">{{ cat.key }}</span></h3>
+      {% if editable %}
+      <form method="post" action="/interests/price">
+        <input type="hidden" name="category" value="{{ cat.key }}">
+        <span class="filter-label">Prisloft</span>
+        <input type="number" name="max_price" min="1" value="{{ cat.max_price }}">
+        <span class="filter-label">kr</span>
+        <button class="ghost" type="submit">Gem</button>
+      </form>
+      {% else %}
+      <span class="filter-label">Prisloft {{ cat.max_price|kr }}</span>
+      {% endif %}
+    </div>
+
+    {% for level in levels %}
+    <div class="level">
+      <div class="level-head">
+        <span class="level-name">{{ level }}</span>
+        <span class="level-hint">{{ hints[level] }}</span>
+        <span class="count" style="margin-left:auto">{{ cat.levels[level]|length }}</span>
+      </div>
+
+      {% if cat.levels[level] %}
+      <div class="kw-list">
+        {% for keyword in cat.levels[level] %}
+        <span class="kw">{{ keyword }}
+          {% if editable %}
+          <form method="post" action="/interests/keyword"
+                onsubmit="return confirm('Fjern {{ keyword }} fra {{ cat.key }}.{{ level }}?')">
+            <input type="hidden" name="action" value="remove">
+            <input type="hidden" name="category" value="{{ cat.key }}">
+            <input type="hidden" name="level" value="{{ level }}">
+            <input type="hidden" name="keyword" value="{{ keyword }}">
+            <button type="submit" title="Fjern">×</button>
+          </form>
+          {% endif %}
+        </span>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if editable %}
+      <form method="post" action="/interests/keyword" class="add-form">
+        <input type="hidden" name="action" value="add">
+        <input type="hidden" name="category" value="{{ cat.key }}">
+        <input type="hidden" name="level" value="{{ level }}">
+        <input type="text" name="keyword" placeholder="Tilføj nøgleord til {{ level }}" required maxlength="80">
+        <button class="ghost" type="submit">Tilføj</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</section>
+
+<section>
+  <h2>Udelukkelser <span class="count">{{ excludes|length }}</span></h2>
+  <div class="panel panel-pad">
+    <p style="color:var(--muted);font-size:.83rem;margin-bottom:12px">
+      Udelukkelser vinder over alt andet. Et lot med et af disse ord bliver aldrig et fund,
+      uanset hvilken kategori der ellers ville ramme.
+    </p>
+
+    <div class="kw-list">
+      {% for keyword in excludes %}
+      <span class="kw">{{ keyword }}
+        {% if editable %}
+        <form method="post" action="/interests/exclude"
+              onsubmit="return confirm('Fjern udelukkelsen af {{ keyword }}?')">
+          <input type="hidden" name="action" value="remove">
+          <input type="hidden" name="keyword" value="{{ keyword }}">
+          <button type="submit" title="Fjern">×</button>
+        </form>
+        {% endif %}
+      </span>
+      {% endfor %}
+    </div>
+
+    {% if editable %}
+    <form method="post" action="/interests/exclude" class="add-form" style="margin-top:12px">
+      <input type="hidden" name="action" value="add">
+      <input type="text" name="keyword" placeholder="Nyt ord der skal udelukkes" required maxlength="80">
+      <button class="ghost" type="submit">Udeluk</button>
+    </form>
+    {% endif %}
+  </div>
+</section>
+
+<section>
+  <h2>Om filen</h2>
+  <div class="panel panel-pad" style="color:var(--muted);font-size:.85rem;line-height:1.7">
+    Ændringer herfra skrives linje for linje i <code>config/interests.yml</code>, så
+    kommentarerne i filen bevares — de bærer beslutningerne bag profilen.
+    Agenten genlæser filen ved hver kørsel, så en ændring slår igennem
+    inden for 15 minutter uden genstart.
+  </div>
+</section>
+{% endblock %}

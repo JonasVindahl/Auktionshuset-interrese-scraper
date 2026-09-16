@@ -43,6 +43,29 @@ def normalize(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", lowered).strip()
 
 
+# Den anden måde folk folder æøå på: ét bogstav i stedet for to. Begge dele er
+# almindelige når man skriver uden danske taster, så søgningen skal kunne
+# genkende både 'hoejttaler' og 'hojttaler'.
+_FOLD_LOOSE = str.maketrans(
+    {
+        "æ": "a", "ø": "o", "å": "a", "ä": "a", "ö": "o", "ü": "u",
+        "é": "e", "è": "e", "ê": "e", "á": "a", "à": "a", "ó": "o", "ú": "u",
+        "ß": "ss", "&": " og ",
+    }
+)
+
+
+def normalize_loose(text: str) -> str:
+    """Som ``normalize``, men æøå bliver til ét bogstav i stedet for to.
+
+    Bruges kun til fritekstsøgning, aldrig til nøgleordsmatchning: den er for
+    upræcis til at afgøre om et lot er interessant, men præcis nok til at finde
+    noget man leder efter.
+    """
+    lowered = text.lower().translate(_FOLD_LOOSE)
+    return re.sub(r"[^a-z0-9]+", " ", lowered).strip()
+
+
 @lru_cache(maxsize=8192)
 def keyword_pattern(keyword: str) -> re.Pattern[str] | None:
     """Byg et regex for et normaliseret nøgleord.
