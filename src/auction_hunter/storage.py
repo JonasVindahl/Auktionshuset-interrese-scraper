@@ -150,6 +150,14 @@ CREATE TABLE IF NOT EXISTS price_alerts (
     cost       INTEGER,
     alerted_at TEXT NOT NULL DEFAULT ''
 );
+
+-- Lots brugeren foelger hvor der er sendt en "sidste chance"-besked. Uden
+-- denne husker vi ikke at vi allerede har sagt det, og beskeden ville komme
+-- hvert 15. minut i den sidste time.
+CREATE TABLE IF NOT EXISTS last_chance_alerts (
+    lot_id  TEXT PRIMARY KEY,
+    sent_at TEXT NOT NULL
+);
 """
 
 # Kolonner der er kommet til efter de første databaser blev oprettet.
@@ -479,6 +487,28 @@ class Store:
                    alerted_at=excluded.alerted_at""",
                 (lot_id, cost, alerted_at),
             )
+
+    # -- sidste chance -----------------------------------------------------
+
+    def last_chance_sent(self, lot_ids: list[str]) -> set[str]:
+        """Hvilke af lot'ene har vi allerede advaret om."""
+        if not lot_ids:
+            return set()
+        marks = ",".join("?" * len(lot_ids))
+        rows = self.conn.execute(
+            f"SELECT lot_id FROM last_chance_alerts WHERE lot_id IN ({marks})", lot_ids
+        ).fetchall()
+        return {row["lot_id"] for row in rows}
+
+    def mark_last_chance(self, lot_ids: list[str], sent_at: str) -> None:
+        if not lot_ids:
+            return
+        with self._tx() as conn:
+            for lot_id in lot_ids:
+                conn.execute(
+                    "INSERT OR REPLACE INTO last_chance_alerts (lot_id, sent_at) VALUES (?,?)",
+                    (lot_id, sent_at),
+                )
 
     # -- AI-klassificering -------------------------------------------------
 

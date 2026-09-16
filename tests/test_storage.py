@@ -48,6 +48,12 @@ def test_feedback_handlinger_slaas_op_pr_lot(store):
     assert store.feedback_actions(["a", "b", "c"]) == {"a": "watch", "b": "skip"}
 
 
+def test_sidste_chance_huskes(store):
+    assert store.last_chance_sent(["x"]) == set()
+    store.mark_last_chance(["x", "y"], "2026-09-16T12:00:00+00:00")
+    assert store.last_chance_sent(["x", "y", "z"]) == {"x", "y"}
+
+
 def iso(days_ago: float = 0) -> str:
     return (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat(
         timespec="seconds"

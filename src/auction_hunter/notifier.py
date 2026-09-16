@@ -57,6 +57,16 @@ class PriceAlert:
     ends_at: str | None = None
 
 
+@dataclass(frozen=True)
+class LastChanceAlert:
+    """Et fulgt lot hvor hammerslaget er taet paa."""
+
+    lot_id: str
+    title: str
+    url: str
+    ends_at: str | None = None
+
+
 def _format_price(match: Match) -> str:
     """Prisfelt med tydelig markering af estimerede beløb.
 
@@ -246,6 +256,13 @@ class DiscordNotifier:
             return False
         return self.send_text(content)
 
+    def send_last_chance(self, rows: list[LastChanceAlert]) -> bool:
+        """Send ét samlet svar naar flere fulgte lots snart slutter."""
+        content = build_last_chance(rows)
+        if not content:
+            return False
+        return self.send_text(content)
+
 
 def build_digest(rows: list[dict], *, max_items: int = 15) -> str:
     """Byg en tekstbesked med 'måske'-fund til samlet gennemsyn.
@@ -290,6 +307,37 @@ def send_digest(notifier: DiscordNotifier, rows: list[dict]) -> bool:
     if not content:
         return False
     return notifier.send_text(content)
+
+
+def build_last_chance(rows: list[LastChanceAlert], *, max_items: int = 12) -> str:
+    """Én tekstbesked med de fulgte lots der snart slutter."""
+    if not rows:
+        return ""
+
+    lines = [
+        f"**{len(rows)} {'lot' if len(rows) == 1 else 'lots'} du følger "
+        f"slutter snart**\n"
+    ]
+    for row in rows[:max_items]:
+        title = (row.title or "ukendt").strip()
+        if len(title) > 100:
+            title = title[:97] + "…"
+        left = ""
+        if row.ends_at:
+            text, _css, _secs = time_left(row.ends_at)
+            if text:
+                left = f" — {text}"
+        lines.append(
+            f"• [{title}]({row.url}){left}" if row.url else f"• {title}{left}"
+        )
+
+    if len(rows) > max_items:
+        lines.append(f"\n… og {len(rows) - max_items} mere")
+
+    text = "\n".join(lines)
+    if len(text) > 2000:
+        text = text[:1990] + "\n…"
+    return text
 
 
 def build_price_alerts(rows: list[PriceAlert], *, max_items: int = 12) -> str:

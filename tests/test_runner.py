@@ -17,7 +17,8 @@ from auction_hunter.fees import PriceEstimate
 from auction_hunter.matcher import Match
 from auction_hunter.notifier import DiscordNotifier, NotifyResult
 from auction_hunter.runner import (
-    RunStats, build_classifier, maybe_price_alerts, run_once, select_price_alerts,
+    RunStats, build_classifier, maybe_last_chance, maybe_price_alerts, run_once,
+    select_last_chance, select_price_alerts,
 )
 from auction_hunter.scraper import Auction, Lot
 from auction_hunter.storage import Store
@@ -598,4 +599,47 @@ def test_maybe_price_alerts_sender_en_gang_og_husker(tmp_path):
         maybe_price_alerts(store, notifier2, [_match("L1", 200)], stats2)
         assert stats2.price_alerts == 0
         assert notifier2.payloads == []
+
+
+# -- sidste chance ---------------------------------------------------------
+
+def test_sidste_chance_naar_fulgt_og_taet_paa():
+    snart = _match("L1", 200, ends_in_hours=0.5, now=NOW)
+    out = select_last_chance([snart], {"L1": "watch"}, set(), now=NOW, within_hours=1)
+    assert len(out) == 1 and out[0].lot_id == "L1"
+
+
+def test_sidste_chance_kraever_fulgt_eller_budt():
+    snart = _match("L1", 200, ends_in_hours=0.5, now=NOW)
+    assert select_last_chance([snart], {}, set(), now=NOW, within_hours=1) == []
+    assert select_last_chance([snart], {"L1": "bought"}, set(), now=NOW, within_hours=1) == []
+
+
+def test_sidste_chance_kommer_kun_en_gang():
+    snart = _match("L1", 200, ends_in_hours=0.5, now=NOW)
+    assert select_last_chance([snart], {"L1": "watch"}, {"L1"}, now=NOW, within_hours=1) == []
+
+
+def test_sidste_chance_ikke_foer_vinduet():
+    sen = _match("L1", 200, ends_in_hours=5, now=NOW)
+    assert select_last_chance([sen], {"L1": "watch"}, set(), now=NOW, within_hours=1) == []
+
+
+def test_maybe_last_chance_sender_en_gang(tmp_path):
+    with Store(tmp_path / "t.db") as store:
+        store.conn.execute(
+            "INSERT INTO feedback (lot_id, category_key, action, title, created_at)"
+            " VALUES ('L1','it_tech','watch','x','2026-09-16T00:00:00+00:00')"
+        )
+        store.conn.commit()
+
+        notifier = RecordingNotifier()
+        stats = RunStats()
+        maybe_last_chance(store, notifier, [_match("L1", 200, ends_in_hours=0.5)], stats)
+        assert stats.last_chance == 1 and len(notifier.payloads) == 1
+
+        notifier2 = RecordingNotifier()
+        stats2 = RunStats()
+        maybe_last_chance(store, notifier2, [_match("L1", 200, ends_in_hours=0.5)], stats2)
+        assert stats2.last_chance == 0 and notifier2.payloads == []
 

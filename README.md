@@ -17,7 +17,8 @@ Hvert 15. minut (auktionshusets vilkår tillader ikke hurtigere):
 5. Slår op i SQLite-hukommelsen og beholder kun nye lots. Stiger prisen på et
    lot du følger eller har budt på, giver det sin egen besked — højst hver 12.
    time pr. lot, så en travl auktion ikke fylder kanalen (slås fra med
-   `PRICE_ALERTS=0`)
+   `PRICE_ALERTS=0`). Er et fulgt lot tæt på hammerslag, kommer der også én
+   besked om det (`LAST_CHANCE_ALERTS=0`)
 6. Lader en sprogmodel vurdere de nye fund (valgfrit, se nedenfor) — støj
    afvises, og grænsetilfælde lægges i et samlet digest
 7. Sender fund til Discord som embeds, højst 10 pr. besked
