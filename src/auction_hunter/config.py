@@ -82,6 +82,28 @@ class Source:
 
 
 @dataclass(frozen=True)
+class ClassifierConfig:
+    """Indstillinger for AI-trinnet, læst fra 'classifier' i interests.yml.
+
+    Hemmeligheden (API-nøglen) læses ikke her, men af ``secrets.get_secret``, så
+    den kan komme fra miljø, fil eller indirekte. Alt andet kan stå i YAML-filen
+    og versionsfølges i git sammen med nøgleordene.
+    """
+
+    enabled: bool = False
+    model: str = "gpt-4o-mini"
+    base_url: str = "https://api.openai.com/v1"
+    max_per_run: int = 25
+    timeout: int = 30
+    profile: str = ""
+
+    @property
+    def configured(self) -> bool:
+        """Om trinnet er slået til og har en profil at arbejde ud fra."""
+        return bool(self.enabled and self.profile.strip())
+
+
+@dataclass(frozen=True)
 class Config:
     source: Source
     categories: tuple[Category, ...]
@@ -90,6 +112,7 @@ class Config:
     regions: dict[str, str] = field(default_factory=dict)
     exclude: tuple[str, ...] = ()
     opening_bid: int = DEFAULT_OPENING_BID
+    classifier: ClassifierConfig = field(default_factory=ClassifierConfig)
 
     def category(self, key: str) -> Category | None:
         return next((c for c in self.categories if c.key == key), None)
@@ -202,4 +225,29 @@ def load_config(path: str | Path | None = None) -> Config:
         regions={str(k): str(v) for k, v in (raw.get("regions") or {}).items()},
         exclude=_normalize_keywords(raw.get("exclude")),
         opening_bid=_env_int("OPENING_BID", int(raw.get("opening_bid", DEFAULT_OPENING_BID))),
+        classifier=_load_classifier(raw.get("classifier") or {}),
+    )
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None or raw.strip() == "":
+        return default
+    return raw.strip().lower() in ("1", "true", "ja", "yes", "on")
+
+
+def _load_classifier(spec: dict[str, Any]) -> ClassifierConfig:
+    """Læs AI-indstillingerne. API-nøglen hentes ikke her — se secrets.py."""
+    profile = spec.get("profile") or ""
+    return ClassifierConfig(
+        enabled=_env_bool("CLASSIFIER_ENABLED", _env_bool("LLM_ENABLED", bool(spec.get("enabled", False)))),
+        model=os.environ.get("CLASSIFIER_MODEL") or str(spec.get("model", "gpt-4o-mini")),
+        base_url=(os.environ.get("CLASSIFIER_BASE_URL") or str(
+            spec.get("base_url", "https://api.openai.com/v1")
+        )).rstrip("/"),
+        max_per_run=_env_int(
+            "CLASSIFIER_MAX_PER_RUN", int(spec.get("max_per_run", 25))
+        ),
+        timeout=_env_int("CLASSIFIER_TIMEOUT", int(spec.get("timeout", 30))),
+        profile=str(profile),
     )

@@ -87,3 +87,55 @@ def test_notifier_rejects_empty_webhook():
 
     with pytest.raises(Exception):
         DiscordNotifier("")
+
+
+class TestDigest:
+    """Digestet samler 'måske'-fund, så de ikke støjer i nuet."""
+
+    def test_empty_list_gives_no_message(self):
+        from auction_hunter.notifier import build_digest
+
+        assert build_digest([]) == ""
+
+    def test_lists_title_reason_and_link(self):
+        from auction_hunter.notifier import build_digest
+
+        rows = [
+            {
+                "title": "Div. lydudstyr: DVI-forlængere",
+                "reason": "Rodlot med adaptere",
+                "url": "https://auktionshuset.dk/lot/1",
+            }
+        ]
+        text = build_digest(rows)
+        assert "1 lot(er)" in text
+        assert "Div. lydudstyr" in text
+        assert "Rodlot med adaptere" in text
+        assert "https://auktionshuset.dk/lot/1" in text
+
+    def test_caps_items_and_reports_remainder(self):
+        from auction_hunter.notifier import build_digest
+
+        rows = [{"title": f"Lot {i}", "reason": "", "url": ""} for i in range(40)]
+        text = build_digest(rows, max_items=5)
+        assert "og 35 mere" in text
+
+    def test_never_exceeds_discord_limit(self):
+        from auction_hunter.notifier import build_digest
+
+        rows = [
+            {"title": "T" * 300, "reason": "R" * 300, "url": "u" * 300}
+            for _ in range(30)
+        ]
+        assert len(build_digest(rows)) <= 2000
+
+    def test_long_title_is_shortened(self):
+        from auction_hunter.notifier import build_digest
+
+        rows = [{"title": "x" * 400, "reason": "", "url": ""}]
+        assert "…" in build_digest(rows)
+
+    def test_send_digest_returns_false_when_empty(self):
+        from auction_hunter.notifier import send_digest
+
+        assert send_digest(DiscordNotifier("https://discord.invalid/hook"), []) is False

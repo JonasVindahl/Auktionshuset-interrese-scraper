@@ -196,3 +196,45 @@ class DiscordNotifier:
             log.error("Kunne ikke sende tekstbesked: %s", exc)
             return False
         return True
+
+
+def build_digest(rows: list[dict], *, max_items: int = 15) -> str:
+    """Byg en tekstbesked med 'måske'-fund til samlet gennemsyn.
+
+    Digestet er bevidst tekst og ikke embeds: det er en liste brugeren skal
+    skimme og svare på, ikke noget der skal se indbydende ud. Titlerne
+    afkortes, så beskeden kan læses på en telefon.
+    """
+    if not rows:
+        return ""
+
+    lines = [f"**{len(rows)} lot(er) jeg er i tvivl om** — værd at kigge på:\n"]
+    for row in rows[:max_items]:
+        title = (row.get("title") or "").strip()
+        if len(title) > 110:
+            title = title[:107] + "…"
+        reason = (row.get("reason") or "").strip()
+        url = (row.get("url") or "").strip()
+        if url:
+            lines.append(f"• [{title}]({url})")
+        else:
+            lines.append(f"• {title}")
+        if reason:
+            lines.append(f"  _{reason}_")
+
+    if len(rows) > max_items:
+        lines.append(f"\n… og {len(rows) - max_items} mere")
+
+    text = "\n".join(lines)
+    # Discord afviser beskeder over 2000 tegn. Skær hellere af end at fejle.
+    if len(text) > 2000:
+        text = text[:1990] + "\n…"
+    return text
+
+
+def send_digest(notifier: DiscordNotifier, rows: list[dict]) -> bool:
+    """Send et digest af 'måske'-fund. Returnerer False hvis intet blev sendt."""
+    content = build_digest(rows)
+    if not content:
+        return False
+    return notifier.send_text(content)

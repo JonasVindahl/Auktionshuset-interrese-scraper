@@ -13,6 +13,8 @@ services:
       # Intervallet kan kun sættes op, aldrig under 900s (auktionsvilkår).
       SCRAPE_INTERVAL_SECONDS: "900"
       LOG_LEVEL: "INFO"
+      # AI-trinnet og dets nøgle sættes i .env (læses via env_file ovenfor), så
+      # her duplikeres de ikke — en værdi her ville overskygge interests.yml.
 
     volumes:
       # Hukommelsen (SQLite) og interesseprofilen lever uden for containeren,

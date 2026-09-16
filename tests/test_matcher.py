@@ -37,10 +37,22 @@ def test_strict_keyword_matches_alone(config):
 def test_single_weak_keyword_is_not_enough(config):
     """Et enkelt bredt ord må ikke udløse et match alene.
 
-    'server' står i weak, fordi det optræder i mange sammenhænge (servering,
-    serveringspersonale). Det kræver derfor en anden træffer ved siden af.
+    'router' står i weak, fordi ordet også bruges om andet end netværksudstyr.
+    Det kræver derfor en anden træffer ved siden af.
     """
-    assert match_lot(make_lot("Server"), config) == []
+    assert match_lot(make_lot("Router"), config) == []
+    assert match_lot(make_lot("Rack"), config) == []
+
+
+def test_server_matches_alone(config):
+    """Server er bevidst flyttet til strong.
+
+    Brugeren vil gerne have servere med, og i en auktionssammenhæng er 'server'
+    næsten altid en maskine. Afvejningen er at 'Kaffeservering' ikke fanges,
+    fordi bøjningen ikke står på listen over endelser.
+    """
+    matches = match_lot(make_lot("Server"), config)
+    assert matches and matches[0].category.key == "it_tech"
     assert match_lot(make_lot("Kaffeservering"), config) == []
 
 
@@ -51,8 +63,58 @@ def test_single_strong_keyword_is_enough(config):
 
 
 def test_two_weak_keywords_match(config):
-    matches = match_lot(make_lot("Server rack med netværksudstyr"), config)
+    matches = match_lot(make_lot("Router med netværksudstyr"), config)
     assert matches
+
+
+class TestServersAndDisks:
+    """Server- og drevudstyr skal fanges, men ikke butiksdiske.
+
+    'disk' er bevidst ikke et nøgleord: det rammer 'ekspeditionsdisk',
+    'købmandsdisk' og 'Industriopvaskemaskine WEXIÖDISK'. Kategorien bruger
+    derfor 'harddisk' og de øvrige sammensætninger.
+    """
+
+    @pytest.mark.parametrize(
+        "title",
+        [
+            "Intern harddiske ca. 12 stk 1 TB, 8 TB, 18 TB SEAGATE EXOS",
+            "Intern harddiske ca. 30 stk. 2 TB, 6 TB, 12 TB TOSHIBA",
+            "Ekstern harddisk 1 TB GLYPH Model: Secure Drive",
+            "2 stk. Ekstern hardisk 1 TB GLYPH Model: Blackbox Plus",
+            "Synology DiskStation DS920+",
+            "Dell PowerEdge R720 server",
+            "HP ProLiant DL380 Gen9",
+            "NAS med 4 drev",
+            "Samsung SSD 870 EVO 1TB",
+        ],
+    )
+    def test_server_and_disk_gear_matches(self, title, config):
+        assert "it_tech" in {m.category.key for m in match_lot(make_lot(title), config)}
+
+    @pytest.mark.parametrize(
+        "title",
+        [
+            "1.Stk. Ekspeditions disk i træ",
+            "Industriopvaskemaskine WEXIÖDISK WD-4",
+            "Stor købmandsdisk",
+            "Tøm disken",
+            "Vitrineskab på disken",
+        ],
+    )
+    def test_disk_word_does_not_match_shop_furniture(self, title, config):
+        assert "it_tech" not in {m.category.key for m in match_lot(make_lot(title), config)}
+
+    def test_server_bundle_with_higher_price_still_matches(self, config):
+        """Drevbunker er dyre, så loftet for it_tech er hævet til 5.000 kr."""
+        lot = make_lot("Intern harddiske ca. 12 stk 1 TB SEAGATE EXOS", bid=11000, total=11000)
+        matches = match_lot(lot, config)
+        assert matches and matches[0].category.key == "it_tech"
+        assert matches[0].over_budget is True
+
+    def test_brand_alone_does_not_match(self, config):
+        """Mærket står ikke i brands og må derfor ikke bære et match alene."""
+        assert match_lot(make_lot("Glyph Blackbox Pro"), config) == []
 
 
 def test_excluded_keywords_win_over_matches(config):

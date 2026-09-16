@@ -45,3 +45,16 @@
 {"title": "Mikrobølgeovn SAMSUNG, kaffemaskine, airfyrer NINJA samt diverse", "expect": "maybe", "why": "Kaffemaskine men blandet lot"}
 {"title": "6 stk. Blueray/stereoafspillere PIONEER/SONY", "expect": "maybe", "why": "Afspillere i bunke; ikke klassisk HiFi"}
 {"title": "2 stk. Lydkort/audio interfaces + Hovedtelefonforstærker", "expect": "maybe", "why": "Lydkort er relevant, men lot indeholder høretelefonforstærker"}
+{"title": "Intern harddiske ca. 12 stk  1 TB, 8 TB, 18 TB  SEAGATE EXOS, HGST ULTRASTAR", "expect": "yes", "why": "Drevbunke, it_tech; over budget men brugeren vil se den"}
+{"title": "Intern harddiske ca. 30 stk. 2 TB, 6 TB, 12 TB  TOSHIBA, WESTERN DIGITAL (se info)", "expect": "yes", "why": "Drevbunke, it_tech"}
+{"title": "Ekstern harddisk GLYPH BLACKBOX Pro 2 TB", "expect": "yes", "why": "Harddisk, it_tech"}
+{"title": "Ekstern harddisk 1 TB GLYPH Model: Secure Drive", "expect": "yes", "why": "Harddisk, it_tech"}
+{"title": "2 stk. Ekstern hardisk 1 TB  GLYPH Model: Blackbox Plus", "expect": "yes", "why": "Harddiske med auktionshusets stavefejl 'hardisk'"}
+{"title": "3 stk. Ekstern hardisk 1/2 TB   GLYPH Model: PRO SSD Thunderbolt/ Atom EV SSD", "expect": "yes", "why": "Harddiske, stavefejlen 'hardisk'"}
+{"title": "Ekstern hardisk 8 TB  GLYPH Model: Blackbox PRO", "expect": "yes", "why": "Harddisk, stavefejlen 'hardisk'"}
+{"title": "1.Stk. Ekspeditions disk i træ", "expect": "no", "why": "Butiksdisk; ordet 'disk' er derfor ikke et noegleord"}
+{"title": "Stor købmandsdisk", "expect": "no", "why": "Butiksindretning, ikke storage"}
+{"title": "Industriopvaskemaskine, se tekst  WEXIÖDISK WD-4", "expect": "no", "why": "'WEXIOeDISK' indeholder 'disk' — derfor matcher vi ikke paa 'disk'"}
+{"title": "Videoopbygning med skærm, server og UPS", "expect": "maybe", "why": "Indeholder en server, men er et videopakke-lot over budget; AI-trinnet boer vurdere"}
+{"title": "Div. Computerudstyr: SSD-kort, adapter mv.  SONNOS", "expect": "maybe", "why": "Tilbehoer; matcher paa 'ssd', AI-trinnet forventes at sige nej"}
+{"title": "Div. lydudstyr: DVI-forlængere, HDD-adaptere mv.  BLACK MAGIC DESIGN/ADDONICS Model: AD2SAHDCF", "expect": "maybe", "why": "Rodlot med adaptere; matcher paa 'hdd', AI-trinnet forventes at sige nej"}

@@ -92,12 +92,43 @@ def cmd_stats(args: argparse.Namespace) -> int:
         print("Indhold i databasen:")
         for table, count in counts.items():
             print(f"  {table:<15} {count:>8}")
+
+        verdicts = store.classification_counts()
+        if verdicts:
+            print("\nAI-vurderinger (cachede):")
+            for verdict, count in sorted(verdicts.items()):
+                label = {"ja": "interessant", "nej": "afvist", "maaske": "i tvivl"}.get(
+                    verdict, verdict
+                )
+                print(f"  {label:<13} {count:>8}")
+
+        pending = store.pending_review_count()
+        if pending:
+            print(f"\nTil gennemsyn: {pending} lot(er) venter på næste digest")
+
         risers = store.price_risers(limit=10)
         if risers:
             print("\nStørste prisstigninger (fra første observation):")
             for row in risers:
                 delta = row["last_bid"] - row["first_bid"]
                 print(f"  +{delta:>6} kr  {row['title'][:55]}")
+    return 0
+
+
+def cmd_review(args: argparse.Namespace) -> int:
+    """Vis 'måske'-fundene der endnu ikke er sendt i et digest."""
+    with Store(args.db) as store:
+        rows = store.pending_reviews(limit=args.limit)
+    if not rows:
+        print("Ingen lotter til gennemsyn.")
+        return 0
+    print(f"{len(rows)} lot(er) til gennemsyn:\n")
+    for row in rows:
+        print(f"  {row['title'][:78]}")
+        if row["reason"]:
+            print(f"      {row['reason']}")
+        if row["url"]:
+            print(f"      {row['url']}")
     return 0
 
 
@@ -117,6 +148,24 @@ def cmd_check(args: argparse.Namespace) -> int:
     print(f"Udelukkelser:{len(config.exclude)} nøgleord")
     print(f"Interval:    min. {MIN_SCRAPE_INTERVAL_SECONDS}s (15 min, låst af auktionsvilkår)")
     print()
+
+    cl = config.classifier
+    if not cl.configured:
+        print("AI-trin:     slået fra (kører kun på nøgleord)")
+        if cl.enabled:
+            print("             'enabled' er sat, men 'profile' mangler i interests.yml")
+    else:
+        try:
+            key = get_secret("CLASSIFIER_API_KEY") or get_secret("OPENAI_API_KEY")
+        except SecretError as exc:
+            print(f"AI-trin:     FEJL — nøglen kunne ikke læses: {exc}", file=sys.stderr)
+            return 1
+        if key:
+            print(f"AI-trin:     aktivt — {cl.model} via {redact(key)}")
+        else:
+            print("AI-trin:     slået til, men CLASSIFIER_API_KEY mangler — kører uden AI")
+    print()
+
     try:
         webhook = get_secret("DISCORD_WEBHOOK_URL")
         print(f"Discord:     {redact(webhook)}")
@@ -168,6 +217,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.set_defaults(func=cmd_run)
 
     sub.add_parser("stats", help="vis databaseindhold").set_defaults(func=cmd_stats)
+
+    p_review = sub.add_parser("review", help="vis 'måske'-fund til gennemsyn")
+    p_review.add_argument("--limit", type=int, default=25)
+    p_review.set_defaults(func=cmd_review)
 
     p_export = sub.add_parser("export", help="dump hukommelse til JSON")
     p_export.add_argument("--out", default="reports/export.json")

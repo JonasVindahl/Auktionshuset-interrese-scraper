@@ -28,6 +28,53 @@ budget:
 # Prisen for at afgive første bud på et lot uden bud.
 opening_bid: 50
 
+# AI-trin: et sprogmodel-kald der kun kører på lots der allerede har matchet på
+# nøgleord. Det fanger den slags støj nøgleord ikke kan se — fx
+# 'Div. lydudstyr: DVI-forlængere, HDD-adaptere mv.', hvor ordet 'hdd' står i
+# titlen, men varen er et rodlot med adaptere.
+#
+# Krav: CLASSIFIER_API_KEY skal være sat (miljø, _FILE eller _FROM_ENV).
+# Slå til/fra med 'enabled' her eller CLASSIFIER_ENABLED=1.
+# Sæt CLASSIFIER_MODEL, CLASSIFIER_BASE_URL og CLASSIFIER_MAX_PER_RUN for at
+# override uden at redigere filen. Funktionen virker med enhver
+# OpenAI-kompatibel endpoint (OpenAI, Azure, OpenRouter, Ollama, vLLM).
+classifier:
+  enabled: false
+  model: gpt-4o-mini
+  base_url: https://api.openai.com/v1
+  # Loft pr. kørsel, så en fejlkonfiguration ikke kan løbe med budgettet.
+  # Fund ud over loftet udskydes til næste kørsel i stedet for at sendes
+  # uklassificeret.
+  max_per_run: 25
+  timeout: 30
+  # Profilen læses af modellen for hvert lot. Skriv frit — den er den
+  # egentlige 'smag', mens nøglelisterne kun er grovsortering.
+  profile: |
+    Jeg samler på og bruger:
+    - IT og hacking-hardware: SDR, Proxmark, Flipper Zero, Raspberry Pi,
+      netværksudstyr, switches, routere, firewalls
+    - Servere og storage: rack- og towerservere, NAS, harddiske, SSD'er,
+      RAID-controllere. Gerne hele maskiner, drevbunker og reservedele til dem.
+    - Lyd og HiFi: forstærkere, højttalere, pladespillere, DAC'er, vintage
+      anlæg. Gerne noget der kan repareres eller opgraderes.
+    - Ure: mekaniske og automatiske, gerne vintage. Mærker med historie.
+    - Elektronik og maker: oscilloskoper, måleudstyr, loddeudstyr, 3D-printere,
+      komponenter og moduler.
+    - Kaffe: espressomaskiner og kværne, gerne professionelt brugt.
+
+    Jeg er IKKE interesseret i:
+    - Tilbehør og forbrugsgoder: kabler, adaptere, batterier, opladere, tasker,
+      flightcases, stativer, emballage, manualer, skærme og dockingstationer.
+    - Rodlodder og blandede partier. Hvis titlen er en opremsning af forskellige
+      småting ('diverse', 'mv.', 'm.m.', 'og andet'), er den næsten altid
+      uinteressant, også selvom et enkelt nøgleord optræder.
+    - Høretelefoner, headsets, tastaturer og mus.
+    - Bulk-partier af forbrugsvarer uden enkeltværdi.
+
+    Afvejning: et enkelt, komplet og fungerende stykke udstyr er langt mere
+    interessant end en bunke dele. Er du i tvivl om et lot er et reelt stykke
+    udstyr eller et rodlot, svar 'måske' frem for 'ja'.
+
 # Nøgleord der ALTID gør et lot uinteressant, uanset hvilken kategori det
 # ellers ville matche. Brugeren er eksplicit ligeglad med høretelefoner,
 # keyboards og mus — derfor udelukkes de her i stedet for at skulle undgås
@@ -84,7 +131,11 @@ categories:
   it_tech:
     label: IT / tech / hacking
     emoji: "🖥️"
-    max_price: 1000
+    # Højere loft end de øvrige kategorier, fordi servere og drevbunker er
+    # dyre i sig selv: en stak på 12-30 diske ligger typisk på 4.000-11.000 kr
+    # i hammerpris, altså op til ~16.500 kr færdigpris. Overstyr med
+    # MAX_PRICE_IT_TECH.
+    max_price: 7000
     strong:
       - proxmark
       - flipper zero
@@ -121,6 +172,36 @@ categories:
       - nvidia jetson
       - coral usb
       - bus pirate
+      # Server- og drevudstyr er nu en del af interessen. Ordene herunder er
+      # entydige varebetegnelser, så et enkelt træf er signal nok.
+      #
+      # 'disk' står bevidst IKKE på listen: det rammer 'ekspeditionsdisk',
+      # 'købmandsdisk' og 'Industriopvaskemaskine WEXIÖDISK'. Brug 'harddisk'
+      # og de øvrige sammensætninger i stedet.
+      - server
+      - servere
+      - rackserver
+      - bladeserver
+      - towerserver
+      - nas
+      - diskstation
+      - harddisk
+      - harddiske
+      - hardisk
+      - hardiske
+      - ssd
+      - nvme
+      - hdd
+      - solid state drive
+      - raid controller
+      - raidcontroller
+      - storage backplane
+      # Produktlinjer for servere. Navnene er entydige — 'PowerEdge' og
+      # 'ProLiant' betegner en maskine og intet andet, i modsætning til
+      # 'Supermicro' og 'Synology', der også bruges om tilbehør og emballage.
+      - poweredge
+      - proliant
+      - thinkstation
       # Netværksswitches er en konkret vare brugeren vil have, og 'switch' er i
       # en auktionssammenhæng næsten altid netværksudstyr.
       - switch
@@ -136,21 +217,18 @@ categories:
       - supermicro
       - thinkcentre
       - elgato
+      - netapp
+      - powervault
+      - hpe
     weak:
-      - server
-      - servere
-      - switch
-      - switches
-      - nas
+      # 'server', 'servere', 'nas', 'switch' og 'switches' er flyttet til
+      # strong — se ovenfor. De står derfor ikke her.
       - router
       - firewall
       - rack
       - poe
       - sfp
       - raid
-      - ssd
-      - nvme
-      - hdd
       - kvm
       - mini pc
       - nuc
@@ -164,15 +242,28 @@ categories:
       - gigabit
       - access point
       - storage
-      - raid controller
       - patch panel
+      # Komponenter og maskinnavne. De er konkrete, men ordene er korte eller
+      # flertydige nok til at et enkelt træf ikke bør udløse en besked.
       - cpu
+      - gpu
+      - bundkort
+      - motherboard
+      - ram
+      - hypervisor
+      - proxmox
+      - esxi
+      - vmware
+      - zfs
+      - iscsi
+      - san
+      - drev
+      - kabinet
       - server rack
       - netværkskabel
       - transceiver
       - computere
       - bærbar
-      - harddisk
       - docking
 
   audio_hifi:
