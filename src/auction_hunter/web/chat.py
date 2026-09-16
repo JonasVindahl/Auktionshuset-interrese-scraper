@@ -98,17 +98,25 @@ def _fallback_filter(question: str) -> SearchQuery:
     Stopordene fjernes, så 'har der været nogen Sennheiser?' bliver til
     'sennheiser' i stedet for at søge på hele sætningen.
     """
+    # Uden denne liste bliver "Hvilke NAS-enheder er der lige nu?" til
+    # "nas enheder lige nu", hvor de sidste to ord ikke findes i nogen titel.
     stopwords = {
-        "har", "der", "været", "nogen", "noget", "hvad", "hvilke", "hvilken",
-        "er", "en", "et", "og", "i", "på", "til", "med", "for", "af", "om",
-        "jeg", "du", "den", "det", "de", "kan", "vil", "skal", "som", "under",
-        "over", "find", "vis", "mig", "søg", "efter", "hvor", "mange",
+        "har", "der", "været", "nogen", "noget", "nogle", "hvad", "hvilke",
+        "hvilken", "hvornår", "hvordan", "er", "en", "et", "og", "i", "på",
+        "til", "med", "for", "af", "om", "jeg", "du", "den", "det", "de",
+        "kan", "vil", "skal", "som", "under", "over", "find", "findes",
+        "fandtes", "haft", "vis", "mig", "søg", "efter", "hvor", "mange",
+        "lige", "nu", "gerne", "ca", "cirka", "omkring", "siden", "dage",
+        "dag", "uge", "uger", "måned", "måneder", "år",
     }
     words = [
         w for w in re.findall(r"[\wæøåÆØÅ]+", question.lower())
         if w not in stopwords and len(w) > 2 and not w.isdigit()
     ]
-    return SearchQuery(text=" ".join(words[:6]))
+    # OR, ikke AND: assistenten har ikke et struktureret filter at læne sig på
+    # her, så et enkelt dækord må ikke kræve at alle de øvrige ord også står i
+    # titlen.
+    return SearchQuery(text=" ".join(words[:6]), any_words=True)
 
 
 def build_filter(client: OpenAICompatibleClient | None, question: str) -> tuple[SearchQuery, bool]:
@@ -234,20 +242,23 @@ class MatchTrace:
     excluded_by: tuple[str, ...] = ()
     near_misses: list[dict] = field(default_factory=list)
 
-    def as_text(self) -> str:
+    def as_text(self, labels: dict[str, str] | None = None) -> str:
+        """Forklaringen på dansk. labels oversætter kategorinøgler til etiketter."""
+        def pretty(key: str) -> str:
+            key = key.strip()
+            return (labels or {}).get(key, key)
+
         if self.excluded_by:
             return (
                 f"Titlen blev udelukket af ordet/ordene: "
                 f"{', '.join(self.excluded_by)}. Udelukkelser vinder over alt andet."
             )
         if self.matched:
-            return (
-                f"Matchede kategorien '{self.category}' på: "
-                f"{', '.join(self.keywords)}."
-            )
+            names = ", ".join(pretty(n) for n in self.category.split(","))
+            return f"Matchede kategorien '{names}' på: {', '.join(self.keywords)}."
         if self.near_misses:
             parts = [
-                f"'{m['category']}' ramte {m['hits']} men manglede "
+                f"'{pretty(m['category'])}' ramte {m['hits']} men manglede "
                 f"{m['missing']}"
                 for m in self.near_misses
             ]

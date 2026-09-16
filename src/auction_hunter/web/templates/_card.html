@@ -15,7 +15,7 @@
     <span class="thumb-fallback">{{ icon('image', 20) }}</span>
     {%- if row.image %}
     <img src="{{ row.image }}" alt="" loading="lazy" decoding="async"
-         referrerpolicy="no-referrer" onerror="this.classList.add('is-broken')">
+         referrerpolicy="no-referrer">
     {%- endif %}
   </div>
 
@@ -39,14 +39,16 @@
     {% if row.auction %}<p class="card-sub" title="{{ row.auction }}">{{ row.auction }}</p>{% endif %}
 
     <div class="card-actions">
+      {# Den synlige tekst er også det tilgængelige navn. En aria-label der
+         ikke indeholder den synlige tekst bryder Label in Name (WCAG 2.5.3). #}
       {%- for action, label, tip, ic in [
-        ('skip', 'Ikke interesseret', 'Ikke interesseret', 'ban'),
+        ('skip', 'Afvis', 'Ikke interesseret i dette lot', 'ban'),
         ('bid', 'Budt', 'Jeg har budt på det', 'bookmark'),
         ('bought', 'Købt', 'Jeg købte det', 'check')
       ] %}
       <button type="button" class="fb-btn" data-action="{{ action }}"
               data-lot-id="{{ row.lot_id }}" data-cat-key="{{ row.category }}"
-              title="{{ tip }}" aria-label="{{ tip }}"
+              title="{{ tip }}"
               aria-pressed="{{ 'true' if row.feedback == action else 'false' }}">
         {{ icon(ic, 13) }}<span>{{ label }}</span>
       </button>

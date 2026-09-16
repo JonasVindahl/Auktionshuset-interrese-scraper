@@ -68,6 +68,25 @@
     saveFeedback(btn);
   });
 
+  /* ---- bekraeftelse foer fjernelse ------------------------------------- */
+
+  // Ligger her og ikke i en inline onsubmit: et noegleord med et citationstegn
+  // i ville ellers kunne bryde ud af JavaScript-strengen i attributten.
+  document.addEventListener('submit', event => {
+    const form = event.target.closest && event.target.closest('form[data-confirm]');
+    if (!form) return;
+    if (!window.confirm(form.dataset.confirm)) event.preventDefault();
+  });
+
+  /* ---- pladsholder naar et billede ikke kan hentes ---------------------- */
+
+  // 'error' bobler ikke, saa den fanges i capture-fasen. Ligger her fordi
+  // inline onerror ville kraeve 'unsafe-inline' i script-src.
+  document.addEventListener('error', event => {
+    const img = event.target;
+    if (img && img.tagName === 'IMG') img.classList.add('is-broken');
+  }, true);
+
   /* ---- filtrering og sortering på fund-siderne -------------------------- */
 
   function initFindPage() {
@@ -98,6 +117,39 @@
       cats: new Set(), period: 'all', sort: 'newest',
       min: 0, max: Infinity, ending: false
     };
+
+    // Filtrene gemmes pr. side, så de overlever at man lige åbner et lot og
+    // kommer tilbage. De er synlige som chips, så de kan ikke ligge skjult.
+    const storageKey = 'fund-filtre:' + location.pathname;
+
+    function restore() {
+      let saved = null;
+      try {
+        saved = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
+      } catch (_) {
+        saved = null;
+      }
+      if (!saved || typeof saved !== 'object') return;
+      if (Array.isArray(saved.cats)) {
+        saved.cats.forEach(cat => { if (catLabels[cat]) state.cats.add(cat); });
+      }
+      if (['all', 'today', 'week'].indexOf(saved.period) !== -1) state.period = saved.period;
+      if (['newest', 'oldest', 'ending', 'price_desc', 'price_asc'].indexOf(saved.sort) !== -1) {
+        state.sort = saved.sort;
+      }
+      if (Number.isFinite(saved.min) && saved.min > 0) state.min = saved.min;
+      if (Number.isFinite(saved.max) && saved.max > 0) state.max = saved.max;
+      state.ending = saved.ending === true;
+    }
+
+    function store() {
+      try {
+        sessionStorage.setItem(storageKey, JSON.stringify({
+          cats: Array.from(state.cats), period: state.period, sort: state.sort,
+          min: state.min, max: state.max, ending: state.ending
+        }));
+      } catch (_) { /* privat tilstand uden storage er helt fint */ }
+    }
 
     const num = (card, key) => parseInt(card.dataset[key], 10) || 0;
 
@@ -183,9 +235,20 @@
       }
     }
 
+    // "I dag" er kalenderdagen i brugerens tid, ikke de sidste 24 timer. Et
+    // fund fra kl. 23 i går hører til i går.
+    const todayStart = () => {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      return d.getTime() / 1000;
+    };
+
     function apply(syncInputs) {
-      const now = Date.now() / 1000;
-      const periodSecs = { all: Infinity, today: 86400, week: 7 * 86400 }[state.period];
+      const from = {
+        all: -Infinity,
+        today: todayStart(),
+        week: todayStart() - 6 * 86400
+      }[state.period];
       let visible = 0;
 
       cards.forEach(card => {
@@ -194,7 +257,7 @@
         const endsIn = num(card, 'endsin');
         const shown =
           (state.cats.size === 0 || state.cats.has(cat)) &&
-          (!isFinite(periodSecs) || (now - num(card, 'ts')) <= periodSecs) &&
+          num(card, 'ts') >= from &&
           price >= state.min && price <= state.max &&
           (!state.ending || (endsIn > 0 && endsIn <= 86400));
         if (shown) { card.removeAttribute('data-hidden'); visible++; }
@@ -240,6 +303,7 @@
       }
 
       renderActive();
+      store();
     }
 
     function reset() {
@@ -321,6 +385,7 @@
       });
     }
 
+    restore();
     apply(true);
   }
 
@@ -351,16 +416,27 @@
   /* ---- arkiv: vælg et filter og slippe for et ekstra klik ---------------- */
 
   function initArchiveForm() {
-    $$('form[data-autosubmit] select').forEach(select => {
-      select.addEventListener('change', () => {
-        if (select.form) select.form.submit();
+    $$('form[data-autosubmit] select, form[data-autosubmit] input[type=number]')
+      .forEach(field => {
+        // Samme model for alle filtre: rører man en kontrol, slår den igennem.
+        // Fritekstfeltet kræver stadig Enter eller knappen.
+        field.addEventListener('change', () => {
+          if (field.form) field.form.submit();
+        });
       });
-    });
   }
 
   /* ---- '/'-genvej til søgefeltet ---------------------------------------- */
 
   function initSearchShortcut() {
+    // Autofokus er rart med tastatur og mus, men på en telefon åbner det
+    // skærmtastaturet med det samme og skubber indholdet væk.
+    const wide = window.matchMedia('(min-width: 800px) and (hover: hover)');
+    if (wide.matches) {
+      const field = $('input[data-search]');
+      if (field && !field.value) field.focus();
+    }
+
     document.addEventListener('keydown', event => {
       if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return;
       const target = event.target;

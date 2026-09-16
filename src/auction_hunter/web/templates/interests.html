@@ -50,7 +50,7 @@
       <p class="trace-verdict {{ 'is-yes' if trace.matched else 'is-no' }}">
         {% if trace.matched %}{{ icon('check', 15) }} Matcher{% else %}{{ icon('close', 15) }} Matcher ikke{% endif %}
       </p>
-      <p class="trace-text">{{ trace.as_text() }}</p>
+      <p class="trace-text">{{ trace.as_text(category_labels) }}</p>
       {% if explanation %}<p class="trace-explain">{{ explanation }}</p>{% endif %}
     </div>
     {% else %}
@@ -75,11 +75,10 @@
 {% for cat in categories %}
 <details class="cat-block" data-cat-block="{{ cat.key }}">
   <summary class="cat-head">
-    <span class="cat-title">
+    <span class="cat-title" title="{{ cat.key }}">
       <span class="cat-name" data-cat="{{ cat.key }}">{{ cat.label }}</span>
-      <span class="cat-key">{{ cat.key }}</span>
     </span>
-    <span class="cat-meta">{{ cat.levels.values()|map('length')|sum }} nøgleord · prisloft {{ cat.max_price|kr }}</span>
+    <span class="cat-meta">{{ cat.levels.values()|map('length')|sum }} nøgleord<span class="cat-meta-price"> · prisloft {{ cat.max_price|kr }}</span></span>
     {{ icon('chevron', 15, 'cat-chevron') }}
   </summary>
 
@@ -121,7 +120,7 @@
           <span class="kw-text">{{ keyword }}</span>
           {% if editable %}
           <form method="post" action="/interests/keyword"
-                onsubmit="return confirm('Fjern {{ keyword }} fra {{ cat.key }}.{{ level }}?')">
+                data-confirm="Fjern {{ keyword }} fra {{ cat.key }}.{{ level }}?">
             <input type="hidden" name="action" value="remove">
             <input type="hidden" name="category" value="{{ cat.key }}">
             <input type="hidden" name="level" value="{{ level }}">
@@ -155,7 +154,7 @@
       <span class="kw-text">{{ keyword }}</span>
       {% if editable %}
       <form method="post" action="/interests/exclude"
-            onsubmit="return confirm('Fjern udelukkelsen af {{ keyword }}?')">
+            data-confirm="Fjern udelukkelsen af {{ keyword }}?">
         <input type="hidden" name="action" value="remove">
         <input type="hidden" name="keyword" value="{{ keyword }}">
         <button type="submit" class="kw-remove" title="Fjern udelukkelsen af {{ keyword }}"

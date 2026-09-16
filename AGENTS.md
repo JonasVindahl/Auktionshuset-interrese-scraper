@@ -99,6 +99,27 @@ skifter tilbage til 'nyeste'.
 tilføj-formularer ligger bag `<details>` og virker uden JavaScript. Alle
 arkivfiltre er stadig server-side via GET-formularen.
 
+**Ingen inline JavaScript i skabelonerne.** CSP'en tillader kun script fra
+`/static`. Bekræftelser ligger på `data-confirm` og håndteres af en delegeret
+`submit`-lytter, og billedfejl fanges af en global `error`-lytter i
+capture-fasen. En inline `onsubmit` med et nøgleord indsat ville desuden kunne
+bryde ud af JavaScript-strengen, fordi browseren HTML-dekoder attributten før
+JS-parsing.
+
+**Adgangskoden fejler lukket.** Kan `WEB_PASSWORD` ikke læses, rejser
+`auth.configured_password` en `AuthConfigError` som giver 503. Forskellen
+mellem "ingen adgangskode er sat" og "adgangskoden kunne ikke læses" er hele
+pointen; uden den står dashboardet åbent på en tastefejl i en filsti.
+
+**Søgeparametre clampes i `SearchQuery.normalized`.** En formular kan sende
+hvad som helst, og et prisloft over 2^63 får sqlite3 til at kaste mens et
+`days_back` på 740000 løber tør for datoer. Det skal give en tom søgning, ikke
+en 500.
+
+**Dansk tid og danske månedsnavne.** `formatting.LOCAL_TZ` er
+Europe/Copenhagen, fordi containeren kører UTC, og månedsnavnene kommer fra en
+fast liste fordi `strftime("%B")` følger systemets locale.
+
 **Kategori-etiketter er fælles for siderne.** `app.category_labels()` giver
 `key -> label` fra `interests.yml`, og `app.filter_chips()` bygger de
 fjernbare filtre på arkivsiden. Begge fejler blødt, hvis konfigurationen ikke

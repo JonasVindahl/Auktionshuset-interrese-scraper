@@ -27,13 +27,25 @@ SESSION_KEY = "auth"
 SESSION_MAX_AGE = 30 * 24 * 3600
 
 
+class AuthConfigError(RuntimeError):
+    """Adgangskoden er sat, men kunne ikke læses.
+
+    Skal føre til at dashboardet nægter adgang, ikke til at det åbner. Forskellen
+    mellem "ingen adgangskode er sat" og "adgangskoden kunne ikke læses" er hele
+    pointen: den første er et bevidst valg, den anden er en fejlkonfiguration.
+    """
+
+
 def configured_password() -> str | None:
-    """Adgangskoden, hvis en er sat."""
+    """Adgangskoden, hvis en er sat. Rejser hvis en er sat men ulæselig."""
     try:
         return get_secret("WEB_PASSWORD") or None
     except SecretError as exc:
-        log.error("WEB_PASSWORD kunne ikke læses: %s", exc)
-        return None
+        log.error(
+            "WEB_PASSWORD er sat, men kunne ikke læses: %s. "
+            "Dashboardet nægter adgang, så det ikke står åbent.", exc,
+        )
+        raise AuthConfigError(str(exc)) from exc
 
 
 def auth_required() -> bool:

@@ -11,8 +11,9 @@ import csv
 import io
 import logging
 import os
+import sqlite3
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Callable
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
 from pydantic import BeforeValidator
@@ -26,7 +27,7 @@ from starlette.status import HTTP_303_SEE_OTHER
 
 from .. import images as images_mod
 from ..classifier import OpenAICompatibleClient
-from ..config import ConfigError, load_config
+from ..config import DEFAULT_CONFIG_PATH, ConfigError, load_config
 from ..secrets import SecretError, get_secret
 from . import auth, chat as chat_mod, queries, rows as rows_mod, search as search_mod
 from .formatting import date_label, kr, rel_past, time_left, timestamp
@@ -68,6 +69,24 @@ def db_path() -> str:
     return os.environ.get("DB_PATH", DEFAULT_DB)
 
 
+def ro_conn(db: str) -> sqlite3.Connection:
+    """Read-only forbindelse til visning.
+
+    Kan filen ikke åbnes, returneres en tom database i hukommelsen. Så viser
+    siderne en tom tilstand i stedet for at fejle: det er et helt normalt
+    første kørselsforløb at starte dashboardet før agenten har skrevet noget.
+    Healthz-ruten bruger bevidst queries.ro_conn direkte, så den stadig melder
+    fra om en manglende database.
+    """
+    try:
+        return queries.ro_conn(db)
+    except sqlite3.Error:
+        log.warning("Kunne ikke åbne databasen %s, viser tom tilstand", db)
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        return conn
+
+
 def config_path() -> str | None:
     return os.environ.get("CONFIG_PATH")
 
@@ -95,21 +114,80 @@ def llm_client() -> OpenAICompatibleClient | None:
     )
 
 
+# Kategorietiketterne ændrer sig kun når filen gør, og de slås op ved hvert
+# sidekald. Derfor caches de på filens mtime og størrelse.
+_label_cache: dict[str, Any] = {"key": None, "labels": {}}
+
+
 def category_labels() -> dict[str, str]:
     """Kategorinøgler oversat til de læsbare etiketter fra interesseprofilen.
 
     Et tomt kort er et gyldigt svar: siden skal kunne vises, selvom
     konfigurationsfilen mangler eller er i stykker.
     """
+    path = config_path()
     try:
-        config = load_config(config_path())
+        stat = os.stat(path or DEFAULT_CONFIG_PATH)
+        key: tuple[Any, ...] = (str(path), stat.st_mtime_ns, stat.st_size)
+    except OSError:
+        key = (str(path), None, None)
+
+    if _label_cache["key"] == key:
+        return dict(_label_cache["labels"])
+
+    try:
+        config = load_config(path)
+        labels = {category.key: category.label for category in config.categories}
     except ConfigError:
-        return {}
-    return {category.key: category.label for category in config.categories}
+        labels = {}
+
+    _label_cache["key"] = key
+    _label_cache["labels"] = labels
+    return labels
 
 
-# Etiketter til de enkelte arkivfiltre, så opsummeringen bliver til dansk
-# frem for feltnavne.
+def archive_url(query: search_mod.SearchQuery, **changes: Any) -> str:
+    """Byg et /archive-link ud fra en søgning, med enkelte felter ændret.
+
+    En værdi på None eller "" fjerner filtret. Det giver både de fjernbare
+    chips og statustabene, uden at skabelonen skal kende feltnavnene.
+    """
+    from urllib.parse import urlencode
+
+    params: dict[str, Any] = {
+        "q": query.text,
+        "min_price": query.min_price,
+        "max_price": query.max_price,
+        "status": query.status if query.status != "alle" else "",
+        "matched": query.matched if query.matched != "alle" else "",
+        "category": query.category,
+        "days_back": query.days_back,
+        "sort": query.sort if query.sort != "relevans" else "",
+    }
+    params.update(changes)
+    clean = {key: value for key, value in params.items() if value}
+    return "/archive?" + urlencode(clean) if clean else "/archive"
+
+
+# Status er den filtre ring man oftest skifter mellem, så den ligger som
+# faneblade i stedet for i filterpanelet. De er links og virker uden JavaScript.
+_STATUS_TABS = (("alle", "Alle"), ("aktive", "Aktive"), ("afsluttede", "Afsluttede"))
+
+
+def status_tabs(query: search_mod.SearchQuery) -> list[dict[str, Any]]:
+    return [
+        {
+            "key": key,
+            "label": label,
+            "url": archive_url(query, status="" if key == "alle" else key),
+            "active": query.status == key,
+        }
+        for key, label in _STATUS_TABS
+    ]
+
+
+# Etiketter til sorterings-chippen, så opsummeringen bliver dansk frem for
+# feltnavne.
 _ARCHIVE_SORT_LABELS = {
     "nyeste": "nyeste",
     "slutter": "slutter først",
@@ -121,62 +199,85 @@ _ARCHIVE_SORT_LABELS = {
 def filter_chips(query: search_mod.SearchQuery) -> list[dict[str, str]]:
     """De aktive arkivfiltre som fjernbare chips.
 
-    Hver chip bærer et link til den samme søgning uden netop det filter. Det
-    gør oprydningen til ét klik, og den virker også uden JavaScript.
+    Status er ikke med her: den vises som faneblade i stedet. Hver chip bærer
+    et link til den samme søgning uden netop det filter, så oprydningen er ét
+    klik og virker uden JavaScript.
     """
-    from urllib.parse import urlencode
-
     labels = category_labels()
-
-    def link_without(drop: str) -> str:
-        params: dict[str, Any] = {
-            "q": query.text,
-            "min_price": query.min_price,
-            "max_price": query.max_price,
-            "status": query.status if query.status != "alle" else "",
-            "matched": query.matched if query.matched != "alle" else "",
-            "category": query.category,
-            "days_back": query.days_back,
-            "sort": query.sort if query.sort != "relevans" else "",
-        }
-        params.pop(drop, None)
-        clean = {key: value for key, value in params.items() if value}
-        return "/archive?" + urlencode(clean) if clean else "/archive"
 
     chips: list[dict[str, str]] = []
     if query.text:
-        chips.append({"label": f'"{query.text}"', "url": link_without("q")})
+        chips.append({"label": f'"{query.text}"', "url": archive_url(query, q="")})
     if query.min_price is not None:
-        chips.append({"label": f"fra {kr(query.min_price)}", "url": link_without("min_price")})
+        chips.append({"label": f"fra {kr(query.min_price)}", "url": archive_url(query, min_price=None)})
     if query.max_price is not None:
-        chips.append({"label": f"til {kr(query.max_price)}", "url": link_without("max_price")})
-    if query.status in ("aktive", "afsluttede"):
-        chips.append({"label": f"kun {query.status}", "url": link_without("status")})
+        chips.append({"label": f"til {kr(query.max_price)}", "url": archive_url(query, max_price=None)})
     if query.matched == "kun_fund":
-        chips.append({"label": "kun fund", "url": link_without("matched")})
+        chips.append({"label": "kun fund", "url": archive_url(query, matched="")})
     elif query.matched == "kun_ikke_fund":
-        chips.append({"label": "kun ikke-fund", "url": link_without("matched")})
+        chips.append({"label": "kun ikke-fund", "url": archive_url(query, matched="")})
     if query.category:
         chips.append({
             "label": labels.get(query.category, query.category),
-            "url": link_without("category"),
+            "url": archive_url(query, category=""),
         })
     if query.days_back:
         unit = "dag" if query.days_back == 1 else "dage"
         chips.append({
             "label": f"set inden for {query.days_back} {unit}",
-            "url": link_without("days_back"),
+            "url": archive_url(query, days_back=None),
         })
     if query.sort != "relevans":
         chips.append({
             "label": "sorteret: " + _ARCHIVE_SORT_LABELS.get(query.sort, query.sort),
-            "url": link_without("sort"),
+            "url": archive_url(query, sort=""),
         })
     return chips
 
 
+# Excel og Sheets evaluerer en celle der begynder med = + - @ som en formel.
+# Titel og lot_id kommer fra auktionshusets HTML, saa de skal neutraliseres.
+_CSV_FORMULA_STARTS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(value: Any) -> Any:
+    if isinstance(value, str) and value[:1] in _CSV_FORMULA_STARTS:
+        return "'" + value
+    return value
+
+
+def pct(value: float) -> str:
+    """Procent med dansk decimalseparator. round(1) giver '70.0 %' på engelsk."""
+    return f"{value:.1f}".replace(".", ",")
+
+
+def safe_next(target: str) -> str:
+    """Kun interne stier, så et login-link ikke kan sende folk videre.
+
+    Bruges både når login-formularen vises og når den indsendes. Uden den
+    kunne GET /login?next=https://ondsindet.example videresende direkte.
+    """
+    return target if target.startswith("/") and not target.startswith("//") else "/"
+
+
+# Konservativ CSP. Den tillader kun script fra /static, billeder fra
+# auktionshuset og data-URI'er, og forbyder at siden rammes ind i en anden
+# (clickjacking). 'unsafe-inline' er nødvendigt for style, fordi et par
+# skabeloner sætter bredder direkte som style-attribut.
+_CSP = (
+    "default-src 'self'; img-src 'self' data: https:; "
+    "style-src 'self' 'unsafe-inline'; script-src 'self'; "
+    "form-action 'self'; base-uri 'self'; frame-ancestors 'none'"
+)
+
+
 def create_app() -> FastAPI:
-    app = FastAPI(title="Auktionshuset Hunter", docs_url=None, redoc_url=None)
+    app = FastAPI(
+        title="Auktionshuset Hunter",
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,   # ingen offentlig rute-enumeration
+    )
     app.add_middleware(
         SessionMiddleware,
         secret_key=auth.session_secret(),
@@ -184,10 +285,23 @@ def create_app() -> FastAPI:
         same_site="lax",
         https_only=False,      # kører typisk på LAN uden TLS
     )
+    @app.middleware("http")
+    async def sikkerhedsheadere(request: Request, call_next: Callable) -> Response:
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "same-origin")
+        response.headers.setdefault("Content-Security-Policy", _CSP)
+        # Siderne kan redigere interesseprofilen, så de må ikke havne i en cache.
+        if response.headers.get("content-type", "").startswith("text/html"):
+            response.headers.setdefault("Cache-Control", "no-store")
+        return response
+
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 
     templates = Jinja2Templates(directory=str(HERE / "templates"))
     templates.env.filters["kr"] = kr
+    templates.env.filters["pct"] = pct
     templates.env.filters["date_label"] = date_label
     templates.env.filters["timestamp"] = timestamp
     templates.env.globals["time_left"] = time_left
@@ -196,7 +310,7 @@ def create_app() -> FastAPI:
 
     def page(request: Request, name: str, **context: Any) -> HTMLResponse:
         """Render en side med det fælles sidehoved allerede udfyldt."""
-        conn = queries.ro_conn(db_path())
+        conn = ro_conn(db_path())
         try:
             pulse, stale = queries.last_run(conn)
             counts = queries.counts(conn)
@@ -219,12 +333,25 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(401)
     async def unauthorized(request: Request, _exc: Exception) -> RedirectResponse:
-        return RedirectResponse(f"/login?next={request.url.path}", HTTP_303_SEE_OTHER)
+        return RedirectResponse(f"/login?next={safe_next(request.url.path)}", HTTP_303_SEE_OTHER)
+
+    @app.exception_handler(auth.AuthConfigError)
+    async def auth_misconfigured(request: Request, _exc: Exception) -> HTMLResponse:
+        """Fejl lukket: en ulæselig adgangskode må ikke åbne dashboardet."""
+        return HTMLResponse(
+            "<!doctype html><html lang=da><meta charset=utf-8>"
+            "<title>Dashboardet er ikke konfigureret</title>"
+            "<h1>Dashboardet er ikke konfigureret</h1>"
+            "<p>WEB_PASSWORD er sat, men kunne ikke læses, så adgang nægtes. "
+            "Ret stien i WEB_PASSWORD_FILE (eller den variabel "
+            "WEB_PASSWORD_FROM_ENV peger på) og genstart.</p>",
+            status_code=503,
+        )
 
     @app.get("/login", response_class=HTMLResponse)
     def login_form(request: Request, next: str = "/") -> Any:
         if not auth.auth_required() or request.session.get(auth.SESSION_KEY):
-            return RedirectResponse(next, HTTP_303_SEE_OTHER)
+            return RedirectResponse(safe_next(next), HTTP_303_SEE_OTHER)
         return templates.TemplateResponse(
             request, "login.html", {"next": next, "error": None}
         )
@@ -235,9 +362,7 @@ def create_app() -> FastAPI:
     ) -> Any:
         if auth.check_password(password):
             request.session[auth.SESSION_KEY] = True
-            # Åbn kun interne stier, så et login-link ikke kan sende folk videre.
-            target = next if next.startswith("/") and not next.startswith("//") else "/"
-            return RedirectResponse(target, HTTP_303_SEE_OTHER)
+            return RedirectResponse(safe_next(next), HTTP_303_SEE_OTHER)
         return templates.TemplateResponse(
             request, "login.html",
             {"next": next, "error": "Forkert adgangskode."},
@@ -253,7 +378,7 @@ def create_app() -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     def finds(request: Request, _: None = Depends(require_login)) -> HTMLResponse:
-        conn = queries.ro_conn(db_path())
+        conn = ro_conn(db_path())
         try:
             rows = queries.notifications(conn)
             active, _expired = queries.split_by_end(rows)
@@ -273,7 +398,7 @@ def create_app() -> FastAPI:
 
     @app.get("/expired", response_class=HTMLResponse)
     def expired(request: Request, _: None = Depends(require_login)) -> HTMLResponse:
-        conn = queries.ro_conn(db_path())
+        conn = ro_conn(db_path())
         try:
             rows = queries.notifications(conn)
             _active, gone = queries.split_by_end(rows)
@@ -327,7 +452,7 @@ def create_app() -> FastAPI:
         ] = 1,
         _: None = Depends(require_login),
     ) -> HTMLResponse:
-        conn = queries.ro_conn(db_path())
+        conn = ro_conn(db_path())
         try:
             result = search_mod.search(conn, search_mod.SearchQuery(
                 text=q, min_price=min_price, max_price=max_price,
@@ -360,7 +485,7 @@ def create_app() -> FastAPI:
             rows=rows_mod.prepare_all(result.rows, seen_field="first_seen", db_path=db_path()),
             archive=stats, categories=categories, page_url=page_url,
             filters=filter_chips(result.query),
-            status_choices=search_mod.STATUS_CHOICES,
+            status_tabs=status_tabs(result.query),
             match_choices=search_mod.MATCH_CHOICES,
             sort_choices=search_mod.SORT_CHOICES,
         )
@@ -502,24 +627,27 @@ def create_app() -> FastAPI:
         _: None = Depends(require_login),
     ) -> HTMLResponse:
         answer = None
+        # Klienten læses fra konfiguration og miljø, så den hentes én gang
+        # pr. sidekald i stedet for to.
+        client = llm_client()
         if q.strip():
-            conn = queries.ro_conn(db_path())
+            conn = ro_conn(db_path())
             try:
-                answer = chat_mod.ask(conn, llm_client(), q)
+                answer = chat_mod.ask(conn, client, q)
             finally:
                 conn.close()
         return page(
             request, "chat.html",
             question=q, answer=answer,
             rows=rows_mod.prepare_all(answer.rows, seen_field="first_seen", db_path=db_path()) if answer else [],
-            has_key=llm_client() is not None,
+            has_key=client is not None,
         )
 
     # -- statistik ---------------------------------------------------------
 
     @app.get("/stats", response_class=HTMLResponse)
     def stats(request: Request, _: None = Depends(require_login)) -> HTMLResponse:
-        conn = queries.ro_conn(db_path())
+        conn = ro_conn(db_path())
         try:
             context = {
                 "by_category": queries.category_breakdown(conn),
@@ -540,7 +668,7 @@ def create_app() -> FastAPI:
     @app.get("/export/feedback.csv")
     def export_feedback(_: None = Depends(require_login)) -> StreamingResponse:
         """Markeringer som CSV — træningsdata til AI-trinnet."""
-        conn = queries.ro_conn(db_path())
+        conn = ro_conn(db_path())
         try:
             rows = queries.feedback_export(conn)
         finally:
@@ -551,8 +679,9 @@ def create_app() -> FastAPI:
         writer.writerow(["lot_id", "kategori", "handling", "titel", "pris", "url", "tidspunkt"])
         for row in rows:
             writer.writerow([
-                row["lot_id"], row["category_key"], row["action"], row["title"],
-                row["last_total"] or "", row["url"] or "", row["created_at"],
+                _csv_safe(row["lot_id"]), row["category_key"], row["action"],
+                _csv_safe(row["title"]), row["last_total"] or "",
+                row["url"] or "", row["created_at"],
             ])
         buffer.seek(0)
         return StreamingResponse(
@@ -610,7 +739,11 @@ def serve(
     import uvicorn
 
     os.environ.setdefault("DB_PATH", db_path)
-    if not auth.auth_required():
+    try:
+        auth_ok = auth.auth_required()
+    except auth.AuthConfigError:
+        auth_ok = True   # fejler lukket; håndteres pr. request som 503
+    if not auth_ok:
         log.warning(
             "WEB_PASSWORD er ikke sat — dashboardet er åbent for alle på "
             "netværket, og det kan redigere interesseprofilen. Sæt WEB_PASSWORD."

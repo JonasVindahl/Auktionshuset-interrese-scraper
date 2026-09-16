@@ -15,7 +15,7 @@
     <div class="metric"><dt>Lots set i alt</dt><dd>{{ archive.total }}</dd></div>
     <div class="metric"><dt>Blev til fund</dt><dd class="is-accent">{{ archive.matched }}</dd></div>
     <div class="metric"><dt>Uden for profilen</dt><dd>{{ archive.unmatched }}</dd></div>
-    <div class="metric"><dt>Rammeprocent</dt><dd>{% if archive.total %}{{ (100 * archive.matched / archive.total)|round(1) }}%{% else %}–{% endif %}</dd></div>
+    <div class="metric"><dt>Rammeprocent</dt><dd>{% if archive.total %}{{ (100 * archive.matched / archive.total)|pct }} %{% else %}–{% endif %}</dd></div>
     {% if images.count %}
     <div class="metric"><dt>Cachede billeder</dt><dd>{{ images.count }} <span class="metric-unit">{{ images.mb }} MB</span></dd></div>
     {% endif %}
@@ -29,7 +29,7 @@
   <h2 class="section-title">Pr. kategori</h2>
   <div class="panel">
     <div class="table-wrap">
-      <table>
+      <table class="stack">
         <thead>
           <tr>
             <th scope="col">Kategori</th>
@@ -44,14 +44,15 @@
           {% for row in by_category %}
           <tr>
             <td>
-              <span class="cat-label" data-cat="{{ row.category }}">{{ category_labels.get(row.category, row.category) }}</span>
-              <span class="cat-key">{{ row.category }}</span>
+              <span class="cat-label" data-cat="{{ row.category }}"
+                    title="{{ row.category }}">{{ category_labels.get(row.category, row.category) }}</span>
             </td>
-            <td class="num">{{ row.sent }}</td>
-            <td class="num">{{ row.bought or '–' }}</td>
-            <td class="num">{{ row.bid or '–' }}</td>
-            <td class="num">{{ row.skipped or '–' }}</td>
-            <td>
+            {# 0 er et svar. Tankestregen er til "ved ikke". #}
+            <td class="num" data-label="Sendt">{{ row.sent }}</td>
+            <td class="num" data-label="Købt">{{ row.bought }}</td>
+            <td class="num" data-label="Budt">{{ row.bid }}</td>
+            <td class="num" data-label="Afvist">{{ row.skipped }}</td>
+            <td data-label="Støjandel">
               {% if row.skipped %}
               <span class="meter-row">
                 <span class="meter{% if row.noise_pct > 60 %} is-high{% elif row.noise_pct > 30 %} is-mid{% endif %}">
@@ -120,7 +121,7 @@
   <h2 class="section-title">Seneste kørsler</h2>
   <div class="panel">
     <div class="table-wrap">
-      <table>
+      <table class="stack">
         <thead>
           <tr>
             <th scope="col">Tidspunkt</th>
@@ -136,11 +137,11 @@
           {% set rel, full = rel_past(run.finished_at) %}
           <tr>
             <td title="{{ full }}">{{ rel }}</td>
-            <td class="num">{{ run.auctions }}</td>
-            <td class="num">{{ run.lots }}</td>
-            <td class="num">{{ run.matches }}</td>
-            <td class="num">{{ run.new_matches or '–' }}</td>
-            <td>
+            <td class="num" data-label="Auktioner">{{ run.auctions }}</td>
+            <td class="num" data-label="Lots">{{ run.lots }}</td>
+            <td class="num" data-label="Fund">{{ run.matches }}</td>
+            <td class="num" data-label="Nye">{{ run.new_matches or '–' }}</td>
+            <td data-label="Status">
               {% if run.error %}<span class="status is-err" title="{{ run.error }}">{{ icon('alert', 13) }} fejl</span>
               {% elif run.lots == 0 %}<span class="status is-warn">{{ icon('alert', 13) }} ingen lots</span>
               {% else %}<span class="status is-ok">{{ icon('check', 13) }} ok</span>{% endif %}

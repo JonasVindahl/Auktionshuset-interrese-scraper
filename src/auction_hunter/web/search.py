@@ -18,9 +18,23 @@ from datetime import datetime, timedelta, timezone
 
 from ..textmatch import normalize, normalize_loose
 from .formatting import parse_dt
-from .queries import has_column, has_table
+from .queries import has_column, has_schema, has_table
 
 PAGE_SIZE = 50
+
+# Grænser for hvad et filter må indeholde. En formular kan sendes med hvad som
+# helst, og et prisloft på 2^70 får sqlite3 til at kaste OverflowError mens et
+# days_back på 740000 får datetime til at løbe tør for datoer. Begge dele blev
+# til en 500 i stedet for en tom søgning.
+MAX_PRICE = 100_000_000        # 100 mio. kr
+MAX_DAYS_BACK = 3_650          # 10 år
+
+
+def _positive(value: int | None, maximum: int) -> int | None:
+    """Kun positive tal, og inden for hvad databasen og datetime kan klare."""
+    if not value or value <= 0:
+        return None
+    return min(int(value), maximum)
 
 # Hvad et lot kan filtreres på ud over fritekst.
 STATUS_CHOICES = ("alle", "aktive", "afsluttede")
@@ -41,19 +55,23 @@ class SearchQuery:
     days_back: int | None = None
     sort: str = "relevans"
     page: int = 1
+    # Sand når ordene skal slås sammen med OR i stedet for AND. Bruges af
+    # assistentens nøgleordsfald, hvor et enkelt dækord ellers dræber svaret.
+    any_words: bool = False
 
     def normalized(self) -> "SearchQuery":
         """Ret ugyldige værdier til deres standard i stedet for at fejle."""
         return SearchQuery(
             text=self.text.strip()[:200],
-            min_price=self.min_price if (self.min_price or 0) > 0 else None,
-            max_price=self.max_price if (self.max_price or 0) > 0 else None,
+            min_price=_positive(self.min_price, MAX_PRICE),
+            max_price=_positive(self.max_price, MAX_PRICE),
             status=self.status if self.status in STATUS_CHOICES else "alle",
             matched=self.matched if self.matched in MATCH_CHOICES else "alle",
             category=self.category.strip()[:64],
-            days_back=self.days_back if (self.days_back or 0) > 0 else None,
+            days_back=_positive(self.days_back, MAX_DAYS_BACK),
             sort=self.sort if self.sort in SORT_CHOICES else "relevans",
             page=max(1, self.page),
+            any_words=self.any_words,
         )
 
     @property
@@ -71,6 +89,9 @@ class SearchResult:
     page: int = 1
     pages: int = 1
     query: SearchQuery = field(default_factory=SearchQuery)
+    # Sand når søgningen ramte den hårde grænse. Så er total et gulv, ikke et
+    # facit, og siden skal sige det i stedet for at påstå noget forkert.
+    truncated: bool = False
 
     @property
     def has_prev(self) -> bool:
@@ -81,7 +102,7 @@ class SearchResult:
         return self.page < self.pages
 
 
-def to_fts_query(text: str) -> str:
+def to_fts_query(text: str, any_words: bool = False) -> str:
     """Byg et sikkert FTS5-udtryk af brugerens ord.
 
     FTS5 har sin egen syntaks hvor ``"``, ``*``, ``:``, ``^`` og ``NEAR`` har
@@ -103,12 +124,17 @@ def to_fts_query(text: str) -> str:
         # Præfiks-match, så 'højttal' finder 'højttaler'.
         parts = " OR ".join(f'"{v}"*' for v in sorted(variants))
         clauses.append(f"({parts})")
-    return " AND ".join(clauses)
+    # OR bruges af assistentens nøgleordsfald, hvor et enkelt dækord ikke må
+    # kræve at alle de øvrige ord også står i titlen.
+    return (" OR " if any_words else " AND ").join(clauses)
 
 
 def search(conn: sqlite3.Connection, query: SearchQuery) -> SearchResult:
     """Kør en søgning mod arkivet."""
     query = query.normalized()
+
+    if not has_schema(conn, "lots", "notifications"):
+        return SearchResult(query=query)
 
     image = "l.image_url" if has_column(conn, "lots", "image_url") else "''"
     feedback_join = (
@@ -124,7 +150,7 @@ def search(conn: sqlite3.Connection, query: SearchQuery) -> SearchResult:
     where: list[str] = []
     params: list[object] = []
 
-    fts = to_fts_query(query.text)
+    fts = to_fts_query(query.text, query.any_words)
     if fts:
         joins.insert(0, "JOIN lots_fts fts ON fts.lot_id = l.lot_id")
         where.append("lots_fts MATCH ?")
@@ -195,6 +221,7 @@ def search(conn: sqlite3.Connection, query: SearchQuery) -> SearchResult:
             return ends is None or ends > now
         rows = [r for r in rows if active(r) == (query.status == "aktive")]
 
+    truncated = len(rows) >= hard_limit
     total = len(rows)
     pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
     page = min(query.page, pages)
@@ -206,11 +233,14 @@ def search(conn: sqlite3.Connection, query: SearchQuery) -> SearchResult:
         page=page,
         pages=pages,
         query=query,
+        truncated=truncated,
     )
 
 
 def archive_stats(conn: sqlite3.Connection) -> dict[str, int]:
     """Overblik over hvor stort arkivet er."""
+    if not has_schema(conn, "lots", "notifications"):
+        return {"total": 0, "matched": 0, "unmatched": 0, "indexed": 0}
     total = conn.execute("SELECT COUNT(*) FROM lots").fetchone()[0]
     matched = conn.execute(
         "SELECT COUNT(DISTINCT lot_id) FROM notifications"
@@ -228,6 +258,8 @@ def archive_stats(conn: sqlite3.Connection) -> dict[str, int]:
 
 
 def categories_seen(conn: sqlite3.Connection) -> list[str]:
+    if not has_table(conn, "notifications"):
+        return []
     return [
         row[0] for row in conn.execute(
             "SELECT DISTINCT category_key FROM notifications "

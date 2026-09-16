@@ -2,7 +2,7 @@
 {% from "_icons.html" import icon %}
 {% from "_card.html" import card with context %}
 {% set q = result.query %}
-{% set advanced = q.min_price or q.max_price or q.status != 'alle' or q.matched != 'alle' or q.category or q.days_back or q.sort != 'relevans' %}
+{% set advanced = q.min_price or q.max_price or q.matched != 'alle' or q.category or q.days_back or q.sort != 'relevans' %}
 
 {% block title %}Arkiv · Auktionshuset Hunter{% endblock %}
 
@@ -20,10 +20,29 @@
   <div class="search-form">
     <div class="search-field">
       {{ icon('search', 17) }}
-      <input type="search" name="q" value="{{ q.text }}" data-search autofocus
+      <input type="search" name="q" value="{{ q.text }}" data-search
              placeholder="Søg i alt agenten har set" aria-label="Søg i arkivet">
     </div>
     <button class="btn is-primary" type="submit">Søg</button>
+  </div>
+
+  {# Status ligger som faneblade ovenfor. Det skjulte felt sørger for at et
+     andet filter ikke nulstiller den ved næste indsendelse. #}
+  {% if q.status != 'alle' %}<input type="hidden" name="status" value="{{ q.status }}">{% endif %}
+
+  <div class="archive-bar">
+    <nav class="segmented" aria-label="Status på lot">
+      {% for tab in status_tabs %}
+      <a href="{{ tab.url }}"{% if tab.active %} aria-current="page"{% endif %}>{{ tab.label }}</a>
+      {% endfor %}
+    </nav>
+    {% if result.total %}
+    <p class="result-count">
+      Viser {{ result.rows|length }} af {{ result.total }}{% if result.truncated %}+{% endif %}
+      {%- if result.pages > 1 %}, side {{ result.page }} af {{ result.pages }}{% endif %}
+      {%- if result.truncated %} (flere resultater er skåret fra, præcisér søgningen){% endif %}
+    </p>
+    {% endif %}
   </div>
 
   {% if filters %}
@@ -37,15 +56,6 @@
   <details class="filters" {% if advanced %}open{% endif %}>
     <summary class="btn is-quiet">{{ icon('filter', 15) }} Flere filtre</summary>
     <div class="filters-body">
-      <div class="field">
-        <label for="f-status">Status</label>
-        <select id="f-status" name="status">
-          {% for choice in status_choices %}
-          <option value="{{ choice }}" {% if q.status == choice %}selected{% endif %}>{{ {'alle':'Alle','aktive':'Kun aktive','afsluttede':'Kun afsluttede'}[choice] }}</option>
-          {% endfor %}
-        </select>
-      </div>
-
       <div class="field">
         <label for="f-matched">Match</label>
         <select id="f-matched" name="matched">
@@ -88,11 +98,12 @@
 
       <div class="field">
         <label for="f-sort">Rækkefølge</label>
-        <select id="f-sort" name="sort">
+        <select id="f-sort" name="sort" title="Relevans følger søgeordets vægt. Nyeste er senest set af agenten.">
           {% for choice in sort_choices %}
           <option value="{{ choice }}" {% if q.sort == choice %}selected{% endif %}>{{ {'relevans':'Relevans','nyeste':'Nyeste','slutter':'Slutter først','pris_op':'Laveste pris','pris_ned':'Højeste pris'}[choice] }}</option>
           {% endfor %}
         </select>
+        <span class="field-hint">Relevans følger søgeordets vægt. Nyeste er senest set af agenten, ikke senest sendt.</span>
       </div>
     </div>
 
@@ -105,10 +116,6 @@
 
 <section class="section">
   {% if result.rows %}
-    <p class="result-count">
-      Viser {{ result.rows|length }} af {{ result.total }}
-      {%- if result.pages > 1 %} · side {{ result.page }} af {{ result.pages }}{% endif %}
-    </p>
     {% for row in rows %}{{ card(row, show_seen=True) }}{% endfor %}
 
     {% if result.pages > 1 %}

@@ -10,7 +10,15 @@
   <h1>{{ heading }}</h1>
   <p class="page-meta">
     <span id="visible-count" role="status" aria-live="polite">{{ rows|length }} fund</span>
-    {%- if ending_soon %}<span class="meta-sep">·</span><span class="meta-urgent">{{ ending_soon }} slutter inden for et døgn</span>{% endif %}
+    {%- if ending_soon %}
+    <span class="meta-sep">·</span>
+    {# Tiden er det eneste filter der haster, så det ligger frit fremme i
+       stedet for inde i filterpanelet. #}
+    <button type="button" class="meta-toggle" id="ending-chip" aria-pressed="false"
+            title="Vis kun de fund der slutter inden for et døgn">
+      {{ icon('clock', 13) }}<span>{{ ending_soon }} slutter inden for et døgn</span>
+    </button>
+    {%- endif %}
   </p>
 </header>
 
@@ -36,15 +44,6 @@
       <button type="button" class="chip" data-period="all" aria-pressed="true">Alle</button>
       <button type="button" class="chip" data-period="today" aria-pressed="false">I dag</button>
       <button type="button" class="chip" data-period="week" aria-pressed="false">7 dage</button>
-    </div>
-  </div>
-  {% endif %}
-
-  {% if show_ending %}
-  <div class="filter-group">
-    <span class="filter-label" id="filter-tid">Tid tilbage</span>
-    <div class="chip-row" role="group" aria-labelledby="filter-tid">
-      <button type="button" class="chip" id="ending-chip" aria-pressed="false">{{ icon('clock', 13) }} Slutter inden for 24 timer</button>
     </div>
   </div>
   {% endif %}

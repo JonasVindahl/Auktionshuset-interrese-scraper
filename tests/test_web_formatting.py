@@ -92,7 +92,10 @@ def test_time_left_entalsform():
 
 
 def test_time_left_uden_sluttidspunkt():
-    assert time_left(None) == ("", "", 0)
+    text, css, secs = time_left(None)
+    assert text == "Sluttid ukendt"
+    assert css == "unknown"
+    assert secs == 0, "et lot uden sluttid skal sortere som de afsluttede"
 
 
 # -- rel_past --------------------------------------------------------------
@@ -104,12 +107,12 @@ def test_rel_past_lige_nu():
 
 def test_rel_past_minutter():
     rel, _full = rel_past(iso_in(minutes=-20))
-    assert rel == "20 min siden"
+    assert rel == "for 20 min. siden"
 
 
 def test_rel_past_dage():
     rel, _full = rel_past(iso_in(days=-3))
-    assert rel == "3 dage siden"
+    assert rel == "for 3 dage siden"
 
 
 def test_rel_past_paa_ugyldigt_input():
@@ -117,6 +120,12 @@ def test_rel_past_paa_ugyldigt_input():
 
 
 # -- kr --------------------------------------------------------------------
+
+def test_rel_past_ental():
+    """'1 dage siden' er forkert dansk."""
+    rel, _full = rel_past(iso_in(days=-1))
+    assert rel == "for 1 dag siden"
+
 
 @pytest.mark.parametrize("value,expected", [
     (1234, "1.234 kr"),
@@ -145,3 +154,20 @@ def test_date_label_denne_uge():
 
 def test_date_label_paa_ugyldigt_input():
     assert date_label("vrøvl") == "Ukendt"
+
+
+def test_date_label_skriver_danske_maaneder():
+    """strftime("%B") følger systemets locale, som er engelsk i containeren."""
+    label = date_label(iso_in(days=-40))
+    dansk = ("januar", "februar", "marts", "april", "maj", "juni", "juli",
+             "august", "september", "oktober", "november", "december")
+    engelsk = ("January", "February", "March", "April", "May", "June", "July",
+               "August", "October", "December")
+    assert any(m in label for m in dansk), label
+    assert not any(m in label for m in engelsk), label
+
+
+def test_time_left_afsluttet_entalsform():
+    text, css, _secs = time_left(iso_in(days=-1, hours=-1))
+    assert text == "Sluttede 1 dag siden"
+    assert css == "ended"

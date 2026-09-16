@@ -44,10 +44,22 @@ def has_table(conn: sqlite3.Connection, table: str) -> bool:
     return row is not None
 
 
+def has_schema(conn: sqlite3.Connection, *tables: str) -> bool:
+    """Findes alle de nævnte tabeller?
+
+    En databasefil uden tabeller er et helt normalt første kørselsscenarie:
+    dashboardet kan startes før agenten har skrevet noget. Siderne skal vise en
+    tom tilstand, ikke en 500.
+    """
+    return all(has_table(conn, table) for table in tables)
+
+
 # -- fund ------------------------------------------------------------------
 
 def notifications(conn: sqlite3.Connection, limit: int = 400) -> list[sqlite3.Row]:
     """Sendte fund, nyeste først, med lot-detaljer og eventuel markering."""
+    if not has_schema(conn, "lots", "notifications"):
+        return []
     image = "l.image_url" if has_column(conn, "lots", "image_url") else "'' AS image_url"
     return conn.execute(
         f"""
@@ -87,6 +99,8 @@ def split_by_end(rows: list[sqlite3.Row]) -> tuple[list[sqlite3.Row], list[sqlit
 
 
 def pending_reviews(conn: sqlite3.Connection, limit: int = 40) -> list[sqlite3.Row]:
+    if not has_table(conn, "review_queue"):
+        return []
     return conn.execute(
         """
         SELECT title, url, reason, created_at
@@ -104,10 +118,16 @@ def pending_reviews(conn: sqlite3.Connection, limit: int = 40) -> list[sqlite3.R
 def counts(conn: sqlite3.Connection) -> dict[str, int]:
     result: dict[str, int] = {}
     for table in ("lots", "notifications"):
-        result[table] = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-    result["pending_review"] = conn.execute(
-        "SELECT COUNT(*) FROM review_queue WHERE digested_at IS NULL"
-    ).fetchone()[0]
+        result[table] = (
+            conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            if has_table(conn, table) else 0
+        )
+    result["pending_review"] = (
+        conn.execute(
+            "SELECT COUNT(*) FROM review_queue WHERE digested_at IS NULL"
+        ).fetchone()[0]
+        if has_table(conn, "review_queue") else 0
+    )
     result["marked"] = (
         conn.execute("SELECT COUNT(*) FROM feedback").fetchone()[0]
         if has_table(conn, "feedback") else 0
@@ -117,6 +137,8 @@ def counts(conn: sqlite3.Connection) -> dict[str, int]:
 
 def last_run(conn: sqlite3.Connection) -> tuple[str, bool]:
     """(tekst, er_forældet). Forældet = mere end 45 minutter siden."""
+    if not has_table(conn, "runs"):
+        return "ingen kørsel endnu", True
     row = conn.execute(
         "SELECT finished_at FROM runs WHERE finished_at IS NOT NULL "
         "ORDER BY run_id DESC LIMIT 1"
@@ -131,8 +153,8 @@ def last_run(conn: sqlite3.Connection) -> tuple[str, bool]:
     if mins < 2:
         return "opdateret lige nu", stale
     if mins < 60:
-        return f"opdateret {mins} min siden", stale
-    return f"opdateret {mins // 60} t siden", stale
+        return f"opdateret for {mins} min. siden", stale
+    return f"opdateret for {mins // 60} t. siden", stale
 
 
 def feedback_breakdown(conn: sqlite3.Connection) -> dict[str, int]:
@@ -148,6 +170,8 @@ def feedback_breakdown(conn: sqlite3.Connection) -> dict[str, int]:
 
 def category_breakdown(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     """Hvor mange fund pr. kategori, og hvor mange der blev markeret som støj."""
+    if not has_schema(conn, "notifications", "feedback"):
+        return []
     rows = conn.execute(
         """
         SELECT n.category_key AS category,
@@ -179,6 +203,8 @@ def category_breakdown(conn: sqlite3.Connection) -> list[dict[str, Any]]:
 
 
 def run_history(conn: sqlite3.Connection, limit: int = 40) -> list[sqlite3.Row]:
+    if not has_table(conn, "runs"):
+        return []
     return conn.execute(
         """
         SELECT run_id, started_at, finished_at, auctions, lots,
@@ -193,6 +219,8 @@ def run_history(conn: sqlite3.Connection, limit: int = 40) -> list[sqlite3.Row]:
 
 
 def price_risers(conn: sqlite3.Connection, limit: int = 15) -> list[sqlite3.Row]:
+    if not has_table(conn, "lots"):
+        return []
     return conn.execute(
         """
         SELECT l.title, l.url, l.first_bid, l.last_bid, l.ends_at

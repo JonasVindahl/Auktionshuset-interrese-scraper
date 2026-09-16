@@ -64,9 +64,11 @@ def prepare(
         "feedback": _get(row, "feedback_action") or "",
         "image": image,
         "cost": cost,
-        "price": kr(cost),
+        # En tankestreg på et kort ser ud som en manglende værdi. Et lot uden
+        # bud har en mening: der er ikke afgivet noget endnu.
+        "price": kr(cost) if cost else "Ingen bud",
         "rise": rise,
-        "is_estimate": not last_bid,
+        "is_estimate": bool(cost) and not last_bid,
         "ts": timestamp(seen),
         "seen_rel": seen_rel,
         "seen_full": seen_full,
