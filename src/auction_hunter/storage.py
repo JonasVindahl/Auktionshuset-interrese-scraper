@@ -248,10 +248,13 @@ class Store:
         self.path = Path(path)
         if str(self.path) != ":memory:":
             self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(str(self.path))
+        self.conn = sqlite3.connect(str(self.path), timeout=15)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA foreign_keys=ON")
+        # Webben skriver feedback gennem sin egen forbindelse, og den daglige
+        # checkpoint kraever et oejeblik uden laas. Vent hellere end at fejle.
+        self.conn.execute("PRAGMA busy_timeout=15000")
         self.conn.executescript(SCHEMA)
         _migrate(self.conn)
         self.conn.commit()
@@ -302,70 +305,82 @@ class Store:
 
     def record_lot(self, lot: Lot, total: int | None) -> None:
         """Gem lot og dets aktuelle pris; opdater pris-historik ved ændring."""
+        with self._tx() as conn:
+            self._write_lot(conn, lot, total)
+
+    def record_lots(self, lots: list[Lot], totals: dict[str, int | None] | None = None) -> None:
+        """Gem alle lots i én transaktion.
+
+        En kørsel giver typisk omkring 2.000 lots. Én transaktion pr. lot ville
+        betyde 2.000 commits og dermed 2.000 fsync pr. kørsel; her er der ét.
+        """
+        if not lots:
+            return
+        totals = totals or {}
+        with self._tx() as conn:
+            for lot in lots:
+                self._write_lot(conn, lot, totals.get(lot.lot_id))
+
+    def _write_lot(self, conn: sqlite3.Connection, lot: Lot, total: int | None) -> None:
+        """Skrivningen bag baade record_lot og record_lots. Deler transaktion."""
         now = utcnow()
         ends = lot.ends_at.isoformat(timespec="seconds") if lot.ends_at else None
 
-        with self._tx() as conn:
-            row = conn.execute(
-                "SELECT last_bid, last_total FROM lots WHERE lot_id=?", (lot.lot_id,)
-            ).fetchone()
-            if row is None:
-                conn.execute(
-                    """INSERT INTO lots (lot_id, auction_id, auction_title, title, url,
-                       lot_number, first_seen, last_seen, first_bid, last_bid, last_total,
-                       ends_at, image_url)
-                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                    (
-                        lot.lot_id, lot.auction_id, lot.auction_title, lot.title, lot.url,
-                        lot.lot_number, now, now, lot.current_bid, lot.current_bid, total, ends,
-                        lot.image_url,
-                    ),
-                )
-                price_changed = True
-            else:
-                # Billedet kan mangle i ét udtræk (lazy loading) uden at være
-                # forsvundet. Behold derfor det gamle, hvis det nye er tomt.
-                conn.execute(
-                    """UPDATE lots SET last_seen=?, last_bid=?, last_total=?, ends_at=?,
-                       title=?, url=?, image_url=COALESCE(NULLIF(?, ''), image_url)
-                       WHERE lot_id=?""",
-                    (now, lot.current_bid, total, ends, lot.title, lot.url,
-                     lot.image_url, lot.lot_id),
-                )
-                # Kun en faktisk prisændring er ny information. Uden dette skrev
-                # hver kørsel en række pr. lot pr. 15. minut, og historikken
-                # voksede til flere GB om året uden at sige noget nyt.
-                price_changed = (row["last_bid"], row["last_total"]) != (lot.current_bid, total)
-                if price_changed:
-                    log.info("Prisændring på %s: %s -> %s",
-                             lot.lot_id, row["last_bid"], lot.current_bid)
-
+        row = conn.execute(
+            "SELECT last_bid, last_total FROM lots WHERE lot_id=?", (lot.lot_id,)
+        ).fetchone()
+        if row is None:
+            conn.execute(
+                """INSERT INTO lots (lot_id, auction_id, auction_title, title, url,
+                   lot_number, first_seen, last_seen, first_bid, last_bid, last_total,
+                   ends_at, image_url)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    lot.lot_id, lot.auction_id, lot.auction_title, lot.title, lot.url,
+                    lot.lot_number, now, now, lot.current_bid, lot.current_bid, total, ends,
+                    lot.image_url,
+                ),
+            )
+            price_changed = True
+        else:
+            # Billedet kan mangle i ét udtræk (lazy loading) uden at være
+            # forsvundet. Behold derfor det gamle, hvis det nye er tomt.
+            conn.execute(
+                """UPDATE lots SET last_seen=?, last_bid=?, last_total=?, ends_at=?,
+                   title=?, url=?, image_url=COALESCE(NULLIF(?, ''), image_url)
+                   WHERE lot_id=?""",
+                (now, lot.current_bid, total, ends, lot.title, lot.url,
+                 lot.image_url, lot.lot_id),
+            )
+            # Kun en faktisk prisændring er ny information. Uden dette skrev
+            # hver kørsel en række pr. lot pr. 15. minut, og historikken
+            # voksede til flere GB om året uden at sige noget nyt.
+            price_changed = (row["last_bid"], row["last_total"]) != (lot.current_bid, total)
             if price_changed:
-                conn.execute(
-                    """INSERT OR REPLACE INTO price_history (lot_id, observed_at, bid, total)
-                       VALUES (?,?,?,?)""",
-                    (lot.lot_id, utcnow_precise(), lot.current_bid, total),
-                )
+                log.info("Prisændring på %s: %s -> %s",
+                         lot.lot_id, row["last_bid"], lot.current_bid)
 
-            # Søgeindekset. Kun titlen kan ændre sig, så den billige vej er at
-            # slette og indsætte igen — FTS5 har ingen UPDATE der virker på en
-            # ekstern nøgle.
-            indexed = conn.execute(
-                "SELECT title FROM lots_fts WHERE lot_id=?", (lot.lot_id,)
-            ).fetchone()
-            if indexed is None or indexed["title"] != lot.title:
-                if indexed is not None:
-                    conn.execute("DELETE FROM lots_fts WHERE lot_id=?", (lot.lot_id,))
-                conn.execute(
-                    """INSERT INTO lots_fts (lot_id, title, normalized, auction_title)
-                       VALUES (?,?,?,?)""",
-                    (lot.lot_id, lot.title, _search_text(lot.title), lot.auction_title),
-                )
+        if price_changed:
+            conn.execute(
+                """INSERT OR REPLACE INTO price_history (lot_id, observed_at, bid, total)
+                   VALUES (?,?,?,?)""",
+                (lot.lot_id, utcnow_precise(), lot.current_bid, total),
+            )
 
-    def record_lots(self, lots: list[Lot], totals: dict[str, int | None] | None = None) -> None:
-        totals = totals or {}
-        for lot in lots:
-            self.record_lot(lot, totals.get(lot.lot_id))
+        # Søgeindekset. Kun titlen kan ændre sig, så den billige vej er at
+        # slette og indsætte igen — FTS5 har ingen UPDATE der virker på en
+        # ekstern nøgle.
+        indexed = conn.execute(
+            "SELECT title FROM lots_fts WHERE lot_id=?", (lot.lot_id,)
+        ).fetchone()
+        if indexed is None or indexed["title"] != lot.title:
+            if indexed is not None:
+                conn.execute("DELETE FROM lots_fts WHERE lot_id=?", (lot.lot_id,))
+            conn.execute(
+                """INSERT INTO lots_fts (lot_id, title, normalized, auction_title)
+                   VALUES (?,?,?,?)""",
+                (lot.lot_id, lot.title, _search_text(lot.title), lot.auction_title),
+            )
 
     # -- notifikationer ----------------------------------------------------
 

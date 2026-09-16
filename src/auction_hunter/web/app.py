@@ -12,6 +12,7 @@ import io
 import logging
 import os
 import sqlite3
+import time
 from pathlib import Path
 from typing import Annotated, Any, Callable
 
@@ -386,6 +387,27 @@ def create_app() -> FastAPI:
 
     # -- login -------------------------------------------------------------
 
+    # Dashboardet har én adgangskode, så et hurtigt ordbogsangreb er den
+    # realistiske trussel. Tælleren lever i processen, hvilket er nok fordi
+    # uvicorn kører én worker. Bag en reverse proxy er client.host proxyens
+    # adresse, så grænsen bliver global frem for per klient; det er
+    # acceptabelt for et enkeltbruger-dashboard.
+    LOGIN_MAX_ATTEMPTS = 5
+    LOGIN_WINDOW_SECONDS = 900
+    _login_failures: dict[str, list[float]] = {}
+
+    def _login_key(request: Request) -> str:
+        return request.client.host if request.client else "ukendt"
+
+    def _recent_failures(key: str) -> list[float]:
+        now = time.monotonic()
+        recent = [t for t in _login_failures.get(key, []) if now - t < LOGIN_WINDOW_SECONDS]
+        if recent:
+            _login_failures[key] = recent
+        else:
+            _login_failures.pop(key, None)
+        return recent
+
     def require_login(request: Request) -> None:
         if not auth.auth_required():
             return
@@ -421,16 +443,25 @@ def create_app() -> FastAPI:
     def login_submit(
         request: Request, password: str = Form(""), next: str = Form("/")
     ) -> Any:
+        key = _login_key(request)
+        if len(_recent_failures(key)) >= LOGIN_MAX_ATTEMPTS:
+            return templates.TemplateResponse(
+                request, "login.html",
+                {"next": next, "error": "For mange forsøg. Prøv igen om et kvarter."},
+                status_code=429,
+            )
         if auth.check_password(password):
+            _login_failures.pop(key, None)
             request.session[auth.SESSION_KEY] = True
             return RedirectResponse(safe_next(next), HTTP_303_SEE_OTHER)
+        _login_failures.setdefault(key, []).append(time.monotonic())
         return templates.TemplateResponse(
             request, "login.html",
             {"next": next, "error": "Forkert adgangskode."},
             status_code=401,
         )
 
-    @app.get("/logout")
+    @app.post("/logout")
     def logout(request: Request) -> RedirectResponse:
         request.session.clear()
         return RedirectResponse("/login", HTTP_303_SEE_OTHER)

@@ -64,6 +64,8 @@ class RunStats:
     pruned: int = 0
     images_cached: int = 0
     details_fetched: int = 0
+    lots_with_ends: int = 0
+    ends_parse_failures: int = 0
     errors: list[str] = field(default_factory=list)
 
 
@@ -162,6 +164,15 @@ def check_blindness(stats: RunStats, store: Store) -> str | None:
             "Der blev ikke fundet en enkelt aktiv auktion i Sjælland. "
             "Tjek om auktionshuset har ændret deres side, eller om der "
             "midlertidigt ikke er aktive auktioner."
+        )
+
+    if (stats.ends_parse_failures >= 5
+            and stats.ends_parse_failures >= stats.lots_with_ends * 0.5):
+        return (
+            "**Agenten kan ikke læse sluttidspunkter.**\n"
+            f"{stats.ends_parse_failures} af {stats.lots_with_ends} lots havde et "
+            "data-ends der ikke kunne parses. Formatet på auktionshusets side "
+            "er sandsynligvis ændret. Tjek scraper.parse_ends."
         )
 
     baseline = store.last_successful_lot_count()
@@ -266,6 +277,10 @@ def run_once(
             scraper._polite_pause()
 
         stats.lots = len(all_lots)
+        # Scraperen taeller hvor mange data-ends der ikke kunne parses. Uden
+        # det fjerner et aendret format alle deadlines uden en lyd.
+        stats.lots_with_ends = int(getattr(scraper, "lots_with_ends", 0))
+        stats.ends_parse_failures = int(getattr(scraper, "ends_parse_failures", 0))
 
         matches = sort_matches(match_all(all_lots, config, opening_bid=config.opening_bid))
         stats.matches = len(matches)

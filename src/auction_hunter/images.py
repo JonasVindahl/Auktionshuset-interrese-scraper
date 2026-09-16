@@ -20,10 +20,13 @@ auktionshusets side og må derfor aldrig bruges som filnavn direkte.
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import logging
 import os
 import re
 import shutil
+import socket
+import urllib.parse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -68,6 +71,45 @@ def _env_bool(name: str, default: bool) -> bool:
     if not raw:
         return default
     return raw in ("1", "true", "ja", "yes", "on")
+
+
+def allow_private_hosts() -> bool:
+    """Om billedhentning maa ramme private adresser.
+
+    Slået fra i drift. Billed-URL'en kommer fra scrapet HTML, og en
+    kompromitteret lot-side maa ikke kunne faa agenten til at hente
+    cloud-metadata eller en tjeneste paa LAN'et. Testene koerer mod en lokal
+    billedserver og slaar det til.
+    """
+    return _env_bool("IMAGE_ALLOW_PRIVATE_HOSTS", False)
+
+
+def is_public_host(url: str) -> bool:
+    """Om alle adresser et vaertsnavn peger paa er offentlige.
+
+    Navnet oploeses her og igen af requests. Et DNS-svar der skifter imellem de
+    to kald (rebinding) er derfor ikke fanget. Et vaertsnavn-allowlist ville
+    vaere staerkere, men skulle opdateres hver gang auktionshuset skifter
+    billed-CDN.
+    """
+    try:
+        host = urllib.parse.urlsplit(url).hostname
+    except ValueError:
+        return False
+    if not host:
+        return False
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except OSError:
+        return False
+    for info in infos:
+        try:
+            address = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            return False
+        if not address.is_global:
+            return False
+    return True
 
 
 def caching_enabled() -> bool:
@@ -159,6 +201,9 @@ def download(
     stedet for at blive læst helt ind i hukommelsen.
     """
     if not url.startswith(("http://", "https://")):
+        return False
+    if not allow_private_hosts() and not is_public_host(url):
+        log.debug("Billedadressen peger ikke paa en offentlig vaert: %s", url)
         return False
 
     limit = limit or max_bytes()

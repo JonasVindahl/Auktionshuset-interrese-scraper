@@ -45,6 +45,12 @@ def make_png(width: int = 4, height: int = 4) -> bytes:
 PNG = make_png()
 
 
+@pytest.fixture(autouse=True)
+def _lokal_billedserver_er_tilladt(monkeypatch):
+    """Testene koerer mod en server paa 127.0.0.1, som drift ellers blokerer."""
+    monkeypatch.setenv("IMAGE_ALLOW_PRIVATE_HOSTS", "1")
+
+
 @pytest.fixture()
 def image_server():
     """Lokal server der kan svare som en billedserver — og som en ødelagt en."""
@@ -100,6 +106,29 @@ def image_server():
     yield f"http://127.0.0.1:{server.server_address[1]}"
     server.shutdown()
     server.server_close()
+
+
+# -- SSRF-vaern ------------------------------------------------------------
+
+@pytest.mark.parametrize("url,expected", [
+    ("http://127.0.0.1/x.png", False),
+    ("http://[::1]/x.png", False),
+    ("http://192.168.1.10/x.png", False),
+    ("http://10.0.0.5/x.png", False),
+    ("http://169.254.169.254/latest/meta-data/", False),
+    ("http://8.8.8.8/x.png", True),
+    ("", False),
+    ("ikke-en-url", False),
+])
+def test_kun_offentlige_vaerter_er_tilladte(url, expected):
+    assert images.is_public_host(url) is expected
+
+
+def test_blokerer_privat_adresse_naar_vaernet_er_paa(tmp_path, monkeypatch):
+    monkeypatch.delenv("IMAGE_ALLOW_PRIVATE_HOSTS", raising=False)
+    dest = tmp_path / "x"
+    assert images.download("http://127.0.0.1:1/x.png", dest) is False
+    assert not dest.exists()
 
 
 # -- typegenkendelse -------------------------------------------------------

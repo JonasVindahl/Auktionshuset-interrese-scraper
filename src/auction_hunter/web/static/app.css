@@ -818,6 +818,8 @@ th.col-meter{width:160px}
   display:flex;flex-wrap:wrap;gap:10px 24px;justify-content:space-between;align-items:center}
 .site-foot-links{display:flex;gap:20px}
 .site-foot-links a{display:inline-flex;align-items:center;gap:6px;min-height:26px;padding:2px 0}
+/* Log ud er en POST-formular, saa den ikke kan rammes af et <img src>. */
+.linkish-form{display:contents}
 .site-foot-links a:hover{color:var(--accent)}
 
 /* ---- motion ---- */

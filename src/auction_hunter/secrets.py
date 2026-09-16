@@ -41,6 +41,12 @@ def get_secret(name: str, *, required: bool = False, default: str | None = None)
     if file_path:
         return _read_file(file_path.strip(), name)
 
+    value = os.environ.get(name)
+    if value and value.strip():
+        return value.strip()
+
+    # Indirekte opslag er det sidste valg: en direkte variabel med vores eget
+    # navn er mere specifik end et peger paa en anden variabel.
     indirect = os.environ.get(f"{name}_FROM_ENV")
     if indirect:
         value = os.environ.get(indirect.strip())
@@ -49,10 +55,6 @@ def get_secret(name: str, *, required: bool = False, default: str | None = None)
         raise SecretError(
             f"{name}_FROM_ENV peger på '{indirect}', men den miljøvariabel er tom eller findes ikke"
         )
-
-    value = os.environ.get(name)
-    if value and value.strip():
-        return value.strip()
 
     if required:
         raise SecretError(
