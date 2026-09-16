@@ -1,187 +1,381 @@
-/* Filtrering, sortering og markering på fund-siderne.
+/* Auktionshuset Hunter, dashboard.
+ *
+ * Al JavaScript her er en forbedring, ikke en forudsætning: siderne er
+ * server-renderede, og uden JS virker søgning, filtre og markering stadig.
+ * Scriptet gør filtrering og sortering øjeblikkelig og husker markeringer.
  *
  * Kortene i #cards-container er sandheden. Ved anden sortering end 'nyeste'
- * klones de synlige kort ind i #flat-list; derfor scopes alle opslag til
- * containeren, ellers ville klonerne tælle med og listen vokse ved hvert klik.
+ * KLONES de synlige kort ind i #flat-list, så originalerne bliver stående i
+ * deres dato-grupper. Flytter man dem i stedet, forsvinder de fra grupperne
+ * når man skifter tilbage til 'nyeste'.
  */
 
 (function () {
   'use strict';
 
-  const container = () => document.getElementById('cards-container');
-  const srcCards = () => container() ? [...container().querySelectorAll('.card[data-cat]')] : [];
-  const srcGroups = () => container() ? [...container().querySelectorAll('.date-group')] : [];
+  const $ = (sel, root) => (root || document).querySelector(sel);
+  const $$ = (sel, root) => Array.prototype.slice.call((root || document).querySelectorAll(sel));
 
-  let activeCats = new Set();
-  let activePeriod = 'all';
-  let activeSort = 'newest';
-  let priceMin = 0;
-  let priceMax = Infinity;
-  let endingOnly = false;
+  const kr = n => Number(n).toLocaleString('da-DK');
 
-  function applyFilters() {
-    if (!container()) return;
-    const now = Date.now();
-    const periodMs = { all: Infinity, today: 86400e3, week: 7 * 86400e3 }[activePeriod] ?? Infinity;
-    let visible = 0;
+  /* ---- markering af fund ------------------------------------------------ */
 
-    srcCards().forEach(card => {
-      const catOk = activeCats.size === 0 || activeCats.has(card.dataset.cat);
-      const tsOk = (now - parseInt(card.dataset.ts, 10) * 1000) <= periodMs;
-      const price = parseInt(card.dataset.price, 10) || 0;
-      const priceOk = price >= priceMin && price <= priceMax;
-      const endsIn = parseInt(card.dataset.endsin, 10) || 0;
-      const endingOk = !endingOnly || (endsIn > 0 && endsIn <= 86400);
-      const show = catOk && tsOk && priceOk && endingOk;
-      show ? card.removeAttribute('data-hidden') : card.setAttribute('data-hidden', '1');
-      if (show) visible++;
+  function paint(lotId, action) {
+    $$('.card[data-lot="' + CSS.escape(lotId) + '"]').forEach(card => {
+      card.dataset.feedback = action;
+      $$('.fb-btn', card).forEach(btn => {
+        btn.setAttribute('aria-pressed',
+          String(action !== '' && btn.dataset.action === action));
+      });
     });
-
-    const noRes = document.getElementById('no-results');
-    if (noRes) noRes.style.display = visible === 0 ? '' : 'none';
-
-    const counter = document.getElementById('visible-count');
-    if (counter) {
-      const total = srcCards().length;
-      counter.textContent = visible === total ? `${total} fund` : `${visible} af ${total} fund`;
-    }
-    applySort();
   }
 
-  function applySort() {
-    const flat = document.getElementById('flat-list');
-    if (!container()) return;
+  async function saveFeedback(btn) {
+    const card = btn.closest('.card');
+    if (!card) return;
 
-    if (activeSort === 'newest') {
-      if (flat) { flat.style.display = 'none'; flat.innerHTML = ''; }
-      srcGroups().forEach(group => {
-        const any = [...group.querySelectorAll('.card')].some(c => !c.hasAttribute('data-hidden'));
-        group.style.display = any ? '' : 'none';
+    const lotId = btn.dataset.lotId;
+    const action = btn.dataset.action;
+    const previous = card.dataset.feedback || '';
+    const next = previous === action ? '' : action;
+
+    // Opdatér med det samme; serveren er hurtigere end øjet følger med.
+    paint(lotId, next);
+
+    const titleEl = $('.card-title', card);
+    try {
+      const response = await fetch('/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lot_id: lotId,
+          category_key: btn.dataset.catKey || '',
+          action: next,
+          title: (titleEl ? titleEl.textContent : '').trim()
+        })
       });
-      return;
+      if (!response.ok) throw new Error(String(response.status));
+    } catch (_) {
+      // Netværksfejl: vis sandheden igen ved næste reload.
+      paint(lotId, previous);
     }
+  }
 
-    srcGroups().forEach(group => { group.style.display = 'none'; });
-    if (!flat) return;
+  document.addEventListener('click', event => {
+    const btn = event.target.closest && event.target.closest('.fb-btn');
+    if (!btn) return;
+    event.preventDefault();
+    saveFeedback(btn);
+  });
+
+  /* ---- filtrering og sortering på fund-siderne -------------------------- */
+
+  function initFindPage() {
+    const container = document.getElementById('cards-container');
+    if (!container) return;
+
+    const flat = document.getElementById('flat-list');
+    const noResults = document.getElementById('no-results');
+    const counter = document.getElementById('visible-count');
+    const toggle = document.getElementById('filter-toggle');
+    const panel = document.getElementById('filter-panel');
+    const endingBtn = document.getElementById('ending-chip');
+    const minInput = document.getElementById('price-min');
+    const maxInput = document.getElementById('price-max');
+    const resetBtn = document.getElementById('reset-btn');
+    const activeBox = document.getElementById('active-filters');
+
+    const cards = $$('.card', container);
+    const total = cards.length;
+    const groups = $$('.date-group', container);
+
+    const catLabels = {};
+    $$('.chip[data-cat]').forEach(chip => {
+      catLabels[chip.dataset.cat] = chip.textContent.trim();
+    });
+
+    const state = {
+      cats: new Set(), period: 'all', sort: 'newest',
+      min: 0, max: Infinity, ending: false
+    };
 
     const num = (card, key) => parseInt(card.dataset[key], 10) || 0;
-    const visible = srcCards().filter(c => !c.hasAttribute('data-hidden'));
-    const sorted = visible.slice().sort((a, b) => {
-      switch (activeSort) {
-        case 'oldest': return num(a, 'ts') - num(b, 'ts');
-        case 'price_asc': return num(a, 'price') - num(b, 'price');
+
+    function compare(a, b) {
+      switch (state.sort) {
+        case 'oldest':     return num(a, 'ts') - num(b, 'ts');
+        case 'price_asc':  return num(a, 'price') - num(b, 'price');
         case 'price_desc': return num(b, 'price') - num(a, 'price');
         case 'ending': {
-          // Lots uden sluttidspunkt sidst.
+          // Lots uden sluttidspunkt lægges sidst.
           const ea = num(a, 'endsin'), eb = num(b, 'endsin');
           return (ea > 0 ? ea : Infinity) - (eb > 0 ? eb : Infinity);
         }
         default: return 0;
       }
-    });
-
-    flat.innerHTML = '';
-    sorted.forEach(card => flat.appendChild(card.cloneNode(true)));
-    flat.querySelectorAll('.fb-btn').forEach(bindFeedback);
-    flat.style.display = '';
-  }
-
-  async function sendFeedback(btn) {
-    const card = btn.closest('.card');
-    if (!card) return;
-    const { lotId, catKey, action } = btn.dataset;
-    const title = (card.querySelector('.title')?.textContent || '').trim();
-    const next = card.dataset.feedback === action ? '' : action;
-
-    // Opdatér med det samme; serveren er hurtigere end brugeren kan nå at se.
-    document.querySelectorAll(`.card[data-lot="${CSS.escape(lotId)}"]`).forEach(c => {
-      c.dataset.feedback = next;
-      c.querySelectorAll('.fb-btn').forEach(b => {
-        b.classList.toggle('active', next !== '' && b.dataset.action === next);
-      });
-    });
-
-    try {
-      await fetch('/feedback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lot_id: lotId, category_key: catKey, action: next, title })
-      });
-    } catch (_) {
-      // Markeringen står stadig visuelt; næste reload henter sandheden.
     }
+
+    function activeList() {
+      const list = [];
+      state.cats.forEach(cat => list.push({
+        key: 'cat:' + cat, label: catLabels[cat] || cat, kind: 'cat', value: cat
+      }));
+      if (state.period !== 'all') list.push({
+        key: 'period', kind: 'period', value: state.period,
+        label: state.period === 'today' ? 'Sendt i dag' : 'Sendt inden for 7 dage'
+      });
+      if (state.ending) list.push({
+        key: 'ending', kind: 'ending', label: 'Slutter inden for 24 timer'
+      });
+      if (state.min > 0) list.push({
+        key: 'min', kind: 'min', label: 'Fra ' + kr(state.min) + ' kr'
+      });
+      if (state.max < Infinity) list.push({
+        key: 'max', kind: 'max', label: 'Til ' + kr(state.max) + ' kr'
+      });
+      return list;
+    }
+
+    function renderActive() {
+      const list = activeList();
+
+      if (activeBox) {
+        activeBox.innerHTML = '';
+        if (list.length) {
+          const label = document.createElement('span');
+          label.className = 'active-filters-label';
+          label.textContent = 'Filtre';
+          activeBox.appendChild(label);
+
+          list.forEach(item => {
+            const chip = document.createElement('span');
+            chip.className = 'filter-item';
+            chip.appendChild(document.createTextNode(item.label));
+
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.dataset.remove = item.key;
+            remove.setAttribute('aria-label', 'Fjern filteret ' + item.label);
+            remove.innerHTML = '<svg class="ic" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+            chip.appendChild(remove);
+            activeBox.appendChild(chip);
+          });
+
+          const clear = document.createElement('button');
+          clear.type = 'button';
+          clear.className = 'filter-clear';
+          clear.dataset.remove = 'all';
+          clear.textContent = 'Ryd alle';
+          activeBox.appendChild(clear);
+
+          activeBox.hidden = false;
+        } else {
+          activeBox.hidden = true;
+        }
+      }
+
+      if (toggle) {
+        const badge = $('.filter-count', toggle);
+        if (badge) {
+          badge.textContent = String(list.length);
+          badge.hidden = list.length === 0;
+        }
+      }
+    }
+
+    function apply(syncInputs) {
+      const now = Date.now() / 1000;
+      const periodSecs = { all: Infinity, today: 86400, week: 7 * 86400 }[state.period];
+      let visible = 0;
+
+      cards.forEach(card => {
+        const cat = card.dataset.cat;
+        const price = num(card, 'price');
+        const endsIn = num(card, 'endsin');
+        const shown =
+          (state.cats.size === 0 || state.cats.has(cat)) &&
+          (!isFinite(periodSecs) || (now - num(card, 'ts')) <= periodSecs) &&
+          price >= state.min && price <= state.max &&
+          (!state.ending || (endsIn > 0 && endsIn <= 86400));
+        if (shown) { card.removeAttribute('data-hidden'); visible++; }
+        else { card.setAttribute('data-hidden', '1'); }
+      });
+
+      if (counter) {
+        counter.textContent = visible === total
+          ? total + ' fund'
+          : visible + ' af ' + total + ' fund';
+      }
+      if (noResults) noResults.hidden = visible !== 0;
+
+      $$('.chip[data-cat]').forEach(chip => {
+        chip.setAttribute('aria-pressed', String(state.cats.has(chip.dataset.cat)));
+      });
+      $$('.chip[data-period]').forEach(chip => {
+        chip.setAttribute('aria-pressed', String(chip.dataset.period === state.period));
+      });
+      if (endingBtn) endingBtn.setAttribute('aria-pressed', String(state.ending));
+      $$('.sort-btn').forEach(btn => {
+        btn.setAttribute('aria-pressed', String(btn.dataset.sort === state.sort));
+      });
+
+      if (syncInputs) {
+        if (minInput) minInput.value = state.min > 0 ? String(state.min) : '';
+        if (maxInput) maxInput.value = isFinite(state.max) ? String(state.max) : '';
+      }
+
+      if (state.sort === 'newest') {
+        if (flat) { flat.hidden = true; flat.innerHTML = ''; }
+        groups.forEach(group => {
+          group.hidden = !$$('.card', group).some(c => !c.hasAttribute('data-hidden'));
+        });
+      } else {
+        groups.forEach(group => { group.hidden = true; });
+        if (flat) {
+          const shown = cards.filter(c => !c.hasAttribute('data-hidden')).slice().sort(compare);
+          flat.innerHTML = '';
+          shown.forEach(card => flat.appendChild(card.cloneNode(true)));
+          flat.hidden = false;
+        }
+      }
+
+      renderActive();
+    }
+
+    function reset() {
+      state.cats.clear();
+      state.period = 'all';
+      state.sort = 'newest';
+      state.min = 0;
+      state.max = Infinity;
+      state.ending = false;
+      apply(true);
+    }
+
+    if (toggle && panel) {
+      toggle.addEventListener('click', () => {
+        const open = panel.hidden;
+        panel.hidden = !open;
+        toggle.setAttribute('aria-expanded', String(open));
+      });
+    }
+
+    $$('.chip[data-cat]').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const cat = chip.dataset.cat;
+        if (state.cats.has(cat)) state.cats.delete(cat);
+        else state.cats.add(cat);
+        apply(false);
+      });
+    });
+
+    $$('.chip[data-period]').forEach(chip => {
+      chip.addEventListener('click', () => {
+        state.period = chip.dataset.period;
+        apply(false);
+      });
+    });
+
+    if (endingBtn) {
+      endingBtn.addEventListener('click', () => {
+        state.ending = !state.ending;
+        apply(false);
+      });
+    }
+
+    $$('.sort-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.sort = btn.dataset.sort;
+        apply(false);
+      });
+    });
+
+    if (minInput) {
+      minInput.addEventListener('input', () => {
+        state.min = parseInt(minInput.value, 10) || 0;
+        apply(false);
+      });
+    }
+    if (maxInput) {
+      maxInput.addEventListener('input', () => {
+        const parsed = parseInt(maxInput.value, 10);
+        state.max = isNaN(parsed) ? Infinity : parsed;
+        apply(false);
+      });
+    }
+
+    if (resetBtn) resetBtn.addEventListener('click', reset);
+
+    if (activeBox) {
+      activeBox.addEventListener('click', event => {
+        const btn = event.target.closest('[data-remove]');
+        if (!btn) return;
+        const key = btn.dataset.remove;
+        if (key === 'all') { reset(); return; }
+        if (key.indexOf('cat:') === 0) state.cats.delete(key.slice(4));
+        else if (key === 'period') state.period = 'all';
+        else if (key === 'ending') state.ending = false;
+        else if (key === 'min') state.min = 0;
+        else if (key === 'max') state.max = Infinity;
+        apply(true);
+      });
+    }
+
+    apply(true);
   }
 
-  function bindFeedback(btn) {
-    btn.addEventListener('click', event => {
+  /* ---- interesser: husk hvilke kategorier der var foldet ud -------------- */
+
+  function initInterestBlocks() {
+    const blocks = $$('details[data-cat-block]');
+    if (!blocks.length) return;
+
+    let open = [];
+    try {
+      open = JSON.parse(sessionStorage.getItem('interesser-aabne') || '[]');
+    } catch (_) {
+      open = [];
+    }
+
+    blocks.forEach(block => {
+      if (open.indexOf(block.dataset.catBlock) !== -1) block.open = true;
+      block.addEventListener('toggle', () => {
+        const now = blocks.filter(b => b.open).map(b => b.dataset.catBlock);
+        try {
+          sessionStorage.setItem('interesser-aabne', JSON.stringify(now));
+        } catch (_) { /* privat tilstand uden storage er helt fint */ }
+      });
+    });
+  }
+
+  /* ---- arkiv: vælg et filter og slippe for et ekstra klik ---------------- */
+
+  function initArchiveForm() {
+    $$('form[data-autosubmit] select').forEach(select => {
+      select.addEventListener('change', () => {
+        if (select.form) select.form.submit();
+      });
+    });
+  }
+
+  /* ---- '/'-genvej til søgefeltet ---------------------------------------- */
+
+  function initSearchShortcut() {
+    document.addEventListener('keydown', event => {
+      if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' ||
+                     target.tagName === 'SELECT' || target.isContentEditable)) return;
+      const field = $('input[data-search]');
+      if (!field) return;
       event.preventDefault();
-      event.stopPropagation();
-      sendFeedback(btn);
+      field.focus();
+      field.select();
     });
   }
 
-  function resetFilters() {
-    activeCats.clear();
-    activePeriod = 'all';
-    priceMin = 0;
-    priceMax = Infinity;
-    endingOnly = false;
-
-    document.querySelectorAll('.chip[data-cat]').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.chip[data-period]').forEach(b =>
-      b.classList.toggle('active', b.dataset.period === 'all'));
-    document.getElementById('ending-chip')?.classList.remove('active');
-
-    const min = document.getElementById('price-min');
-    const max = document.getElementById('price-max');
-    if (min) min.value = '';
-    if (max) max.value = '';
-    applyFilters();
-  }
-
-  document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('.chip[data-cat]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const cat = btn.dataset.cat;
-        if (activeCats.has(cat)) { activeCats.delete(cat); btn.classList.remove('active'); }
-        else { activeCats.add(cat); btn.classList.add('active'); }
-        applyFilters();
-      });
-    });
-
-    document.querySelectorAll('.chip[data-period]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        activePeriod = btn.dataset.period;
-        document.querySelectorAll('.chip[data-period]').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        applyFilters();
-      });
-    });
-
-    const ending = document.getElementById('ending-chip');
-    if (ending) ending.addEventListener('click', () => {
-      endingOnly = !endingOnly;
-      ending.classList.toggle('active', endingOnly);
-      applyFilters();
-    });
-
-    document.querySelectorAll('.sort-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        activeSort = btn.dataset.sort;
-        document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        applySort();
-      });
-    });
-
-    const min = document.getElementById('price-min');
-    const max = document.getElementById('price-max');
-    if (min) min.addEventListener('input', () => { priceMin = parseInt(min.value) || 0; applyFilters(); });
-    if (max) max.addEventListener('input', () => { priceMax = parseInt(max.value) || Infinity; applyFilters(); });
-
-    document.getElementById('reset-btn')?.addEventListener('click', resetFilters);
-    document.querySelectorAll('.fb-btn').forEach(bindFeedback);
-
-    applyFilters();
-  });
+  initFindPage();
+  initInterestBlocks();
+  initArchiveForm();
+  initSearchShortcut();
 })();

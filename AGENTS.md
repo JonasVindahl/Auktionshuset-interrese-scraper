@@ -67,6 +67,43 @@ koste et rigtigt fund — det er den ene fejl der er dyrere end støj.
 der ikke er notificeret før, og højst `max_per_run` pr. kørsel. Fund ud over
 loftet udskydes til næste kørsel; de sendes aldrig ufiltreret.
 
+## Web-UI
+
+**Ingen emoji i brugerrettede flader.** Ikoner er inline SVG fra
+`templates/_icons.html`. Kategoriernes `emoji`-felt i `interests.yml` læses
+ikke længere af skabelonerne, men feltet er urørt.
+
+**Alt visuelt er tokens i `static/app.css`.** Farver, radius og fonte ligger på
+`:root`, og kun værdierne skifter i mørk tilstand. De tre tekstniveauer
+`--text`, `--muted` og `--faint` er valgt så alle tre er over 4.5:1 på både
+`--surface` og `--raised`. Ændrer man en farve, skal kontrasten regnes efter.
+`--border-input` er den mørkere kant på formularfelter, og `--on-accent` er
+tekstfarven på accentbaggrunde. Hvid tekst på den lyse amber i mørk tilstand
+giver kun 2.4:1 og må ikke bruges.
+
+**Kontrakten mellem skabelon, CSS og `app.js` er id'er og data-attributter:**
+`#cards-container`, `#flat-list`, `#no-results`, `#visible-count`,
+`#filter-toggle`, `#filter-panel`, `#ending-chip`, `#price-min`,
+`#price-max`, `#reset-btn`, `#active-filters` samt `data-cat`, `data-ts`,
+`data-price`, `data-endsin`, `data-lot`, `data-feedback`, `data-action`,
+`data-lot-id`, `data-cat-key`, `data-period`, `data-sort`,
+`data-cat-block`, `data-autosubmit` og `data-search`. Ingen test dækker
+`app.js`, så et omdøbning ser grøn ud i CI og er død i browseren.
+
+**Sortering kloner, flytter ikke.** Ved anden sortering end 'nyeste' klones de
+synlige kort ind i `#flat-list`; originalerne bliver stående i deres
+datogrupper. Flytter man dem i stedet, forsvinder de fra grupperne når man
+skifter tilbage til 'nyeste'.
+
+**Progressiv afsløring er standarden.** Filtre, kategori-blokke, niveauer og
+tilføj-formularer ligger bag `<details>` og virker uden JavaScript. Alle
+arkivfiltre er stadig server-side via GET-formularen.
+
+**Kategori-etiketter er fælles for siderne.** `app.category_labels()` giver
+`key -> label` fra `interests.yml`, og `app.filter_chips()` bygger de
+fjernbare filtre på arkivsiden. Begge fejler blødt, hvis konfigurationen ikke
+kan læses.
+
 ## Testfilosofi
 
 `tests/corpus/match_expectations.jsonl` er projektets vigtigste artefakt.

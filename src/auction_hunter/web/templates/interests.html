@@ -1,77 +1,124 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 
 {% set hints = {
-  'strong': 'matcher alene — konkrete produkttyper',
+  'strong': 'matcher alene, en konkret vare',
   'weak':   'kræver to forskellige træffere',
   'brands': 'kræver en produkttype ved siden af',
   'exact':  'matcher kun som selvstændigt ord'
 } %}
 
+{% set ns = namespace(kw=0, cats=0) %}
+{% for cat in categories %}
+  {% set ns.cats = ns.cats + 1 %}
+  {% for lvl in levels %}{% set ns.kw = ns.kw + cat.levels[lvl]|length %}{% endfor %}
+{% endfor %}
+
+{% block title %}Interesser · Auktionshuset Hunter{% endblock %}
+
 {% block content %}
+<header class="page-head">
+  <h1>Interesser</h1>
+  <p class="page-meta">
+    <span>{{ ns.cats }} kategorier</span>
+    <span class="meta-sep">·</span><span>{{ ns.kw }} nøgleord</span>
+    <span class="meta-sep">·</span><span>{{ excludes|length }} udelukkelser</span>
+  </p>
+</header>
 
 {% if not editable %}
-<div class="banner err">
-  Konfigurationsfilen er skrivebeskyttet. I Docker er <code>./config</code> monteret
-  med <code>:ro</code> — fjern det fra web-servicen i <code>docker-compose.yml</code>
-  for at kunne redigere herfra.
-</div>
+<p class="banner is-warn" role="status">
+  {{ icon('alert', 15) }}
+  <span>Konfigurationsfilen er skrivebeskyttet, så profilen kan ikke redigeres herfra. I Docker er <code>./config</code> monteret med <code>:ro</code>. Fjern det fra web-servicen i <code>docker-compose.yml</code> for at redigere.</span>
+</p>
 {% endif %}
 
-<section>
-  <h2>Test en titel</h2>
-  <div class="panel panel-pad">
-    <form method="get" action="/interests" class="searchbox">
-      <input type="search" name="test" value="{{ test }}"
-             placeholder="Indsæt en lot-titel og se hvorfor den matcher eller ej">
-      <button class="primary" type="submit">Test</button>
+<details class="tester" {% if test %}open{% endif %}>
+  <summary class="btn is-quiet">{{ icon('search', 15) }} Test en titel mod profilen</summary>
+  <div class="tester-body">
+    <form method="get" action="/interests" class="search-form">
+      <div class="search-field">
+        {{ icon('search', 17) }}
+        <input type="search" name="test" value="{{ test }}" data-search
+               placeholder="Indsæt en lot-titel fra auktionen" aria-label="Lot-titel der skal testes">
+      </div>
+      <button class="btn is-primary" type="submit">Test</button>
     </form>
 
     {% if trace %}
-    <div class="trace" style="margin-top:14px">
-      <div class="verdict {% if trace.matched %}yes{% else %}no{% endif %}">
-        {% if trace.matched %}✓ Matcher{% else %}✕ Matcher ikke{% endif %}
-      </div>
-      <div style="margin-top:6px">{{ trace.as_text() }}</div>
-      {% if explanation %}
-      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);white-space:pre-wrap">{{ explanation }}</div>
-      {% endif %}
+    <div class="trace">
+      <p class="trace-verdict {{ 'is-yes' if trace.matched else 'is-no' }}">
+        {% if trace.matched %}{{ icon('check', 15) }} Matcher{% else %}{{ icon('close', 15) }} Matcher ikke{% endif %}
+      </p>
+      <p class="trace-text">{{ trace.as_text() }}</p>
+      {% if explanation %}<p class="trace-explain">{{ explanation }}</p>{% endif %}
     </div>
+    {% else %}
+    <p class="hint">Feltet kører den samme matcher som agenten bruger, og viser hvilke nøgleord der blev ramt eller manglede.</p>
     {% endif %}
   </div>
-</section>
+</details>
 
-<section>
-  <h2>Kategorier <span class="count">{{ categories|length }}</span></h2>
-
-  {% for cat in categories %}
-  <div class="cat-card">
-    <div class="cat-head">
-      <h3>{{ cat.emoji }} {{ cat.label }} <span style="color:var(--faint);font-weight:400;font-size:.8rem">{{ cat.key }}</span></h3>
-      {% if editable %}
-      <form method="post" action="/interests/price">
-        <input type="hidden" name="category" value="{{ cat.key }}">
-        <span class="filter-label">Prisloft</span>
-        <input type="number" name="max_price" min="1" value="{{ cat.max_price }}">
-        <span class="filter-label">kr</span>
-        <button class="ghost" type="submit">Gem</button>
-      </form>
-      {% else %}
-      <span class="filter-label">Prisloft {{ cat.max_price|kr }}</span>
-      {% endif %}
+<details class="legend">
+  <summary class="btn is-quiet">{{ icon('info', 15) }} Sådan læses niveauerne</summary>
+  <dl class="legend-list">
+    {% for level in levels %}
+    <div class="legend-item">
+      <dt>{{ level }}</dt>
+      <dd>{{ hints[level] }}</dd>
     </div>
+    {% endfor %}
+  </dl>
+  <p class="hint">Et mærke må aldrig matche alene. <code>brands</code> kræver derfor et ord ved siden af, og <code>exclude</code> vinder over alt andet.</p>
+</details>
+
+{% for cat in categories %}
+<details class="cat-block" data-cat-block="{{ cat.key }}">
+  <summary class="cat-head">
+    <span class="cat-title">
+      <span class="cat-name" data-cat="{{ cat.key }}">{{ cat.label }}</span>
+      <span class="cat-key">{{ cat.key }}</span>
+    </span>
+    <span class="cat-meta">{{ cat.levels.values()|map('length')|sum }} nøgleord · prisloft {{ cat.max_price|kr }}</span>
+    {{ icon('chevron', 15, 'cat-chevron') }}
+  </summary>
+
+  <div class="cat-body">
+    {% if editable %}
+    <form method="post" action="/interests/price" class="price-form">
+      <input type="hidden" name="category" value="{{ cat.key }}">
+      <label for="price-{{ cat.key }}">Prisloft i kroner</label>
+      <input id="price-{{ cat.key }}" type="number" name="max_price" min="1" value="{{ cat.max_price }}">
+      <button class="btn is-quiet" type="submit">Gem</button>
+    </form>
+    {% endif %}
 
     {% for level in levels %}
     <div class="level">
       <div class="level-head">
         <span class="level-name">{{ level }}</span>
-        <span class="level-hint">{{ hints[level] }}</span>
-        <span class="count" style="margin-left:auto">{{ cat.levels[level]|length }}</span>
+        <span class="count">{{ cat.levels[level]|length }}</span>
+        {% if editable %}
+        <details class="kw-add">
+          <summary class="icon-btn" title="Tilføj nøgleord til {{ cat.key }}.{{ level }}"
+                  aria-label="Tilføj nøgleord til {{ cat.key }}.{{ level }}">{{ icon('plus', 14) }}</summary>
+          <form method="post" action="/interests/keyword" class="add-form">
+            <input type="hidden" name="action" value="add">
+            <input type="hidden" name="category" value="{{ cat.key }}">
+            <input type="hidden" name="level" value="{{ level }}">
+            <input type="text" name="keyword" placeholder="Nyt nøgleord" required maxlength="80"
+                   aria-label="Nyt nøgleord i {{ cat.key }}.{{ level }}">
+            <button class="btn is-primary" type="submit">Tilføj</button>
+          </form>
+        </details>
+        {% endif %}
       </div>
 
       {% if cat.levels[level] %}
-      <div class="kw-list">
+      <ul class="kw-list">
         {% for keyword in cat.levels[level] %}
-        <span class="kw">{{ keyword }}
+        <li class="kw">
+          <span class="kw-text">{{ keyword }}</span>
           {% if editable %}
           <form method="post" action="/interests/keyword"
                 onsubmit="return confirm('Fjern {{ keyword }} fra {{ cat.key }}.{{ level }}?')">
@@ -79,69 +126,61 @@
             <input type="hidden" name="category" value="{{ cat.key }}">
             <input type="hidden" name="level" value="{{ level }}">
             <input type="hidden" name="keyword" value="{{ keyword }}">
-            <button type="submit" title="Fjern">×</button>
+            <button type="submit" class="kw-remove" title="Fjern {{ keyword }} fra {{ level }}"
+                    aria-label="Fjern {{ keyword }} fra {{ cat.key }}.{{ level }}">{{ icon('close', 12) }}</button>
           </form>
           {% endif %}
-        </span>
+        </li>
         {% endfor %}
-      </div>
-      {% endif %}
-
-      {% if editable %}
-      <form method="post" action="/interests/keyword" class="add-form">
-        <input type="hidden" name="action" value="add">
-        <input type="hidden" name="category" value="{{ cat.key }}">
-        <input type="hidden" name="level" value="{{ level }}">
-        <input type="text" name="keyword" placeholder="Tilføj nøgleord til {{ level }}" required maxlength="80">
-        <button class="ghost" type="submit">Tilføj</button>
-      </form>
+      </ul>
+      {% else %}
+      <p class="kw-empty">Ingen nøgleord på dette niveau.</p>
       {% endif %}
     </div>
     {% endfor %}
   </div>
-  {% endfor %}
+</details>
+{% else %}
+<p class="empty">Ingen kategorier kunne læses fra <code>config/interests.yml</code>.</p>
+{% endfor %}
+
+<section class="section">
+  <h2 class="section-title">Udelukkelser <span class="count">{{ excludes|length }}</span></h2>
+  <p class="section-note">Udelukkelser vinder over alt andet. Et lot med et af disse ord bliver aldrig et fund, uanset hvilken kategori der ellers ville ramme.</p>
+
+  {% if excludes %}
+  <ul class="kw-list">
+    {% for keyword in excludes %}
+    <li class="kw">
+      <span class="kw-text">{{ keyword }}</span>
+      {% if editable %}
+      <form method="post" action="/interests/exclude"
+            onsubmit="return confirm('Fjern udelukkelsen af {{ keyword }}?')">
+        <input type="hidden" name="action" value="remove">
+        <input type="hidden" name="keyword" value="{{ keyword }}">
+        <button type="submit" class="kw-remove" title="Fjern udelukkelsen af {{ keyword }}"
+                aria-label="Fjern udelukkelsen af {{ keyword }}">{{ icon('close', 12) }}</button>
+      </form>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="kw-empty">Ingen udelukkelser.</p>
+  {% endif %}
+
+  {% if editable %}
+  <form method="post" action="/interests/exclude" class="add-form add-form-inline">
+    <input type="hidden" name="action" value="add">
+    <input type="text" name="keyword" placeholder="Nyt ord der skal udelukkes" required maxlength="80"
+           aria-label="Nyt ord der skal udelukkes">
+    <button class="btn is-quiet" type="submit">Udeluk</button>
+  </form>
+  {% endif %}
 </section>
 
-<section>
-  <h2>Udelukkelser <span class="count">{{ excludes|length }}</span></h2>
-  <div class="panel panel-pad">
-    <p style="color:var(--muted);font-size:.83rem;margin-bottom:12px">
-      Udelukkelser vinder over alt andet. Et lot med et af disse ord bliver aldrig et fund,
-      uanset hvilken kategori der ellers ville ramme.
-    </p>
-
-    <div class="kw-list">
-      {% for keyword in excludes %}
-      <span class="kw">{{ keyword }}
-        {% if editable %}
-        <form method="post" action="/interests/exclude"
-              onsubmit="return confirm('Fjern udelukkelsen af {{ keyword }}?')">
-          <input type="hidden" name="action" value="remove">
-          <input type="hidden" name="keyword" value="{{ keyword }}">
-          <button type="submit" title="Fjern">×</button>
-        </form>
-        {% endif %}
-      </span>
-      {% endfor %}
-    </div>
-
-    {% if editable %}
-    <form method="post" action="/interests/exclude" class="add-form" style="margin-top:12px">
-      <input type="hidden" name="action" value="add">
-      <input type="text" name="keyword" placeholder="Nyt ord der skal udelukkes" required maxlength="80">
-      <button class="ghost" type="submit">Udeluk</button>
-    </form>
-    {% endif %}
-  </div>
-</section>
-
-<section>
-  <h2>Om filen</h2>
-  <div class="panel panel-pad" style="color:var(--muted);font-size:.85rem;line-height:1.7">
-    Ændringer herfra skrives linje for linje i <code>config/interests.yml</code>, så
-    kommentarerne i filen bevares — de bærer beslutningerne bag profilen.
-    Agenten genlæser filen ved hver kørsel, så en ændring slår igennem
-    inden for 15 minutter uden genstart.
-  </div>
-</section>
+<p class="hint hint-foot">
+  Ændringer skrives linje for linje i <code>config/interests.yml</code>, så kommentarerne i filen bevares.
+  Agenten genlæser filen ved hver kørsel, så en ændring slår igennem inden for 15 minutter uden genstart.
+</p>
 {% endblock %}

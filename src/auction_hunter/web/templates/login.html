@@ -1,3 +1,4 @@
+{% from "_icons.html" import icon %}
 <!doctype html>
 <html lang="da">
 <head>
@@ -5,22 +6,27 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <meta name="robots" content="noindex,nofollow">
-<title>Log ind — Auktionshuset Hunter</title>
+<title>Log ind · Auktionshuset Hunter</title>
 <link rel="stylesheet" href="/static/app.css">
 </head>
-<body>
-<div class="login-wrap">
-  <h1>🏷 Auktionshuset Hunter</h1>
-  <p>Dashboardet kan redigere interesseprofilen, så det kræver adgangskode.</p>
+<body class="login-body">
+<main class="login-wrap">
+  <a class="brand brand-login" href="/">
+    {{ icon('mark', 20, 'brand-mark') }}
+    <span class="brand-name">Auktionshuset <em>Hunter</em></span>
+  </a>
+  <h1>Log ind</h1>
+  <p class="login-note">Dashboardet kan redigere interesseprofilen, så det kræver adgangskode.</p>
 
-  {% if error %}<div class="banner err">{{ error }}</div>{% endif %}
+  {% if error %}<p class="banner is-err" role="alert">{{ icon('alert', 15) }}<span>{{ error }}</span></p>{% endif %}
 
-  <form method="post" action="/login">
+  <form method="post" action="/login" class="login-form">
     <input type="hidden" name="next" value="{{ next }}">
-    <input type="password" name="password" placeholder="Adgangskode" autofocus required
+    <label class="sr-only" for="password">Adgangskode</label>
+    <input id="password" type="password" name="password" placeholder="Adgangskode" autofocus required
            autocomplete="current-password">
-    <button class="primary" type="submit">Log ind</button>
+    <button class="btn is-primary" type="submit">Log ind</button>
   </form>
-</div>
+</main>
 </body>
 </html>

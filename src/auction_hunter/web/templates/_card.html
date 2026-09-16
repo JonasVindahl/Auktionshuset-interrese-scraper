@@ -1,6 +1,10 @@
-{#- Ét fund. Rækken er forberedt i Python (se app.prepare_rows). -#}
-{% macro card(row) -%}
-<div class="card"
+{% from "_icons.html" import icon %}
+{#- Ét lot-kort. Rækken er forberedt i Python (se rows.prepare).
+
+    Informationsrækkefølgen er bevidst: titel, dernæst pris og tid tilbage
+    (det man beslutter ud fra), og først derefter de stille metadata. -#}
+{% macro card(row, show_seen=False) -%}
+<article class="card"
      data-cat="{{ row.category }}"
      data-ts="{{ row.ts }}"
      data-price="{{ row.cost }}"
@@ -8,45 +12,46 @@
      data-lot="{{ row.lot_id }}"
      data-feedback="{{ row.feedback }}">
   <div class="thumb">
+    <span class="thumb-fallback">{{ icon('image', 20) }}</span>
     {%- if row.image %}
-    <img src="{{ row.image }}" alt="" loading="lazy" referrerpolicy="no-referrer"
-         onerror="this.parentNode.innerHTML='&lt;div class=thumb-empty&gt;📦&lt;/div&gt;'">
-    {%- else %}
-    <div class="thumb-empty">📦</div>
+    <img src="{{ row.image }}" alt="" loading="lazy" decoding="async"
+         referrerpolicy="no-referrer" onerror="this.classList.add('is-broken')">
     {%- endif %}
   </div>
-  <div class="body">
-    {% if row.url %}<a href="{{ row.url }}" target="_blank" rel="noopener">{% endif %}
-      <div class="title">{{ row.title }}</div>
-    {% if row.url %}</a>{% endif %}
 
-    <div class="price-row">
+  <div class="card-main">
+    <h3 class="card-title">
+      {%- if row.url %}<a href="{{ row.url }}" target="_blank" rel="noopener">{{ row.title }}</a>
+      {%- else %}{{ row.title }}{%- endif %}
+    </h3>
+
+    <p class="card-facts">
       <span class="price">{{ row.price }}</span>
-      {%- if row.rise %}<span class="price-rise">+{{ row.rise }} siden første bud</span>{% endif %}
-      {%- if row.is_estimate %}<span class="price-note">estimat</span>{% endif %}
-    </div>
+      {%- if row.rise %}<span class="price-rise" title="Stigning siden første registrerede bud">+{{ row.rise }}</span>{% endif %}
+      {%- if row.is_estimate %}<span class="price-note" title="Auktionshusets eget estimat, ikke et bud">estimat</span>{% endif %}
+      {%- if row.time_left %}<span class="time {{ row.time_css }}">{{ icon('clock', 13) }}<span>{{ row.time_left }}</span></span>{% endif %}
+      {%- if row.category %}<span class="tag-cat" data-cat="{{ row.category }}" title="{{ row.category }}">{{ category_labels.get(row.category, row.category) }}</span>{% endif %}
+      {%- if row.lot_number %}<span class="meta-item">Lot {{ row.lot_number }}</span>{% endif %}
+      {%- if show_seen and row.seen_rel %}<span class="meta-item" title="{{ row.seen_full }}">set {{ row.seen_rel }}</span>{% endif %}
+      {%- if row.was_match is defined and not row.was_match %}<span class="meta-item tag-miss">ikke et fund</span>{% endif %}
+    </p>
 
-    <div class="meta">
-      {% if row.category %}<span class="cat-tag">{{ row.category }}</span>{% endif %}
-      {% if row.time_left %}<span class="time-left {{ row.time_css }}">{{ row.time_left }}</span>{% endif %}
-      {% if row.lot_number %}<span>Lot {{ row.lot_number }}</span>{% endif %}
-      {% if row.seen_rel %}<span title="{{ row.seen_full }}">{{ row.seen_rel }}</span>{% endif %}
-      {% if row.was_match is defined and not row.was_match %}<span class="tag-miss">ikke et fund</span>{% endif %}
-    </div>
+    {% if row.auction %}<p class="card-sub" title="{{ row.auction }}">{{ row.auction }}</p>{% endif %}
 
-    {% if row.auction %}<div class="auction-name" title="{{ row.auction }}">{{ row.auction }}</div>{% endif %}
-
-    <div class="fb-row">
-      {%- for action, label, tip in [
-        ('skip', '✕ Ikke interes.', 'Ikke interesseret'),
-        ('bid', '📌 Budt', 'Jeg har budt på det'),
-        ('bought', '✅ Købt', 'Jeg købte det')
+    <div class="card-actions">
+      {%- for action, label, tip, ic in [
+        ('skip', 'Ikke interesseret', 'Ikke interesseret', 'ban'),
+        ('bid', 'Budt', 'Jeg har budt på det', 'bookmark'),
+        ('bought', 'Købt', 'Jeg købte det', 'check')
       ] %}
-      <button class="fb-btn {% if row.feedback == action %}active{% endif %}"
-              data-action="{{ action }}" data-lot-id="{{ row.lot_id }}"
-              data-cat-key="{{ row.category }}" title="{{ tip }}">{{ label }}</button>
+      <button type="button" class="fb-btn" data-action="{{ action }}"
+              data-lot-id="{{ row.lot_id }}" data-cat-key="{{ row.category }}"
+              title="{{ tip }}" aria-label="{{ tip }}"
+              aria-pressed="{{ 'true' if row.feedback == action else 'false' }}">
+        {{ icon(ic, 13) }}<span>{{ label }}</span>
+      </button>
       {%- endfor %}
     </div>
   </div>
-</div>
+</article>
 {%- endmacro %}
