@@ -182,15 +182,18 @@ def ask(
     query, degraded = build_filter(client, question)
     result = search(conn, query)
 
+    # Værdierne formateres, så de kan læses som dansk og ikke som feltnavne.
     filter_used = {
-        k: v for k, v in {
-            "søgeord": query.text,
-            "min_pris": query.min_price,
-            "maks_pris": query.max_price,
-            "status": query.status if query.status != "alle" else None,
-            "kun": query.matched if query.matched != "alle" else None,
-            "dage_tilbage": query.days_back,
-        }.items() if v
+        key: value for key, value in {
+            "søgeord": f'"{query.text}"' if query.text else None,
+            "min_pris": kr(query.min_price) if query.min_price else None,
+            "maks_pris": kr(query.max_price) if query.max_price else None,
+            "status": {"aktive": "kun aktive",
+                       "afsluttede": "kun afsluttede"}.get(query.status),
+            "kun": {"kun_fund": "kun fund",
+                    "kun_ikke_fund": "kun ikke-fund"}.get(query.matched),
+            "dage_tilbage": f"{query.days_back} dage" if query.days_back else None,
+        }.items() if value
     }
 
     if client is None:

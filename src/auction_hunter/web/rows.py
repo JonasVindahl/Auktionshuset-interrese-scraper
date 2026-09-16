@@ -14,6 +14,7 @@ from typing import Any
 from urllib.parse import quote
 
 from .. import images
+from ..fees import DEFAULT_OPENING_BID, estimate as price_estimate
 from .formatting import date_label, kr, rel_past, time_left, timestamp
 
 
@@ -26,6 +27,7 @@ def prepare(
     *,
     seen_field: str = "sent_at",
     db_path: str | None = None,
+    opening_bid: int = DEFAULT_OPENING_BID,
 ) -> dict[str, Any]:
     """Én række klar til skabelonen.
 
@@ -33,9 +35,25 @@ def prepare(
     et, peges der på det i stedet for auktionshusets adresse — den er død så
     snart lot'et er afsluttet.
     """
-    cost = _get(row, "cost") or _get(row, "last_total") or _get(row, "last_bid") or 0
     first_bid = _get(row, "first_bid")
     last_bid = _get(row, "last_bid")
+    # Prisen er den reelle pris inkl. salær og moms. Har lot'et ingen bud, er
+    # 0 kr ikke meningsfuldt: saa vises hvad det koster at vaere den foerste.
+    # Det er samme model som agenten bruger, saa tallene ikke kan divergere.
+    price = price_estimate(
+        last_bid,
+        auction_title=_get(row, "auction_title") or "",
+        opening_bid=opening_bid,
+    )
+    if price.current_total is not None:
+        # Den aktuelle total vinder over den pris der blev sendt ved notifikation.
+        cost = _get(row, "last_total") or _get(row, "cost") or price.current_total
+        price_text = kr(cost)
+        price_label = ""
+    else:
+        cost = price.entry_cost
+        price_text = kr(cost)
+        price_label = "åbner ved"
     ends_at = _get(row, "ends_at")
     seen = _get(row, seen_field) or _get(row, "first_seen")
 
@@ -64,11 +82,10 @@ def prepare(
         "feedback": _get(row, "feedback_action") or "",
         "image": image,
         "cost": cost,
-        # En tankestreg på et kort ser ud som en manglende værdi. Et lot uden
-        # bud har en mening: der er ikke afgivet noget endnu.
-        "price": kr(cost) if cost else "Ingen bud",
+        "price": price_text,
+        "price_label": price_label,
         "rise": rise,
-        "is_estimate": bool(cost) and not last_bid,
+        "is_estimate": price.is_estimate,
         "ts": timestamp(seen),
         "seen_rel": seen_rel,
         "seen_full": seen_full,
@@ -85,8 +102,12 @@ def prepare_all(
     *,
     seen_field: str = "sent_at",
     db_path: str | None = None,
+    opening_bid: int = DEFAULT_OPENING_BID,
 ) -> list[dict]:
-    return [prepare(row, seen_field=seen_field, db_path=db_path) for row in rows]
+    return [
+        prepare(row, seen_field=seen_field, db_path=db_path, opening_bid=opening_bid)
+        for row in rows
+    ]
 
 
 def group_by_date(rows: list[dict]) -> list[tuple[str, list[dict]]]:

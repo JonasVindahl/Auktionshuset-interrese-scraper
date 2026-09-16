@@ -48,7 +48,9 @@
 {% if rows %}
 <section class="section">
   <h2 class="section-title">Fundne lots <span class="count">{{ rows|length }}</span></h2>
-  {% for row in rows %}{{ card(row, show_seen=True, index=loop.index0) }}{% endfor %}
+  <div class="lot-grid">
+    {% for row in rows %}{{ card(row, show_seen=True, index=loop.index0) }}{% endfor %}
+  </div>
 </section>
 {% else %}
 <p class="empty">Ingen lots i arkivet matcher spørgsmålet.</p>

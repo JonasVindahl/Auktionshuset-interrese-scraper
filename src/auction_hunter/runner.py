@@ -230,10 +230,14 @@ def run_once(
             scraper._polite_pause()
 
         stats.lots = len(all_lots)
-        store.record_lots(all_lots)
 
         matches = sort_matches(match_all(all_lots, config, opening_bid=config.opening_bid))
         stats.matches = len(matches)
+
+        # Totalen inkl. salær og moms gemmes sammen med lot'et. Uden den står
+        # last_total tomt, og så regner pris-filtre og statistik på hammerprisen
+        # mens kortet viser den reelle pris. To tal for den samme vare.
+        store.record_lots(all_lots, {m.lot.lot_id: m.cost for m in matches})
 
         new_matches: list[Match] = store.filter_new(matches)
         stats.new_matches = len(new_matches)

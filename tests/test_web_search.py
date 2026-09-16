@@ -81,9 +81,11 @@ def test_filter_kun_fund(conn):
 
 
 def test_prisfilter_nedre_graense(conn):
+    # Filtret bruger samme pris som kortet viser: totalen inkl. salær og moms.
     result = search(conn, SearchQuery(min_price=1000))
     assert all(
-        (row["last_total"] or row["last_bid"] or 0) >= 1000 for row in result.rows
+        (row["cost"] or row["last_total"] or row["last_bid"] or 0) >= 1000
+        for row in result.rows
     )
 
 
@@ -117,7 +119,7 @@ def test_kategorifilter(conn):
 
 def test_sortering_efter_pris(conn):
     result = search(conn, SearchQuery(sort="pris_ned"))
-    prices = [(r["last_total"] or r["last_bid"] or 0) for r in result.rows]
+    prices = [(r["cost"] or r["last_total"] or r["last_bid"] or 0) for r in result.rows]
     assert prices == sorted(prices, reverse=True)
 
 

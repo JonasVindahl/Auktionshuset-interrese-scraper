@@ -8,20 +8,17 @@
   'exact':  'matcher kun som selvstændigt ord'
 } %}
 
-{% set ns = namespace(kw=0, cats=0) %}
-{% for cat in categories %}
-  {% set ns.cats = ns.cats + 1 %}
-  {% for lvl in levels %}{% set ns.kw = ns.kw + cat.levels[lvl]|length %}{% endfor %}
-{% endfor %}
+{% set ns = namespace(kw=0) %}
+{% for cat in categories %}{% for lvl in levels %}{% set ns.kw = ns.kw + cat.levels[lvl]|length %}{% endfor %}{% endfor %}
 
 {% block title %}Interesser · Auktionshuset Hunter{% endblock %}
-{% block page_class %}is-narrow{% endblock %}
+{% block page_class %}is-wide{% endblock %}
 
 {% block content %}
 <header class="page-head">
   <h1>Interesser</h1>
   <p class="page-meta">
-    <span>{{ ns.cats }} kategorier</span>
+    <span>{{ categories|length }} kategorier</span>
     <span class="meta-sep">·</span><span>{{ ns.kw }} nøgleord</span>
     <span class="meta-sep">·</span><span>{{ excludes|length }} udelukkelser</span>
   </p>
@@ -38,6 +35,7 @@
   <summary class="btn is-quiet">{{ icon('search', 15) }} Test en titel mod profilen</summary>
   <div class="tester-body">
     <form method="get" action="/interests" class="search-form">
+      <input type="hidden" name="cat" value="{{ selected.key if selected else '' }}">
       <div class="search-field">
         {{ icon('search', 17) }}
         <input type="search" name="test" value="{{ test }}" data-search
@@ -60,89 +58,107 @@
   </div>
 </details>
 
-<details class="legend">
-  <summary class="btn is-quiet">{{ icon('info', 15) }} Sådan læses niveauerne</summary>
-  <dl class="legend-list">
-    {% for level in levels %}
-    <div class="legend-item">
-      <dt>{{ level }}</dt>
-      <dd>{{ hints[level] }}</dd>
-    </div>
+{% if categories %}
+<div class="editor">
+  <nav class="cat-list" aria-label="Kategorier">
+    {% for cat in categories %}
+    <a href="/interests?cat={{ cat.key }}" class="cat-item" data-cat="{{ cat.key }}"
+       {% if selected and cat.key == selected.key %}aria-current="page"{% endif %}>
+      <span class="cat-item-name">{{ cat.label }}</span>
+      <span class="cat-item-meta">
+        {{ cat.levels.values()|map('length')|sum }} nøgleord
+        <span class="cat-item-price">{{ cat.max_price|kr }}</span>
+      </span>
+    </a>
     {% endfor %}
-  </dl>
-  <p class="hint">Et mærke må aldrig matche alene. <code>brands</code> kræver derfor et ord ved siden af, og <code>exclude</code> vinder over alt andet.</p>
-</details>
+  </nav>
 
-{% for cat in categories %}
-<details class="cat-block" data-cat-block="{{ cat.key }}">
-  <summary class="cat-head">
-    <span class="cat-title" title="{{ cat.key }}">
-      <span class="cat-name" data-cat="{{ cat.key }}">{{ cat.label }}</span>
-    </span>
-    <span class="cat-meta">{{ cat.levels.values()|map('length')|sum }} nøgleord<span class="cat-meta-price"> · prisloft {{ cat.max_price|kr }}</span></span>
-    {{ icon('chevron', 15, 'cat-chevron') }}
-  </summary>
+  {% if selected %}
+  <section class="cat-editor" data-cat="{{ selected.key }}">
+    <header class="cat-editor-head">
+      <div>
+        <h2>{{ selected.label }}</h2>
+        <p class="cat-editor-key">{{ selected.key }}</p>
+      </div>
+      {% if editable %}
+      <form method="post" action="/interests/price" class="price-form">
+        <input type="hidden" name="category" value="{{ selected.key }}">
+        <label for="price-{{ selected.key }}">Prisloft</label>
+        <input id="price-{{ selected.key }}" type="number" name="max_price"
+               min="1" value="{{ selected.max_price }}">
+        <span class="filter-unit">kr</span>
+        <button class="btn is-quiet" type="submit">Gem</button>
+      </form>
+      {% endif %}
+    </header>
 
-  <div class="cat-body">
-    {% if editable %}
-    <form method="post" action="/interests/price" class="price-form">
-      <input type="hidden" name="category" value="{{ cat.key }}">
-      <label for="price-{{ cat.key }}">Prisloft i kroner</label>
-      <input id="price-{{ cat.key }}" type="number" name="max_price" min="1" value="{{ cat.max_price }}">
-      <button class="btn is-quiet" type="submit">Gem</button>
-    </form>
-    {% endif %}
+    <div class="levels">
+      {% for level in levels %}
+      <div class="level">
+        <div class="level-head">
+          <span class="level-name">{{ level }}</span>
+          <span class="level-hint">{{ hints[level] }}</span>
+          <span class="count">{{ selected.levels[level]|length }}</span>
+          {% if editable %}
+          <details class="kw-add">
+            <summary class="icon-btn" title="Tilføj nøgleord til {{ selected.key }}.{{ level }}"
+                    aria-label="Tilføj nøgleord til {{ selected.key }}.{{ level }}">{{ icon('plus', 14) }}</summary>
+            <form method="post" action="/interests/keyword" class="add-form">
+              <input type="hidden" name="action" value="add">
+              <input type="hidden" name="category" value="{{ selected.key }}">
+              <input type="hidden" name="level" value="{{ level }}">
+              <input type="text" name="keyword" placeholder="Nyt nøgleord" required maxlength="80"
+                     aria-label="Nyt nøgleord i {{ selected.key }}.{{ level }}">
+              <button class="btn is-primary" type="submit">Tilføj</button>
+            </form>
+          </details>
+          {% endif %}
+        </div>
 
-    {% for level in levels %}
-    <div class="level">
-      <div class="level-head">
-        <span class="level-name">{{ level }}</span>
-        <span class="count">{{ cat.levels[level]|length }}</span>
-        {% if editable %}
-        <details class="kw-add">
-          <summary class="icon-btn" title="Tilføj nøgleord til {{ cat.key }}.{{ level }}"
-                  aria-label="Tilføj nøgleord til {{ cat.key }}.{{ level }}">{{ icon('plus', 14) }}</summary>
-          <form method="post" action="/interests/keyword" class="add-form">
-            <input type="hidden" name="action" value="add">
-            <input type="hidden" name="category" value="{{ cat.key }}">
-            <input type="hidden" name="level" value="{{ level }}">
-            <input type="text" name="keyword" placeholder="Nyt nøgleord" required maxlength="80"
-                   aria-label="Nyt nøgleord i {{ cat.key }}.{{ level }}">
-            <button class="btn is-primary" type="submit">Tilføj</button>
-          </form>
-        </details>
+        {% if selected.levels[level] %}
+        <ul class="kw-list">
+          {% for keyword in selected.levels[level] %}
+          <li class="kw">
+            <span class="kw-text">{{ keyword }}</span>
+            {% if editable %}
+            <form method="post" action="/interests/keyword"
+                  data-confirm="Fjern {{ keyword }} fra {{ selected.key }}.{{ level }}?">
+              <input type="hidden" name="action" value="remove">
+              <input type="hidden" name="category" value="{{ selected.key }}">
+              <input type="hidden" name="level" value="{{ level }}">
+              <input type="hidden" name="keyword" value="{{ keyword }}">
+              <button type="submit" class="kw-remove" title="Fjern {{ keyword }} fra {{ level }}"
+                      aria-label="Fjern {{ keyword }} fra {{ selected.key }}.{{ level }}">{{ icon('close', 12) }}</button>
+            </form>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="kw-empty">Ingen nøgleord på dette niveau.</p>
         {% endif %}
       </div>
-
-      {% if cat.levels[level] %}
-      <ul class="kw-list">
-        {% for keyword in cat.levels[level] %}
-        <li class="kw">
-          <span class="kw-text">{{ keyword }}</span>
-          {% if editable %}
-          <form method="post" action="/interests/keyword"
-                data-confirm="Fjern {{ keyword }} fra {{ cat.key }}.{{ level }}?">
-            <input type="hidden" name="action" value="remove">
-            <input type="hidden" name="category" value="{{ cat.key }}">
-            <input type="hidden" name="level" value="{{ level }}">
-            <input type="hidden" name="keyword" value="{{ keyword }}">
-            <button type="submit" class="kw-remove" title="Fjern {{ keyword }} fra {{ level }}"
-                    aria-label="Fjern {{ keyword }} fra {{ cat.key }}.{{ level }}">{{ icon('close', 12) }}</button>
-          </form>
-          {% endif %}
-        </li>
-        {% endfor %}
-      </ul>
-      {% else %}
-      <p class="kw-empty">Ingen nøgleord på dette niveau.</p>
-      {% endif %}
+      {% endfor %}
     </div>
-    {% endfor %}
-  </div>
-</details>
+
+    <details class="legend">
+      <summary class="btn is-quiet">{{ icon('info', 15) }} Sådan læses niveauerne</summary>
+      <dl class="legend-list">
+        {% for level in levels %}
+        <div class="legend-item">
+          <dt>{{ level }}</dt>
+          <dd>{{ hints[level] }}</dd>
+        </div>
+        {% endfor %}
+      </dl>
+      <p class="hint">Et mærke må aldrig matche alene. <code>brands</code> kræver derfor et ord ved siden af, og <code>exclude</code> vinder over alt andet.</p>
+    </details>
+  </section>
+  {% endif %}
+</div>
 {% else %}
 <p class="empty">Ingen kategorier kunne læses fra <code>config/interests.yml</code>.</p>
-{% endfor %}
+{% endif %}
 
 <section class="section">
   <h2 class="section-title">Udelukkelser <span class="count">{{ excludes|length }}</span></h2>
@@ -158,6 +174,7 @@
             data-confirm="Fjern udelukkelsen af {{ keyword }}?">
         <input type="hidden" name="action" value="remove">
         <input type="hidden" name="keyword" value="{{ keyword }}">
+        <input type="hidden" name="cat" value="{{ selected.key if selected else '' }}">
         <button type="submit" class="kw-remove" title="Fjern udelukkelsen af {{ keyword }}"
                 aria-label="Fjern udelukkelsen af {{ keyword }}">{{ icon('close', 12) }}</button>
       </form>
@@ -172,6 +189,7 @@
   {% if editable %}
   <form method="post" action="/interests/exclude" class="add-form add-form-inline">
     <input type="hidden" name="action" value="add">
+    <input type="hidden" name="cat" value="{{ selected.key if selected else '' }}">
     <input type="text" name="keyword" placeholder="Nyt ord der skal udelukkes" required maxlength="80"
            aria-label="Nyt ord der skal udelukkes">
     <button class="btn is-quiet" type="submit">Udeluk</button>

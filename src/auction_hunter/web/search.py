@@ -52,6 +52,7 @@ class SearchQuery:
     status: str = "alle"
     matched: str = "alle"
     category: str = ""
+    auction: str = ""
     days_back: int | None = None
     sort: str = "relevans"
     page: int = 1
@@ -68,6 +69,7 @@ class SearchQuery:
             status=self.status if self.status in STATUS_CHOICES else "alle",
             matched=self.matched if self.matched in MATCH_CHOICES else "alle",
             category=self.category.strip()[:64],
+            auction=self.auction.strip()[:160],
             days_back=_positive(self.days_back, MAX_DAYS_BACK),
             sort=self.sort if self.sort in SORT_CHOICES else "relevans",
             page=max(1, self.page),
@@ -78,7 +80,8 @@ class SearchQuery:
     def is_empty(self) -> bool:
         return not any((
             self.text, self.min_price, self.max_price, self.category,
-            self.days_back, self.status != "alle", self.matched != "alle",
+            self.auction, self.days_back,
+            self.status != "alle", self.matched != "alle",
         ))
 
 
@@ -156,16 +159,24 @@ def search(conn: sqlite3.Connection, query: SearchQuery) -> SearchResult:
         where.append("lots_fts MATCH ?")
         params.append(fts)
 
+    # Samme pris som kortet viser: den reelle total inkl. salær og moms.
+    pris = "COALESCE(n.cost, l.last_total, l.last_bid, 0)"
     if query.min_price is not None:
-        where.append("COALESCE(l.last_total, l.last_bid, 0) >= ?")
+        where.append(f"{pris} >= ?")
         params.append(query.min_price)
     if query.max_price is not None:
-        where.append("COALESCE(l.last_total, l.last_bid, 0) <= ?")
+        where.append(f"{pris} <= ?")
         params.append(query.max_price)
 
     if query.category:
         where.append("n.category_key = ?")
         params.append(query.category)
+
+    # "Hvor kommer det fra" er auktionen. Auktionshusets auktionstitler bærer
+    # både sælger og sted, fx "Auktion Køge".
+    if query.auction:
+        where.append("l.auction_title = ?")
+        params.append(query.auction)
 
     if query.matched == "kun_fund":
         where.append("n.lot_id IS NOT NULL")
@@ -190,8 +201,8 @@ def search(conn: sqlite3.Connection, query: SearchQuery) -> SearchResult:
         "relevans": "fts.rank" if fts else "l.last_seen DESC",
         "nyeste": "l.first_seen DESC",
         "slutter": "l.ends_at IS NULL, l.ends_at ASC",
-        "pris_op": "COALESCE(l.last_total, l.last_bid, 0) ASC",
-        "pris_ned": "COALESCE(l.last_total, l.last_bid, 0) DESC",
+        "pris_op": "COALESCE(n.cost, l.last_total, l.last_bid, 0) ASC",
+        "pris_ned": "COALESCE(n.cost, l.last_total, l.last_bid, 0) DESC",
     }[query.sort]
 
     select = f"""

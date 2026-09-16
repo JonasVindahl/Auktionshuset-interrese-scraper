@@ -4,6 +4,7 @@
 {% set ending_soon = rows|selectattr('ends_in', 'gt', 0)|selectattr('ends_in', 'le', 86400)|list|length %}
 
 {% block title %}{{ heading }} · Auktionshuset Hunter{% endblock %}
+{% block page_class %}is-wide{% endblock %}
 
 {% block content %}
 <header class="page-head">
@@ -107,6 +108,20 @@
         {%- else %}{{ review.title }}{%- endif %}
       </h3>
       {% if review.reason %}<p class="review-reason">{{ review.reason }}</p>{% endif %}
+      {# Køen havde ingen handlinger: den kunne ses men ikke afgøres. #}
+      <div class="card-actions review-actions">
+        {%- for action, label, tip, ic in [
+          ('skip', 'Afvis', 'Ikke interesseret i dette lot', 'ban'),
+          ('bid', 'Budt', 'Jeg har budt på det', 'bookmark'),
+          ('bought', 'Købt', 'Jeg købte det', 'check')
+        ] %}
+        <button type="button" class="fb-btn" data-action="{{ action }}"
+                data-lot-id="{{ review.lot_id }}" data-cat-key="{{ review.category_key }}"
+                title="{{ tip }}" aria-label="{{ label }}" aria-pressed="false">
+          {{ icon(ic, 14) }}<span>{{ label }}</span>
+        </button>
+        {%- endfor %}
+      </div>
     </article>
     {% endfor %}
   </div>

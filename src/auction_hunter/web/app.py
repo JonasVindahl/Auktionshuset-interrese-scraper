@@ -28,6 +28,8 @@ from starlette.status import HTTP_303_SEE_OTHER
 from .. import images as images_mod
 from ..classifier import OpenAICompatibleClient
 from ..config import DEFAULT_CONFIG_PATH, ConfigError, load_config
+from ..fees import DEFAULT_OPENING_BID, is_vat_exempt
+from ..textmatch import find_keywords
 from ..secrets import SecretError, get_secret
 from . import auth, chat as chat_mod, queries, rows as rows_mod, search as search_mod
 from .formatting import date_label, kr, rel_past, time_left, timestamp
@@ -42,6 +44,7 @@ DEFAULT_DB = "data/auction_hunter.db"
 NAV = (
     ("/", "Fund"),
     ("/expired", "Udløbet"),
+    ("/mine", "Mine"),
     ("/archive", "Arkiv"),
     ("/interests", "Interesser"),
     ("/chat", "Assistent"),
@@ -114,17 +117,15 @@ def llm_client() -> OpenAICompatibleClient | None:
     )
 
 
-# Kategorietiketterne ændrer sig kun når filen gør, og de slås op ved hvert
-# sidekald. Derfor caches de på filens mtime og størrelse.
-_label_cache: dict[str, Any] = {"key": None, "labels": {}}
+# Konfigurationen ændrer sig kun når filen gør, og den slås op ved hvert
+# sidekald. Derfor caches de få værdier webben skal bruge, på mtime og størrelse.
+_config_cache: dict[str, Any] = {
+    "key": None, "labels": {}, "opening_bid": DEFAULT_OPENING_BID,
+    "brands": (), "brand_exact": (),
+}
 
 
-def category_labels() -> dict[str, str]:
-    """Kategorinøgler oversat til de læsbare etiketter fra interesseprofilen.
-
-    Et tomt kort er et gyldigt svar: siden skal kunne vises, selvom
-    konfigurationsfilen mangler eller er i stykker.
-    """
+def _config_values() -> tuple[dict[str, str], int]:
     path = config_path()
     try:
         stat = os.stat(path or DEFAULT_CONFIG_PATH)
@@ -132,18 +133,54 @@ def category_labels() -> dict[str, str]:
     except OSError:
         key = (str(path), None, None)
 
-    if _label_cache["key"] == key:
-        return dict(_label_cache["labels"])
+    if _config_cache["key"] == key:
+        return dict(_config_cache["labels"]), int(_config_cache["opening_bid"])
 
     try:
         config = load_config(path)
         labels = {category.key: category.label for category in config.categories}
+        opening = config.opening_bid
+        brands = tuple(dict.fromkeys(
+            kw for category in config.categories for kw in category.brands
+        ))
+        brand_exact = tuple(dict.fromkeys(
+            kw for category in config.categories for kw in category.exact
+        ))
     except ConfigError:
-        labels = {}
+        # Et tomt kort er et gyldigt svar: siden skal kunne vises, selvom filen
+        # mangler eller er i stykker.
+        labels, opening, brands, brand_exact = {}, DEFAULT_OPENING_BID, (), ()
 
-    _label_cache["key"] = key
-    _label_cache["labels"] = labels
-    return labels
+    _config_cache.update(
+        key=key, labels=labels, opening_bid=opening,
+        brands=brands, brand_exact=brand_exact,
+    )
+    return labels, opening
+
+
+def category_labels() -> dict[str, str]:
+    """Kategorinøgler oversat til de læsbare etiketter fra interesseprofilen."""
+    return _config_values()[0]
+
+
+def opening_bid() -> int:
+    """Første bud-grænsen, brugt til at vise hvad et lot uden bud koster."""
+    return _config_values()[1]
+
+
+def brands_in(title: str) -> tuple[str, ...]:
+    """Hvilke kendte mærker nævnes i titlen?
+
+    Svarer på "hvilket firma" uden at hente noget ekstra fra auktionshuset:
+    mærkelisterne i interesseprofilen er allerede kuraterede, og et mærke i en
+    titel er det tætteste på en producent vi får uden at læse lot-siden.
+    """
+    _config_values()          # sørger for at cachen er fyldt
+    return find_keywords(
+        title,
+        tuple(_config_cache["brands"]),
+        exact=tuple(_config_cache["brand_exact"]),
+    )
 
 
 def archive_url(query: search_mod.SearchQuery, **changes: Any) -> str:
@@ -161,6 +198,7 @@ def archive_url(query: search_mod.SearchQuery, **changes: Any) -> str:
         "status": query.status if query.status != "alle" else "",
         "matched": query.matched if query.matched != "alle" else "",
         "category": query.category,
+        "auction": query.auction,
         "days_back": query.days_back,
         "sort": query.sort if query.sort != "relevans" else "",
     }
@@ -220,6 +258,11 @@ def filter_chips(query: search_mod.SearchQuery) -> list[dict[str, str]]:
         chips.append({
             "label": labels.get(query.category, query.category),
             "url": archive_url(query, category=""),
+        })
+    if query.auction:
+        chips.append({
+            "label": f"fra {query.auction}",
+            "url": archive_url(query, auction=""),
         })
     if query.days_back:
         unit = "dag" if query.days_back == 1 else "dage"
@@ -306,6 +349,8 @@ def create_app() -> FastAPI:
     templates.env.filters["timestamp"] = timestamp
     templates.env.globals["time_left"] = time_left
     templates.env.globals["rel_past"] = rel_past
+    templates.env.globals["brands_in"] = brands_in
+    templates.env.globals["is_vat_exempt"] = is_vat_exempt
     templates.env.globals["nav"] = NAV
 
     def page(request: Request, name: str, **context: Any) -> HTMLResponse:
@@ -386,7 +431,7 @@ def create_app() -> FastAPI:
         finally:
             conn.close()
         categories = sorted({r["category_key"] for r in active if r["category_key"]})
-        prepared = rows_mod.prepare_all(active, db_path=db_path())
+        prepared = rows_mod.prepare_all(active, db_path=db_path(), opening_bid=opening_bid())
         return page(
             request, "finds.html",
             rows=prepared, groups=rows_mod.group_by_date(prepared),
@@ -405,7 +450,7 @@ def create_app() -> FastAPI:
         finally:
             conn.close()
         categories = sorted({r["category_key"] for r in gone if r["category_key"]})
-        prepared = rows_mod.prepare_all(gone, db_path=db_path())
+        prepared = rows_mod.prepare_all(gone, db_path=db_path(), opening_bid=opening_bid())
         return page(
             request, "finds.html",
             rows=prepared, groups=rows_mod.group_by_date(prepared),
@@ -414,6 +459,34 @@ def create_app() -> FastAPI:
             empty=f"Ingen lots er sluttet inden for de seneste "
                   f"{queries.EXPIRED_WINDOW_HOURS} timer.",
             show_ending=False, show_period=False,
+        )
+
+    # -- mine markeringer --------------------------------------------------
+
+    @app.get("/mine", response_class=HTMLResponse)
+    def mine(request: Request, _: None = Depends(require_login)) -> HTMLResponse:
+        """Det du selv har markeret. Webben skriver til feedback, og her vises
+        den igen sammen med hvad lot'ene koster."""
+        conn = ro_conn(db_path())
+        try:
+            rows = queries.marked_lots(conn)
+        finally:
+            conn.close()
+
+        prepared = rows_mod.prepare_all(
+            rows, seen_field="created_at", db_path=db_path(), opening_bid=opening_bid()
+        )
+        groups = [
+            (key, label, [r for r in prepared if r["feedback"] == key])
+            for key, label in (("bought", "Købt"), ("bid", "Budt"), ("skip", "Afvist"))
+        ]
+        groups = [(key, label, items) for key, label, items in groups if items]
+        committed = [r for r in prepared if r["feedback"] in ("bid", "bought")]
+        total = sum(r["cost"] or 0 for r in committed)
+
+        return page(
+            request, "mine.html",
+            groups=groups, count=len(prepared), committed=len(committed), total=total,
         )
 
     @app.post("/feedback")
@@ -461,6 +534,7 @@ def create_app() -> FastAPI:
             ))
             stats = search_mod.archive_stats(conn)
             categories = search_mod.categories_seen(conn)
+            auctions = queries.auctions_seen(conn)
         finally:
             conn.close()
 
@@ -482,10 +556,11 @@ def create_app() -> FastAPI:
         return page(
             request, "archive.html",
             result=result,
-            rows=rows_mod.prepare_all(result.rows, seen_field="first_seen", db_path=db_path()),
+            rows=rows_mod.prepare_all(result.rows, seen_field="first_seen", db_path=db_path(), opening_bid=opening_bid()),
             archive=stats, categories=categories, page_url=page_url,
             filters=filter_chips(result.query),
             status_tabs=status_tabs(result.query),
+            auctions=auctions,
             match_choices=search_mod.MATCH_CHOICES,
             sort_choices=search_mod.SORT_CHOICES,
         )
@@ -502,6 +577,7 @@ def create_app() -> FastAPI:
         message: str = "",
         error: str = "",
         test: str = "",
+        cat: str = "",
         _: None = Depends(require_login),
     ) -> HTMLResponse:
         try:
@@ -531,17 +607,30 @@ def create_app() -> FastAPI:
             except ConfigError as exc:
                 error = error or f"Konfigurationen kunne ikke læses: {exc}"
 
+        # To-punkts-editoren viser én kategori ad gangen. Uden et gyldigt valg
+        # falder den tilbage til den første, så siden aldrig står tom.
+        selected = next(
+            (c for c in categories if c["key"] == cat.strip()),
+            categories[0] if categories else None,
+        )
+
         return page(
             request, "interests.html",
-            categories=categories, excludes=excludes, levels=LEVELS,
+            categories=categories, selected=selected,
+            excludes=excludes, levels=LEVELS,
             message=message, error=error or read_error,
             test=test, trace=trace, explanation=explanation,
             editable=os.access(config_path() or "config/interests.yml", os.W_OK),
         )
 
-    def _interests_redirect(message: str = "", error: str = "") -> RedirectResponse:
+    def _interests_redirect(
+        message: str = "", error: str = "", cat: str = ""
+    ) -> RedirectResponse:
+        """Tilbage til samme kategori, så en rettelse ikke flytter brugeren."""
         from urllib.parse import urlencode
-        params = {k: v for k, v in (("message", message), ("error", error)) if v}
+        params = {k: v for k, v in (
+            ("message", message), ("error", error), ("cat", cat)
+        ) if v}
         suffix = ("?" + urlencode(params)) if params else ""
         return RedirectResponse(f"/interests{suffix}", HTTP_303_SEE_OTHER)
 
@@ -567,14 +656,15 @@ def create_app() -> FastAPI:
                 return _interests_redirect(error="Ukendt handling.")
             if changed:
                 handle.save()
-            return _interests_redirect(message=note)
+            return _interests_redirect(message=note, cat=category)
         except (EditError, OSError) as exc:
-            return _interests_redirect(error=str(exc))
+            return _interests_redirect(error=str(exc), cat=category)
 
     @app.post("/interests/exclude")
     def interests_exclude(
         action: str = Form(...),
         keyword: str = Form(...),
+        cat: str = Form(""),
         _: None = Depends(require_login),
     ) -> RedirectResponse:
         try:
@@ -591,9 +681,9 @@ def create_app() -> FastAPI:
                 return _interests_redirect(error="Ukendt handling.")
             if changed:
                 handle.save()
-            return _interests_redirect(message=note)
+            return _interests_redirect(message=note, cat=cat.strip())
         except (EditError, OSError) as exc:
-            return _interests_redirect(error=str(exc))
+            return _interests_redirect(error=str(exc), cat=cat.strip())
 
     @app.post("/interests/price")
     def interests_price(
@@ -613,10 +703,10 @@ def create_app() -> FastAPI:
             handle.set_scalar(("categories", category, "max_price"), limit)
             handle.save()
             return _interests_redirect(
-                message=f"Prisloftet for {category} er nu {kr(limit)}."
+                message=f"Prisloftet for {category} er nu {kr(limit)}.", cat=category
             )
         except (EditError, OSError) as exc:
-            return _interests_redirect(error=str(exc))
+            return _interests_redirect(error=str(exc), cat=category)
 
     # -- assistent ---------------------------------------------------------
 
@@ -639,7 +729,7 @@ def create_app() -> FastAPI:
         return page(
             request, "chat.html",
             question=q, answer=answer,
-            rows=rows_mod.prepare_all(answer.rows, seen_field="first_seen", db_path=db_path()) if answer else [],
+            rows=rows_mod.prepare_all(answer.rows, seen_field="first_seen", db_path=db_path(), opening_bid=opening_bid()) if answer else [],
             has_key=client is not None,
         )
 
@@ -655,6 +745,8 @@ def create_app() -> FastAPI:
                 "runs": queries.run_history(conn, limit=25),
                 "risers": queries.price_risers(conn),
                 "archive": search_mod.archive_stats(conn),
+                "prices": queries.price_summary(conn),
+                "bands": queries.price_bands(conn),
             }
         finally:
             conn.close()

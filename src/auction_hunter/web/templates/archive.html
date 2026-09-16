@@ -76,6 +76,16 @@
       </div>
 
       <div class="field">
+        <label for="f-auction">Auktion</label>
+        <select id="f-auction" name="auction" title="Hvor lot'et kommer fra">
+          <option value="">Alle</option>
+          {% for a in auctions %}
+          <option value="{{ a.title }}" {% if q.auction == a.title %}selected{% endif %}>{{ a.title }} ({{ a.n }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field">
         <label for="f-days">Set inden for</label>
         <select id="f-days" name="days_back">
           <option value="">Altid</option>
@@ -116,7 +126,9 @@
 
 <section class="section">
   {% if result.rows %}
-    {% for row in rows %}{{ card(row, show_seen=True, index=loop.index0) }}{% endfor %}
+    <div class="lot-grid">
+      {% for row in rows %}{{ card(row, show_seen=True, index=loop.index0) }}{% endfor %}
+    </div>
 
     {% if result.pages > 1 %}
     <nav class="pager" aria-label="Sider">

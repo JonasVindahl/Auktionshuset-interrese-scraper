@@ -10,150 +10,141 @@
   <p class="page-meta">Hvad agenten har set, hvad der blev fund, og hvordan profilen rammer.</p>
 </header>
 
-<section class="section">
-  <h2 class="section-title">Arkivet</h2>
-  <dl class="metrics">
-    <div class="metric"><dt>Lots set i alt</dt><dd>{{ archive.total }}</dd></div>
-    <div class="metric"><dt>Blev til fund</dt><dd class="is-accent">{{ archive.matched }}</dd></div>
-    <div class="metric"><dt>Uden for profilen</dt><dd>{{ archive.unmatched }}</dd></div>
-    <div class="metric"><dt>Rammeprocent</dt><dd>{% if archive.total %}{{ (100 * archive.matched / archive.total)|pct }} %{% else %}–{% endif %}</dd></div>
-    {% if images.count %}
-    <div class="metric"><dt>Cachede billeder</dt><dd>{{ images.count }} <span class="metric-unit">{{ images.mb }} MB</span></dd></div>
-    {% endif %}
-  </dl>
+<dl class="metrics">
+  <div class="metric"><dt>Lots set i alt</dt><dd>{{ archive.total }}</dd></div>
+  <div class="metric"><dt>Blev til fund</dt><dd class="is-accent">{{ archive.matched }}</dd></div>
+  <div class="metric"><dt>Uden for profilen</dt><dd>{{ archive.unmatched }}</dd></div>
+  <div class="metric">
+    <dt>Rammeprocent</dt>
+    <dd>{% if archive.total %}{{ (100 * archive.matched / archive.total)|pct }} %{% else %}–{% endif %}</dd>
+  </div>
   {% if images.count %}
-  <p class="hint">Billeder hentes kun for fund, og kun mens lot'et er aktivt, for auktionshuset fjerner dem når auktionen lukker. De ryddes automatisk efter 180 dage.</p>
+  <div class="metric"><dt>Cachede billeder</dt>
+    <dd>{{ images.count }} <span class="metric-unit">{{ images.mb }} MB</span></dd></div>
   {% endif %}
-</section>
+</dl>
 
 <section class="section">
-  <h2 class="section-title">Pr. kategori</h2>
-  <div class="panel">
-    <div class="table-wrap">
-      <table class="stack">
-        <thead>
-          <tr>
-            <th scope="col">Kategori</th>
-            <th scope="col" class="num">Sendt</th>
-            <th scope="col" class="num">Købt</th>
-            <th scope="col" class="num">Budt</th>
-            <th scope="col" class="num">Afvist</th>
-            <th scope="col" class="col-meter">Støjandel</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in by_category %}
-          <tr>
-            <td>
-              <span class="cat-label" data-cat="{{ row.category }}"
-                    title="{{ row.category }}">{{ category_labels.get(row.category, row.category) }}</span>
-            </td>
-            {# 0 er et svar. Tankestregen er til "ved ikke". #}
-            <td class="num" data-label="Sendt">{{ row.sent }}</td>
-            <td class="num" data-label="Købt">{{ row.bought }}</td>
-            <td class="num" data-label="Budt">{{ row.bid }}</td>
-            <td class="num" data-label="Afvist">{{ row.skipped }}</td>
-            <td data-label="Støjandel">
-              {% if row.skipped %}
-              <span class="meter-row">
-                <span class="meter{% if row.noise_pct > 60 %} is-high{% elif row.noise_pct > 30 %} is-mid{% endif %}">
-                  <span style="width:{{ row.noise_pct }}%"></span>
-                </span>
-                <span class="meter-value">{{ row.noise_pct }}%</span>
-              </span>
-              {% else %}
-              <span class="muted-note">ikke vurderet</span>
-              {% endif %}
-            </td>
-          </tr>
-          {% else %}
-          <tr><td colspan="6" class="empty">Ingen fund sendt endnu.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
+  <h2 class="section-title">Hvilke kategorier fanger noget</h2>
   {% if by_category %}
-  <p class="hint">Støjandelen er hvor stor en del af kategoriens fund du har markeret ikke interesseret. En høj andel betyder at kategoriens nøgleord er for brede.</p>
+  {% set top = by_category|map(attribute='sent')|max %}
+  <div class="panel bars">
+    {% for row in by_category %}
+    <div class="bar-row" data-cat="{{ row.category }}">
+      <span class="bar-label" title="{{ row.category }}">{{ category_labels.get(row.category, row.category) }}</span>
+      <span class="bar-track">
+        <span class="bar-fill" style="width:{{ (100 * row.sent / top)|round(1) }}%"></span>
+      </span>
+      <span class="bar-value">{{ row.sent }}</span>
+      <span class="bar-note">
+        {%- set pris = prices|selectattr('category', 'equalto', row.category)|first -%}
+        {%- if pris and pris.gns -%}
+          <span class="bar-pct" title="Gennemsnitlig reel pris inkl. salær og moms">gns. {{ pris.gns|kr }}</span>
+        {%- endif -%}
+        {%- if row.skipped -%}
+          <span class="meter{% if row.noise_pct > 60 %} is-high{% elif row.noise_pct > 30 %} is-mid{% endif %}">
+            <span style="width:{{ row.noise_pct }}%"></span>
+          </span>
+          <span class="bar-pct">{{ row.noise_pct }} % afvist</span>
+        {%- elif not (pris and pris.gns) -%}
+          ikke vurderet
+        {%- endif -%}
+      </span>
+    </div>
+    {% endfor %}
+  </div>
+  <p class="hint"><strong>Støjandel</strong> er hvor stor en del af kategoriens fund du har
+    markeret ikke interesseret. En høj andel betyder at nøgleordene er for brede.</p>
+  {% else %}
+  <p class="empty">Ingen fund sendt endnu.</p>
   {% endif %}
 </section>
 
-{% if feedback %}
 <section class="section">
-  <h2 class="section-title">Dine markeringer</h2>
-  <dl class="metrics">
-    <div class="metric"><dt>Købt</dt><dd class="is-accent">{{ feedback.get('bought', 0) }}</dd></div>
-    <div class="metric"><dt>Budt</dt><dd>{{ feedback.get('bid', 0) }}</dd></div>
-    <div class="metric"><dt>Afvist</dt><dd>{{ feedback.get('skip', 0) }}</dd></div>
-  </dl>
-  <p class="hint">Markeringerne er træningsdata til AI-trinnet. <a href="/export/feedback.csv">Hent dem som CSV</a>.</p>
-</section>
-{% endif %}
-
-{% if risers %}
-<section class="section">
-  <h2 class="section-title">Største prisstigninger</h2>
-  <div class="panel">
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr><th scope="col">Lot</th><th scope="col" class="num">Første bud</th><th scope="col" class="num">Nu</th><th scope="col" class="num">Stigning</th></tr>
-        </thead>
-        <tbody>
-          {% for row in risers %}
-          <tr>
-            <td>
-              {% if row.url %}<a href="{{ row.url }}" target="_blank" rel="noopener">{{ row.title[:70] }}</a>
-              {% else %}{{ row.title[:70] }}{% endif %}
-            </td>
-            <td class="num">{{ row.first_bid|kr }}</td>
-            <td class="num">{{ row.last_bid|kr }}</td>
-            <td class="num is-urgent">+{{ (row.last_bid - row.first_bid)|kr }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+  <h2 class="section-title">Hvad fundene koster</h2>
+  <p class="section-note">Reel pris inkl. salær og moms, altså det man faktisk betaler.
+    Et lot uden bud har ingen pris endnu og tælles derfor ikke med.</p>
+  {% if bands and bands|sum(attribute='n') %}
+  {% set top_band = bands|map(attribute='n')|max %}
+  {% set band_total = bands|sum(attribute='n') %}
+  <div class="panel bars">
+    {% for band in bands %}
+    <div class="bar-row is-price">
+      <span class="bar-label">{{ band.label }}</span>
+      <span class="bar-track">
+        <span class="bar-fill is-neutral" style="width:{{ (100 * band.n / top_band)|round(1) if top_band else 0 }}%"></span>
+      </span>
+      <span class="bar-value">{{ band.n }}</span>
+      <span class="bar-note">{{ (100 * band.n / band_total)|round }} % af fundene</span>
     </div>
+    {% endfor %}
   </div>
+  {% else %}
+  <p class="empty">Ingen fund med en pris endnu.</p>
+  {% endif %}
 </section>
-{% endif %}
 
 <section class="section">
   <h2 class="section-title">Seneste kørsler</h2>
-  <div class="panel">
-    <div class="table-wrap">
-      <table class="stack">
-        <thead>
-          <tr>
-            <th scope="col">Tidspunkt</th>
-            <th scope="col" class="num">Auktioner</th>
-            <th scope="col" class="num">Lots</th>
-            <th scope="col" class="num">Fund</th>
-            <th scope="col" class="num">Nye</th>
-            <th scope="col">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for run in runs %}
-          {% set rel, full = rel_past(run.finished_at) %}
-          <tr>
-            <td title="{{ full }}">{{ rel }}</td>
-            <td class="num" data-label="Auktioner">{{ run.auctions }}</td>
-            <td class="num" data-label="Lots">{{ run.lots }}</td>
-            <td class="num" data-label="Fund">{{ run.matches }}</td>
-            <td class="num" data-label="Nye">{{ run.new_matches or '–' }}</td>
-            <td data-label="Status">
-              {% if run.error %}<span class="status is-err" title="{{ run.error }}">{{ icon('alert', 13) }} fejl</span>
-              {% elif run.lots == 0 %}<span class="status is-warn">{{ icon('alert', 13) }} ingen lots</span>
-              {% else %}<span class="status is-ok">{{ icon('check', 13) }} ok</span>{% endif %}
-            </td>
-          </tr>
-          {% else %}
-          <tr><td colspan="6" class="empty">Ingen kørsler registreret endnu.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
+  {% if runs %}
+  {% set top_lots = runs|map(attribute='lots')|max %}
+  <ol class="runs">
+    {% for run in runs %}
+    {% set rel, full = rel_past(run.finished_at) %}
+    <li class="run">
+      <span class="run-time" title="{{ full }}">{{ rel }}</span>
+      <span class="run-bar">
+        <span class="run-fill{% if run.error %} is-err{% elif run.lots == 0 %} is-warn{% endif %}"
+              style="width:{{ (100 * run.lots / top_lots)|round(1) if top_lots else 0 }}%"></span>
+      </span>
+      <span class="run-numbers">
+        <span><strong>{{ run.new_matches or 0 }}</strong> nye</span>
+        <span>{{ run.matches }} fund</span>
+        <span>{{ run.lots }} lots</span>
+      </span>
+      {% if run.error %}<span class="status is-err" title="{{ run.error }}">{{ icon('alert', 13) }} fejl</span>
+      {% elif run.lots == 0 %}<span class="status is-warn">{{ icon('alert', 13) }} ingen lots</span>
+      {% else %}<span class="status is-ok">{{ icon('check', 13) }} ok</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="empty">Ingen kørsler registreret endnu.</p>
+  {% endif %}
 </section>
+
+<div class="split">
+  <section class="section">
+    <h2 class="section-title">Dine markeringer</h2>
+    {% if feedback %}
+    <dl class="metrics is-compact">
+      <div class="metric"><dt>Købt</dt><dd class="is-accent">{{ feedback.get('bought', 0) }}</dd></div>
+      <div class="metric"><dt>Budt</dt><dd>{{ feedback.get('bid', 0) }}</dd></div>
+      <div class="metric"><dt>Afvist</dt><dd>{{ feedback.get('skip', 0) }}</dd></div>
+    </dl>
+    <p class="hint">Træningsdata til AI-trinnet.
+      <a href="/export/feedback.csv">Hent dem som CSV</a>.</p>
+    {% else %}
+    <p class="empty">Ingen markeringer endnu.</p>
+    {% endif %}
+  </section>
+
+  {% if risers %}
+  <section class="section">
+    <h2 class="section-title">Største prisstigninger</h2>
+    <ol class="risers">
+      {% for row in risers[:6] %}
+      <li class="riser">
+        <span class="riser-title">
+          {% if row.url %}<a href="{{ row.url }}" target="_blank" rel="noopener">{{ row.title[:64] }}</a>
+          {% else %}{{ row.title[:64] }}{% endif %}
+        </span>
+        <span class="riser-now">{{ row.last_bid|kr }}</span>
+        <span class="riser-rise">+{{ (row.last_bid - row.first_bid)|kr }}</span>
+      </li>
+      {% endfor %}
+    </ol>
+  </section>
+  {% endif %}
+</div>
 {% endblock %}

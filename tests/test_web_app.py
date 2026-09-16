@@ -43,7 +43,7 @@ def locked_client(sample_db, sample_config, monkeypatch):
 # -- alle sider svarer -----------------------------------------------------
 
 @pytest.mark.parametrize("path", [
-    "/", "/expired", "/archive", "/interests", "/chat", "/stats",
+    "/", "/expired", "/mine", "/archive", "/interests", "/chat", "/stats",
     "/healthz", "/export/feedback.csv",
 ])
 def test_siden_svarer(client, path):
