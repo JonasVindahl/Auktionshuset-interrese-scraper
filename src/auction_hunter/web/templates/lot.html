@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+
+{% block title %}{{ row.title[:60] }} · Auktionshuset Hunter{% endblock %}
+{% block page_class %}is-wide{% endblock %}
+
+{% block content %}
+<p class="crumb"><a href="/">{{ icon('arrow-left', 14) }} Alle fund</a></p>
+
+<header class="page-head">
+  <h1>{{ row.title }}</h1>
+  <p class="page-meta">
+    {% if row.category %}<span class="tag-cat" data-cat="{{ row.category }}" title="{{ row.category }}">{{ category_labels.get(row.category, row.category) }}</span>{% endif %}
+    {%- if row.lot_number %}<span class="meta-item">Lot {{ row.lot_number }}</span>{% endif %}
+    {%- if row.auction %}<span class="meta-item">· {{ row.auction }}</span>{% endif %}
+    {%- if row.time_left %}<span class="meta-item">· {{ row.time_left }}</span>{% endif %}
+    {%- if row.seen_rel %}<span class="meta-item">· set {{ row.seen_rel }}</span>{% endif %}
+  </p>
+</header>
+
+<div class="lot-page">
+  <div class="lot-page-media">
+    <div class="thumb is-large">
+      <span class="thumb-fallback">{{ icon('image', 34) }}</span>
+      {%- if row.image %}
+      <img src="{{ row.image }}" alt="" decoding="async" referrerpolicy="no-referrer">
+      {%- endif %}
+    </div>
+    <div class="card-actions lot-page-actions">
+      {%- for action, label, tip, ic in [
+        ('skip', 'Afvis', 'Ikke interesseret i dette lot', 'ban'),
+        ('watch', 'Følg', 'Hold øje med dette lot', 'eye'),
+        ('bid', 'Budt', 'Jeg har budt på det', 'bookmark'),
+        ('bought', 'Købt', 'Jeg købte det', 'check')
+      ] %}
+      <button type="button" class="fb-btn" data-action="{{ action }}"
+              data-lot-id="{{ row.lot_id }}" data-cat-key="{{ row.category }}"
+              title="{{ tip }}" aria-label="{{ label }}"
+              aria-pressed="{{ 'true' if row.feedback == action else 'false' }}">
+        {{ icon(ic, 15) }}<span>{{ label }}</span>
+      </button>
+      {%- endfor %}
+    </div>
+    {% if row.url %}
+    <a class="btn is-quiet lot-page-link" href="{{ row.url }}" target="_blank" rel="noopener">
+      {{ icon('external', 15) }} Åbn på auktionshuset
+    </a>
+    {% endif %}
+  </div>
+
+  <div class="lot-page-facts">
+    <dl class="metrics is-compact">
+      <div class="metric">
+        <dt>{{ 'Reel pris' if not row.price_label else 'Åbner ved' }}</dt>
+        <dd class="is-accent">{{ row.price }}</dd>
+      </div>
+      <div class="metric"><dt>Bud</dt><dd>{{ row.bid_text }}</dd></div>
+      <div class="metric"><dt>Hammerslag</dt><dd class="is-small">{{ row.ends_at_text or '–' }}</dd></div>
+    </dl>
+    {% if row.flags %}
+    <h2 class="section-title">Stand</h2>
+    <p class="flag-row">
+      {%- for flag in row.flags %}
+      <span class="tag-flag{% if flag in ('defekt', 'reservedele') %} is-serious{% endif %}">{{ FLAG_LABELS.get(flag, flag) }}</span>
+      {%- endfor %}
+    </p>
+    {% endif %}
+    {% if row.details %}
+    <h2 class="section-title">Fra lot-siden</h2>
+    <blockquote class="details-text">{{ row.details }}</blockquote>
+    {% endif %}
+
+    {% if row.is_estimate %}
+    <p class="hint">Der er ikke budt på lot'et endnu. Beløbet er hvad første bud
+      koster inkl. salær og moms med et åbningsbud på {{ 0|kr }}.</p>
+    {% endif %}
+
+    {% if row.series and row.series|length > 1 %}
+    <h2 class="section-title">Prisforløb</h2>
+    {%- set lo = row.series|min %}
+    {%- set hi = row.series|max %}
+    {%- set span = (hi - lo) if hi > lo else 1 %}
+    <div class="panel spark-large">
+      <svg viewBox="0 0 300 70" preserveAspectRatio="none" role="img"
+           aria-label="Prisforløb over {{ row.series|length }} observationer">
+        <polyline fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linejoin="round" stroke-linecap="round"
+                  points="{% for v in row.series %}{{ (loop.index0 / (row.series|length - 1) * 296 + 2)|round(1) }},{{ (66 - (v - lo) / span * 58)|round(1) }}{% if not loop.last %} {% endif %}{% endfor %}"/>
+      </svg>
+      <p class="spark-legend">
+        <span>{{ row.series[0]|kr }}</span>
+        <span>{{ row.series|length }} observationer</span>
+        <span>{{ row.series[-1]|kr }}</span>
+      </p>
+    </div>
+    {% endif %}
+  </div>
+
+  <aside class="lot-page-comps">
+    <h2 class="section-title">Lignende salg <span class="count">{{ comps.count }}</span></h2>
+    {% if comps.count %}
+    <div class="panel comps">
+      <div class="comp-summary">
+        <div><dt>Typisk</dt><dd>{{ comps.median|kr }}</dd></div>
+        <div><dt>Laveste</dt><dd>{{ comps.low|kr }}</dd></div>
+        <div><dt>Højeste</dt><dd>{{ comps.high|kr }}</dd></div>
+      </div>
+      <ol class="comp-list">
+        {% for sale in comps.items %}
+        <li class="comp">
+          <span class="comp-price">{{ sale.total|kr }}</span>
+          <span class="comp-title">
+            <a href="/lot/{{ sale.lot_id }}">{{ sale.title[:70] }}</a>
+            <span class="muted-note">hammer {{ sale.hammer|kr }} · {{ sale.ended_at[:10] }}</span>
+          </span>
+          <span class="comp-shared" title="Fælles ord: {{ sale.shared|join(', ') }}">{{ sale.shared|length }}</span>
+        </li>
+        {% endfor %}
+      </ol>
+    </div>
+    <p class="hint">Beløbene er hvad lot'ene kostede inkl. salær og moms, altså til
+      sammenligning med prisen øverst. Klik på en titel for at se det salg.</p>
+    {% else %}
+    <p class="empty">Arkivet har ikke tidligere salg der ligner dette nok.</p>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

@@ -113,9 +113,11 @@
       catLabels[chip.dataset.cat] = chip.textContent.trim();
     });
 
+    const nobidBtn = document.getElementById('nobid-chip');
+
     const state = {
       cats: new Set(), period: 'all', sort: 'newest',
-      min: 0, max: Infinity, ending: false
+      min: 0, max: Infinity, ending: false, nobid: false
     };
 
     // Filtrene gemmes pr. side, så de overlever at man lige åbner et lot og
@@ -140,13 +142,14 @@
       if (Number.isFinite(saved.min) && saved.min > 0) state.min = saved.min;
       if (Number.isFinite(saved.max) && saved.max > 0) state.max = saved.max;
       state.ending = saved.ending === true;
+      state.nobid = saved.nobid === true;
     }
 
     function store() {
       try {
         sessionStorage.setItem(storageKey, JSON.stringify({
           cats: Array.from(state.cats), period: state.period, sort: state.sort,
-          min: state.min, max: state.max, ending: state.ending
+          min: state.min, max: state.max, ending: state.ending, nobid: state.nobid
         }));
       } catch (_) { /* privat tilstand uden storage er helt fint */ }
     }
@@ -178,6 +181,9 @@
       });
       if (state.ending) list.push({
         key: 'ending', kind: 'ending', label: 'Slutter inden for 24 timer'
+      });
+      if (state.nobid) list.push({
+        key: 'nobid', kind: 'nobid', label: 'Ingen bud endnu'
       });
       if (state.min > 0) list.push({
         key: 'min', kind: 'min', label: 'Fra ' + kr(state.min) + ' kr'
@@ -259,7 +265,8 @@
           (state.cats.size === 0 || state.cats.has(cat)) &&
           num(card, 'ts') >= from &&
           price >= state.min && price <= state.max &&
-          (!state.ending || (endsIn > 0 && endsIn <= 86400));
+          (!state.ending || (endsIn > 0 && endsIn <= 86400)) &&
+          (!state.nobid || card.dataset.bid === '0');
         if (shown) { card.removeAttribute('data-hidden'); visible++; }
         else { card.setAttribute('data-hidden', '1'); }
       });
@@ -285,6 +292,7 @@
         chip.setAttribute('aria-pressed', String(chip.dataset.period === state.period));
       });
       if (endingBtn) endingBtn.setAttribute('aria-pressed', String(state.ending));
+      if (nobidBtn) nobidBtn.setAttribute('aria-pressed', String(state.nobid));
       $$('.sort-btn').forEach(btn => {
         btn.setAttribute('aria-pressed', String(btn.dataset.sort === state.sort));
       });
@@ -320,6 +328,7 @@
       state.min = 0;
       state.max = Infinity;
       state.ending = false;
+      state.nobid = false;
       apply(true);
     }
 
@@ -350,6 +359,13 @@
     if (endingBtn) {
       endingBtn.addEventListener('click', () => {
         state.ending = !state.ending;
+        apply(false);
+      });
+    }
+
+    if (nobidBtn) {
+      nobidBtn.addEventListener('click', () => {
+        state.nobid = !state.nobid;
         apply(false);
       });
     }
@@ -386,6 +402,7 @@
         if (key.indexOf('cat:') === 0) state.cats.delete(key.slice(4));
         else if (key === 'period') state.period = 'all';
         else if (key === 'ending') state.ending = false;
+        else if (key === 'nobid') state.nobid = false;
         else if (key === 'min') state.min = 0;
         else if (key === 'max') state.max = Infinity;
         apply(true);
@@ -448,6 +465,7 @@
           case 'k': event.preventDefault(); select(index - 1); break;
           case 'Enter': event.preventDefault(); openSelected(); break;
           case 'x': event.preventDefault(); act('skip'); break;
+          case 'w': event.preventDefault(); act('watch'); break;
           case 'b': event.preventDefault(); act('bid'); break;
           case 'c': event.preventDefault(); act('bought'); break;
           case '?': event.preventDefault(); if (help) help.hidden = false; break;

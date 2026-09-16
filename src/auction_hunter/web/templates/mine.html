@@ -16,6 +16,32 @@
   </p>
 </header>
 
+{% if monthly %}
+<section class="section">
+  <h2 class="section-title">Måned for måned</h2>
+  <div class="panel">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th scope="col">Måned</th><th scope="col" class="num">Lots</th>
+              <th scope="col" class="num">Beløb</th></tr>
+        </thead>
+        <tbody>
+          {% for month in monthly %}
+          <tr>
+            <td>{{ month.label }}</td>
+            <td class="num">{{ month.n }}</td>
+            <td class="num">{{ month.sum|kr }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <p class="hint">Kun det du har budt på eller købt, med den reelle pris inkl. salær og moms.</p>
+</section>
+{% endif %}
+
 {% if groups %}
   {% for key, label, items in groups %}
   <section class="section">

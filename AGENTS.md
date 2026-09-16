@@ -93,11 +93,18 @@ Okabe-Ito og har en prik-variant til grafik og en tekstvariant til etiketten.
 
 **Fire ting i webfladen har egne kontrakter.** `data-view` på `<html>` skifter
 mellem `katalog` og `kompakt` og huskes i localStorage under `visning`.
-Tastaturgenvejene (j/k/Enter/x/b/c/?/Esc) ligger i `app.js`, markerer med
+Tastaturgenvejene (j/k/Enter/x/w/b/c/?/Esc) ligger i `app.js`, markerer med
 `.is-selected` og hjælpearket er `#key-help`. Hvert kort kan have
 `row.series`, som er lot'ets prisforløb fra `price_history` og tegnes som en
 inline SVG-kurve. `/drift` samler kørsler, størrelser og tilstand; den viser
 kun om en hemmelighed er sat, aldrig værdien.
+
+**Lot-siderne er et ekstra kald og er slået fra.** details.py henter lot-siden
+for hvert fund og leder efter danske signaler om stand. Det er slået fra i
+interests.yml, fordi vilkårene kun tillader ét katalog-scrape hvert 15. minut.
+Kolonnerne details, details_flags og details_at kom med en migration, så webben
+skal læse dem gennem has_column — containeren kan starte før agenten har
+migreret, og en manglende kolonne må ikke give en 500.
 
 **Kortets struktur.** `.card` er billede plus indhold, og `.card-row` holder
 fakta og handlinger på samme linje, så højden styres af billedet og der ikke
@@ -237,8 +244,8 @@ mod den, aldrig mod et snapshot.
 - **Web-afhængighederne er valgfri.** Agenten skal kunne importeres uden
   FastAPI; derfor importerer `web/__init__.py` dovent, og `cli.cmd_web` fanger
   `ImportError` med en brugbar besked.
-- Scraperen henter **kun titler**, ingen beskrivelser. En LLM kan derfor ikke
-  vurdere stand eller om et par er komplet.
+- Scraperen henter **kun titler** fra listen. Beskrivelsen kan hentes fra
+  lot-siden, men det er slået fra som standard og er et ekstra kald pr. lot.
 - Auktionshusets vilkår tillader kun ét scrape hvert 15. minut
   (`MIN_SCRAPE_INTERVAL_SECONDS`). Sænk den ikke, og undgå healthchecks der
   rammer netværket.

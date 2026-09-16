@@ -10,13 +10,17 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from ..textmatch import find_keywords
 from .formatting import parse_dt
 
 # Hvor langt tilbage "udløbet"-siden kigger.
 EXPIRED_WINDOW_HOURS = 48
 
 # Gyldige feedback-handlinger. Alt andet afvises.
-ACTIONS = ("skip", "bid", "bought")
+# Handlinger brugeren kan sætte på et lot. "watch" er ikke en afgørelse, men
+# en påmindelse om at lot'et skal følges — den hører hjemme her fordi det er
+# samme slags menneskelige svar som de andre.
+ACTIONS = ("skip", "watch", "bid", "bought")
 
 
 def ro_conn(db_path: str) -> sqlite3.Connection:
@@ -61,11 +65,15 @@ def notifications(conn: sqlite3.Connection, limit: int = 400) -> list[sqlite3.Ro
     if not has_schema(conn, "lots", "notifications"):
         return []
     image = "l.image_url" if has_column(conn, "lots", "image_url") else "'' AS image_url"
+    # Kolonner fra migrationer må ikke kunne vælte siden: web-containeren kan
+    # starte før agenten har kørt sin første migration.
+    flags = ("l.details_flags" if has_column(conn, "lots", "details_flags")
+             else "'' AS details_flags")
     return conn.execute(
         f"""
         SELECT n.lot_id, n.category_key, n.sent_at, n.cost,
                l.title, l.url, l.auction_title, l.ends_at, l.lot_number,
-               l.first_bid, l.last_bid, l.last_total, {image},
+               l.first_bid, l.last_bid, l.last_total, {flags}, {image},
                COALESCE(f.action, '') AS feedback_action
         FROM notifications n
         JOIN lots l ON n.lot_id = l.lot_id
@@ -261,6 +269,49 @@ def save_feedback(
         conn.close()
 
 
+def lot_detail(conn: sqlite3.Connection, lot_id: str) -> sqlite3.Row | None:
+    """Alt om ét lot: rækken, dens notifikation og din markering."""
+    if not has_schema(conn, "lots"):
+        return None
+    image = "l.image_url" if has_column(conn, "lots", "image_url") else "'' AS image_url"
+    details = ("l.details" if has_column(conn, "lots", "details")
+               else "'' AS details")
+    details_flags = ("l.details_flags" if has_column(conn, "lots", "details_flags")
+                     else "'' AS details_flags")
+    notif = (
+        "LEFT JOIN notifications n ON n.lot_id = l.lot_id"
+        if has_table(conn, "notifications") else ""
+    )
+    feedback_join = (
+        "LEFT JOIN feedback f ON f.lot_id = l.lot_id"
+        if has_table(conn, "feedback") else ""
+    )
+    feedback = (
+        "COALESCE(f.action,'') AS feedback_action"
+        if has_table(conn, "feedback") else "'' AS feedback_action"
+    )
+    sent_at = "n.sent_at" if has_table(conn, "notifications") else "NULL AS sent_at"
+    cost = "n.cost" if has_table(conn, "notifications") else "NULL AS cost"
+    category = (
+        "n.category_key" if has_table(conn, "notifications") else "'' AS category_key"
+    )
+    return conn.execute(
+        f"""
+        SELECT l.lot_id, l.title, l.url, l.auction_title, l.lot_number,
+               l.first_seen, l.last_seen, l.first_bid, l.last_bid, l.last_total,
+               l.ends_at, {details}, {details_flags},
+               {image}, {category}, {sent_at}, {cost}, {feedback}
+        FROM lots l
+        {notif}
+        {feedback_join}
+        WHERE l.lot_id = ?
+        ORDER BY n.sent_at DESC
+        LIMIT 1
+        """,
+        (lot_id,),
+    ).fetchone()
+
+
 def table_counts(conn: sqlite3.Connection) -> dict[str, int]:
     """Rækkeantal pr. tabel. Driftssiden skal kunne se hvad der vokser."""
     counts: dict[str, int] = {}
@@ -333,6 +384,77 @@ def auctions_seen(conn: sqlite3.Connection) -> list[dict[str, Any]]:
                ORDER BY n DESC, auction_title"""
         ).fetchall()
     ]
+
+
+def keyword_noise(
+    conn: sqlite3.Connection, config: Any, *, min_seen: int = 3, limit: int = 8
+) -> list[dict[str, Any]]:
+    """Hvilke nøgleord trækker støj ind?
+
+    For hvert lot du har fået sendt, findes de nøgleord der udløste det, og
+    andelen af dem du har afvist. Et ord der ofte optræder i afviste lots er
+    for bredt. Det er et fingerpeg, ikke et bevis: ordet kan være uskyldigt i
+    netop de titler, så tallene vises sammen med antallet.
+    """
+    if config is None or not has_schema(conn, "notifications", "lots", "feedback"):
+        return []
+    rows = conn.execute(
+        """
+        SELECT n.category_key, COALESCE(f.action, '') AS action, l.title
+        FROM notifications n
+        JOIN lots l ON l.lot_id = n.lot_id
+        LEFT JOIN feedback f
+               ON f.lot_id = n.lot_id AND f.category_key = n.category_key
+        """
+    ).fetchall()
+
+    stats: dict[tuple[str, str], dict[str, int]] = {}
+    for row in rows:
+        category = config.category(row["category_key"])
+        if category is None:
+            continue
+        hits = find_keywords(
+            row["title"] or "",
+            category.strong + category.weak + category.brands,
+            exact=category.exact,
+        )
+        for keyword in hits:
+            entry = stats.setdefault((row["category_key"], keyword), {"seen": 0, "skip": 0})
+            entry["seen"] += 1
+            if row["action"] == "skip":
+                entry["skip"] += 1
+
+    out = [
+        {
+            "category": category,
+            "keyword": keyword,
+            "seen": entry["seen"],
+            "skip": entry["skip"],
+            "pct": round(100 * entry["skip"] / entry["seen"]),
+        }
+        for (category, keyword), entry in stats.items()
+        if entry["seen"] >= min_seen and entry["skip"] > 0
+    ]
+    out.sort(key=lambda row: (-row["pct"], -row["seen"], row["keyword"]))
+    return out[:limit]
+
+
+def archive_export(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Hele arkivet, nyeste først. Til regneark og videre analyse."""
+    if not has_schema(conn, "lots"):
+        return []
+    return conn.execute(
+        """
+        SELECT l.lot_id, l.title, l.url, l.auction_title, l.lot_number,
+               l.first_seen, l.last_seen, l.first_bid, l.last_bid, l.last_total,
+               l.ends_at,
+               COALESCE(n.category_key, '') AS category_key,
+               COALESCE(n.sent_at, '') AS sent_at
+        FROM lots l
+        LEFT JOIN notifications n ON n.lot_id = l.lot_id
+        ORDER BY l.first_seen DESC
+        """
+    ).fetchall()
 
 
 def marked_lots(conn: sqlite3.Connection) -> list[sqlite3.Row]:

@@ -1090,3 +1090,71 @@ details[open]>.cat-body{animation:reveal var(--dur-base) var(--ease-out) both}
 .deflist .ic{vertical-align:-2px}
 tr.run-error td{background:var(--urgent-soft);color:var(--urgent);font-size:var(--fs-caption);
   font-family:var(--font-mono);white-space:pre-wrap}
+
+/* ---- et enkelt lot ---- */
+.crumb{margin-bottom:var(--sp-3);font-size:var(--fs-small)}
+.crumb a{display:inline-flex;align-items:center;gap:6px;color:var(--text-3)}
+.crumb a:hover{color:var(--accent)}
+.lot-page{
+  display:grid;gap:var(--sp-5);
+  grid-template-columns:minmax(240px,340px) minmax(0,1fr) minmax(260px,340px);
+  align-items:start;
+}
+.lot-page-media{display:flex;flex-direction:column;gap:var(--sp-3)}
+.thumb.is-large{position:relative;width:100%;height:auto;aspect-ratio:4/3;border-radius:var(--r-4)}
+.lot-page-actions{border:0;padding:0;gap:6px}
+.lot-page-actions .fb-btn{flex:1;justify-content:center}
+.lot-page-link{align-self:flex-start}
+.lot-page-facts{display:flex;flex-direction:column;gap:var(--sp-2);min-width:0}
+.lot-page-comps{min-width:0}
+.spark-large{display:flex;flex-direction:column;gap:8px;padding:var(--sp-4);color:var(--accent-solid)}
+.spark-large svg{width:100%;height:90px;display:block}
+.spark-legend{display:flex;justify-content:space-between;font-size:var(--fs-caption);color:var(--text-3)}
+.comps{display:flex;flex-direction:column}
+.comp-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border)}
+.comp-summary > div{background:var(--surface-2);padding:11px 14px}
+.comp-summary dt{font-size:var(--fs-overline);font-weight:600;color:var(--text-3);
+  text-transform:uppercase;letter-spacing:.08em}
+.comp-summary dd{font-size:1.25rem;font-weight:650;font-variant-numeric:tabular-nums}
+.comp-list{list-style:none;display:flex;flex-direction:column}
+.comp{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:baseline;
+  padding:11px 14px;border-bottom:1px solid color-mix(in srgb,var(--border) 55%,transparent)}
+.comp:last-child{border-bottom:none}
+.comp:hover{background:color-mix(in oklab,var(--surface-2) 70%,transparent)}
+.comp-price{font-weight:650;font-variant-numeric:tabular-nums;white-space:nowrap}
+.comp-title{font-size:var(--fs-small);display:flex;flex-direction:column;gap:2px;min-width:0}
+.comp-shared{font-size:var(--fs-caption);color:var(--text-3);
+  background:var(--surface-3);border-radius:var(--r-pill);padding:1px 8px;min-width:24px;text-align:center}
+@media (max-width:900px){
+  .lot-page{grid-template-columns:1fr}
+}
+.meta-link{
+  font-size:var(--fs-caption);color:var(--text-3);
+  text-decoration:underline;text-underline-offset:2px;
+}
+.meta-link:hover{color:var(--accent)}
+
+/* fjerde markering: hold oejer */
+.fb-btn[data-action=watch]:hover{color:var(--maybe)}
+.fb-btn[data-action=watch][aria-pressed=true]{
+  background:var(--maybe-soft);color:var(--maybe);border-color:var(--maybe-line);
+}
+.card[data-feedback=watch]{border-color:color-mix(in srgb,var(--maybe) 40%,transparent)}
+.metric dd.is-small{font-size:1.125rem}
+
+/* ---- standsignaler fra lot-siden ---- */
+.tag-flag{
+  font-size:var(--fs-caption);font-weight:600;color:var(--warn);
+  background:var(--warn-soft);border-radius:var(--r-1);padding:2px 8px;
+}
+.tag-flag.is-serious,.flag-row .tag-flag.is-serious{
+  color:var(--urgent);background:var(--urgent-soft);
+}
+.flag-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:var(--sp-3)}
+.details-text{
+  margin:0 0 var(--sp-4);padding:15px 17px;
+  background:var(--surface);border-radius:var(--r-4);
+  box-shadow:var(--e1),var(--edge);
+  font-size:var(--fs-small);line-height:1.65;color:var(--text-2);
+  white-space:pre-wrap;
+}

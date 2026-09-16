@@ -148,6 +148,12 @@ CREATE VIRTUAL TABLE IF NOT EXISTS lots_fts USING fts5(
 # database der har kørt i månedsvis.
 MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     ("lots", "image_url", "ALTER TABLE lots ADD COLUMN image_url TEXT NOT NULL DEFAULT ''"),
+    # Lot-sidens tekst og de stand-signaler der blev fundet i den. Hentes kun
+    # for fund, og kun hvis det er slået til: det er et ekstra kald til
+    # auktionshuset pr. lot.
+    ("lots", "details", "ALTER TABLE lots ADD COLUMN details TEXT NOT NULL DEFAULT ''"),
+    ("lots", "details_flags", "ALTER TABLE lots ADD COLUMN details_flags TEXT NOT NULL DEFAULT ''"),
+    ("lots", "details_at", "ALTER TABLE lots ADD COLUMN details_at TEXT NOT NULL DEFAULT ''"),
 )
 
 
@@ -536,6 +542,27 @@ class Store:
         return {k: v for k, v in removed.items() if v}
 
     # -- meta --------------------------------------------------------------
+
+    def record_details(self, lot_id: str, text: str, flags: tuple[str, ...]) -> None:
+        """Gem hvad lot-siden sagde. Hentes én gang pr. lot."""
+        with self._tx() as conn:
+            conn.execute(
+                """UPDATE lots SET details=?, details_flags=?, details_at=?
+                   WHERE lot_id=?""",
+                (text[:4000], ",".join(flags), utcnow(), lot_id),
+            )
+
+    def lots_without_details(self, lot_ids: list[str]) -> list[str]:
+        """Hvilke af lot'ene mangler vi stadig en lot-side for?"""
+        if not lot_ids:
+            return []
+        marks = ",".join("?" * len(lot_ids))
+        rows = self.conn.execute(
+            f"""SELECT lot_id FROM lots
+                WHERE lot_id IN ({marks}) AND details_at = ''""",
+            lot_ids,
+        ).fetchall()
+        return [row["lot_id"] for row in rows]
 
     def get_meta(self, key: str, default: str | None = None) -> str | None:
         row = self.conn.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()

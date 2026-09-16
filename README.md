@@ -254,9 +254,32 @@ Alt ved det er fail-open: kan billedet ikke hentes, vises pladsholderen som før
 og en død billedserver kan hverken vælte en kørsel eller en side. Slå det fra
 med `CACHE_IMAGES=0`.
 
+### Lot-siderne
+
+Lot-listen indeholder kun en titel, og en titel kan ikke sige om varen er i
+stykker. Med details.enabled: true i config/interests.yml henter agenten også
+selve lot-siden for hvert **fund** og leder efter danske vendinger som
+"defekt", "reserverede", "ubrugt" og "afhentning". Resultatet står på lot'ets
+side og som et lille mærke på kortet, og Discord-beskeden får et Stand-felt.
+
+Udtrækket er strukturuafhængigt: det læser sidens brødtekst frem for at gå efter
+bestemte CSS-klasser, som ville fejle tavst den dag siden ændrer sig.
+
+Det er **slået fra som standard**, fordi det er et ekstra kald til
+auktionshuset for hvert fund, og deres vilkår kun tillader ét katalog-scrape
+hvert 15. minut. Slår du det til, så hold max_per_run lav.
+
+### Lot'ets side
+
+Klik på "historik" på et kort for at se lot'ets prisforløb gennem de
+observationer agenten har, og hvad **samme slags lot** er gået for tidligere.
+Sammenligningen vægter ord efter hvor sjældne de er i arkivet, så "Sennheiser
+HD 650" rangerer de andre HD 650'er øverst frem for alle Sennheiser-lots.
+Beløbene er inkl. salær og moms, altså til at sammenligne med prisen på kortet.
+
 ### Markering til AI-træning
 
-Hvert fund har tre knapper: **Afvis**, **Budt** og **Købt**. De
+Hvert fund har fire knapper: **Afvis**, **Følg**, **Budt** og **Købt**. De
 gemmes i tabellen `feedback` som træningsdata — et menneskeligt svar på om
 nøgleordene og AI-trinnet ramte rigtigt. Klik igen for at fortryde.
 
@@ -267,7 +290,7 @@ du har markeret samles under **Mine**, med det samlede beløb for bud og køb.
 Statistikfanen viser tre ting: **støjandelen** pr. kategori, altså hvor stor en
 del af dens fund du har afvist (en høj andel betyder at nøgleordene er for
 brede), hvor mange fund der ligger i hvert prisleje, og hvad fundene i
-gennemsnit koster. Markeringerne hentes som CSV derfra.
+gennemsnit koster. Markeringerne kan hentes som CSV fra sidefoden, og hele arkivet med priser og datoer som arkiv.csv til videre analyse i et regneark.
 
 ### Adgangskode
 

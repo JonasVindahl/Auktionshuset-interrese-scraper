@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 
 import requests
 
+from .details import FLAG_LABELS
 from .formatting import kr, time_left
 from .matcher import Match, last_chance
 
@@ -62,7 +63,9 @@ def _format_price(match: Match) -> str:
     return base
 
 
-def build_embed(match: Match, *, last_chance_hours: float = 24) -> dict:
+def build_embed(
+    match: Match, *, last_chance_hours: float = 24, flags: tuple[str, ...] = ()
+) -> dict:
     """Byg én Discord-embed for et fund."""
     lot = match.lot
 
@@ -99,6 +102,10 @@ def build_embed(match: Match, *, last_chance_hours: float = 24) -> dict:
         auction_title = auction_title[:197] + "…"
     fields.append({"name": "Auktion", "value": auction_title, "inline": False})
 
+    if flags:
+        labels = [FLAG_LABELS.get(flag, flag) for flag in flags]
+        fields.append({"name": "Stand", "value": " · ".join(labels), "inline": False})
+
     if match.over_budget:
         fields.append(
             {
@@ -122,9 +129,19 @@ def build_embed(match: Match, *, last_chance_hours: float = 24) -> dict:
     return {k: v for k, v in embed.items() if v is not None}
 
 
-def build_payload(matches: list[Match], *, heading: str, username: str = "Auktionshuset Hunter") -> dict:
+def build_payload(
+    matches: list[Match],
+    *,
+    heading: str,
+    username: str = "Auktionshuset Hunter",
+    details: dict[str, tuple[str, ...]] | None = None,
+) -> dict:
     """Byg en Discord-webhook-payload for op til 10 fund."""
-    embeds = [build_embed(m) for m in matches[:MAX_EMBEDS_PER_MESSAGE]]
+    details = details or {}
+    embeds = [
+        build_embed(m, flags=details.get(m.lot.lot_id, ()))
+        for m in matches[:MAX_EMBEDS_PER_MESSAGE]
+    ]
     return {
         "username": username,
         "content": heading[:2000],
@@ -174,12 +191,18 @@ class DiscordNotifier:
                 time.sleep(min(2 ** attempt, 10))
         raise DiscordError(f"Kunne ikke sende til Discord efter {self.max_retries} forsøg: {last_error}")
 
-    def send_matches(self, matches: list[Match], *, heading: str) -> NotifyResult:
+    def send_matches(
+        self,
+        matches: list[Match],
+        *,
+        heading: str,
+        details: dict[str, tuple[str, ...]] | None = None,
+    ) -> NotifyResult:
         """Send fund i grupper på højst 10 embeds pr. besked."""
         result = NotifyResult()
         for offset in range(0, len(matches), MAX_EMBEDS_PER_MESSAGE):
             chunk = matches[offset : offset + MAX_EMBEDS_PER_MESSAGE]
-            payload = build_payload(chunk, heading=heading)
+            payload = build_payload(chunk, heading=heading, details=details)
             try:
                 self._post(payload)
             except DiscordError as exc:

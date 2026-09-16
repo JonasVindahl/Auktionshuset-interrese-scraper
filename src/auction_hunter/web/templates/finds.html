@@ -54,6 +54,16 @@
   {% endif %}
 
   <div class="filter-group">
+    <span class="filter-label" id="filter-bud">Bud</span>
+    <div class="chip-row" role="group" aria-labelledby="filter-bud">
+      <button type="button" class="chip" id="nobid-chip" aria-pressed="false"
+              title="Lots hvor der endnu ikke er budt, saa du kan være den første">
+        Ingen bud endnu
+      </button>
+    </div>
+  </div>
+
+  <div class="filter-group">
     <span class="filter-label" id="filter-pris">Pris</span>
     <div class="chip-row" role="group" aria-labelledby="filter-pris">
       <input id="price-min" type="number" min="0" inputmode="numeric" placeholder="Fra" class="input is-narrow" aria-label="Laveste pris i kroner">
@@ -116,6 +126,7 @@
       <div class="card-actions review-actions">
         {%- for action, label, tip, ic in [
           ('skip', 'Afvis', 'Ikke interesseret i dette lot', 'ban'),
+          ('watch', 'Følg', 'Hold øje med dette lot', 'eye'),
           ('bid', 'Budt', 'Jeg har budt på det', 'bookmark'),
           ('bought', 'Købt', 'Jeg købte det', 'check')
         ] %}

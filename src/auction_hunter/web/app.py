@@ -29,8 +29,17 @@ from .. import images as images_mod
 from ..classifier import OpenAICompatibleClient
 from ..config import DEFAULT_CONFIG_PATH, ConfigError, load_config
 from ..fees import DEFAULT_OPENING_BID, is_vat_exempt
+from ..details import FLAG_LABELS
+from ..formatting import MONTHS_DA
 from ..secrets import SecretError, get_secret
-from . import auth, chat as chat_mod, queries, rows as rows_mod, search as search_mod
+from . import (
+    auth,
+    chat as chat_mod,
+    queries,
+    rows as rows_mod,
+    search as search_mod,
+    similar as similar_mod,
+)
 from .formatting import date_label, kr, rel_past, time_left, timestamp
 from .yamledit import EditError, InterestsFile, LEVELS
 
@@ -197,6 +206,14 @@ def status_tabs(query: search_mod.SearchQuery) -> list[dict[str, Any]]:
         }
         for key, label in _STATUS_TABS
     ]
+
+
+def _safe_config() -> Any | None:
+    """Konfigurationen, eller None hvis filen ikke kan læses."""
+    try:
+        return load_config(config_path())
+    except ConfigError:
+        return None
 
 
 def secret_status(name: str) -> str:
@@ -477,15 +494,38 @@ def create_app() -> FastAPI:
         ))
         groups = [
             (key, label, [r for r in prepared if r["feedback"] == key])
-            for key, label in (("bought", "Købt"), ("bid", "Budt"), ("skip", "Afvist"))
+            for key, label in (("bought", "Købt"), ("bid", "Budt"),
+                               ("watch", "Følger"), ("skip", "Afvist"))
         ]
         groups = [(key, label, items) for key, label, items in groups if items]
         committed = [r for r in prepared if r["feedback"] in ("bid", "bought")]
         total = sum(r["cost"] or 0 for r in committed)
 
+        # Månedligt resumé: hvad er der budt og købt for, måned for måned.
+        month_of = {raw["lot_id"]: (raw["created_at"] or "")[:7] for raw in rows}
+        months: dict[str, dict[str, int]] = {}
+        for row in committed:
+            month = month_of.get(row["lot_id"], "")
+            if not month:
+                continue
+            entry = months.setdefault(month, {"n": 0, "sum": 0})
+            entry["n"] += 1
+            entry["sum"] += row["cost"] or 0
+        monthly = [
+            {
+                "key": month,
+                "label": f"{MONTHS_DA[int(month[5:7]) - 1]} {month[:4]}",
+                "n": data["n"],
+                "sum": data["sum"],
+            }
+            for month, data in sorted(months.items(), reverse=True)
+            if len(month) == 7 and month[5:7].isdigit()
+        ]
+
         return page(
             request, "mine.html",
-            groups=groups, count=len(prepared), committed=len(committed), total=total,
+            groups=groups, count=len(prepared), committed=len(committed),
+            total=total, monthly=monthly,
         )
 
     @app.post("/feedback")
@@ -747,6 +787,9 @@ def create_app() -> FastAPI:
                 "archive": search_mod.archive_stats(conn),
                 "prices": queries.price_summary(conn),
                 "bands": queries.price_bands(conn),
+                # Analyse af nøgleord kræver profilen. Kan den ikke læses, vises
+                # resten af statistikken stadig.
+                "noise": queries.keyword_noise(conn, _safe_config()),
             }
         finally:
             conn.close()
@@ -756,6 +799,34 @@ def create_app() -> FastAPI:
             "mb": round(total / 1024 / 1024, 1),
         }
         return page(request, "stats.html", **context)
+
+    # -- et enkelt lot ------------------------------------------------------
+
+    @app.get("/lot/{lot_id}", response_class=HTMLResponse)
+    def lot_page(
+        request: Request, lot_id: str, _: None = Depends(require_login)
+    ) -> HTMLResponse:
+        """Alt om ét lot: prisen, forløbet og hvad samme slags er gået for."""
+        conn = ro_conn(db_path())
+        try:
+            row = queries.lot_detail(conn, lot_id)
+        finally:
+            conn.close()
+        if row is None:
+            raise HTTPException(404, "lot findes ikke")
+
+        prepared = with_series(rows_mod.prepare_all(
+            [row], seen_field="first_seen", db_path=db_path(), opening_bid=opening_bid()
+        ))[0]
+
+        conn = ro_conn(db_path())
+        try:
+            comps = similar_mod.find(conn, lot_id=lot_id, title=prepared["title"])
+        finally:
+            conn.close()
+
+        return page(request, "lot.html", row=prepared, comps=comps,
+                    FLAG_LABELS=FLAG_LABELS)
 
     # -- drift -------------------------------------------------------------
 
@@ -825,6 +896,39 @@ def create_app() -> FastAPI:
                 "AI-noegle": ai_key,
                 "Adgangskode": secret_status("WEB_PASSWORD"),
             },
+        )
+
+    @app.get("/export/archive.csv")
+    def export_archive(_: None = Depends(require_login)) -> StreamingResponse:
+        """Hele arkivet som CSV, saa priserne kan undersøges i et regneark.
+
+        Markeringerne har haft deres egen eksport længe; arkivet er den store
+        datamængde, og det er den man vil analysere.
+        """
+        conn = ro_conn(db_path())
+        try:
+            rows = queries.archive_export(conn)
+        finally:
+            conn.close()
+
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(["lot_id", "titel", "auktion", "lot_nr", "kategori",
+                         "bud", "total", "første_bud", "slutter", "set_første_gang",
+                         "set_sidst", "url"])
+        for row in rows:
+            writer.writerow([
+                _csv_safe(row["lot_id"]), _csv_safe(row["title"]),
+                _csv_safe(row["auction_title"]), row["lot_number"],
+                row["category_key"], row["last_bid"] or "", row["last_total"] or "",
+                row["first_bid"] or "", row["ends_at"] or "",
+                row["first_seen"] or "", row["last_seen"] or "", row["url"] or "",
+            ])
+        buffer.seek(0)
+        return StreamingResponse(
+            iter([buffer.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": 'attachment; filename="arkiv.csv"'},
         )
 
     @app.get("/export/feedback.csv")

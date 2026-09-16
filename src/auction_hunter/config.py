@@ -104,6 +104,20 @@ class ClassifierConfig:
 
 
 @dataclass(frozen=True)
+class DetailsConfig:
+    """Om lot-siderne skal hentes.
+
+    Slået fra som standard: det er et ekstra kald til auktionshuset pr. lot, og
+    vilkårene tillader kun ét katalog-scrape hvert 15. minut. Den der slår det
+    til, bør have læst vilkårene og holde loftet lavt.
+    """
+
+    enabled: bool = False
+    max_per_run: int = 10
+    pause_seconds: float = 2.0
+
+
+@dataclass(frozen=True)
 class Config:
     source: Source
     categories: tuple[Category, ...]
@@ -113,6 +127,7 @@ class Config:
     exclude: tuple[str, ...] = ()
     opening_bid: int = DEFAULT_OPENING_BID
     classifier: ClassifierConfig = field(default_factory=ClassifierConfig)
+    details: DetailsConfig = field(default_factory=DetailsConfig)
 
     def category(self, key: str) -> Category | None:
         return next((c for c in self.categories if c.key == key), None)
@@ -226,6 +241,7 @@ def load_config(path: str | Path | None = None) -> Config:
         exclude=_normalize_keywords(raw.get("exclude")),
         opening_bid=_env_int("OPENING_BID", int(raw.get("opening_bid", DEFAULT_OPENING_BID))),
         classifier=_load_classifier(raw.get("classifier") or {}),
+        details=_load_details(raw.get("details") or {}),
     )
 
 
@@ -234,6 +250,17 @@ def _env_bool(name: str, default: bool) -> bool:
     if raw is None or raw.strip() == "":
         return default
     return raw.strip().lower() in ("1", "true", "ja", "yes", "on")
+
+
+def _load_details(spec: dict[str, Any]) -> DetailsConfig:
+    """Læs indstillingerne for lot-siderne. Slået fra som standard."""
+    return DetailsConfig(
+        enabled=_env_bool("DETAILS_ENABLED", bool(spec.get("enabled", False))),
+        max_per_run=_env_int("DETAILS_MAX_PER_RUN", int(spec.get("max_per_run", 10))),
+        pause_seconds=float(
+            os.environ.get("DETAILS_PAUSE_SECONDS") or spec.get("pause_seconds", 2.0)
+        ),
+    )
 
 
 def _load_classifier(spec: dict[str, Any]) -> ClassifierConfig:

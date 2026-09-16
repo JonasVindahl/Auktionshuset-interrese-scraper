@@ -169,6 +169,24 @@ class Scraper:
         badge = soup.select_one("p.bg-white.text-gray-401")
         return badge.get_text(strip=True) if badge else ""
 
+    def fetch_details(self, lot: Lot) -> object:
+        """Hent lot-siden og find stand-signalerne i den.
+
+        Kaldes kun for fund, og kun hvis nogen har slået det til. Fejler den,
+        returneres en tom udtrækning: et lot må ikke falde ud af listen, fordi
+        en underside ikke kunne hentes.
+        """
+        from . import details as details_mod
+
+        if not lot.url:
+            return details_mod.Details()
+        try:
+            html = self._get(lot.url)
+        except ScrapeError as exc:
+            log.warning("Kunne ikke hente lot-siden for %s: %s", lot.lot_id, exc)
+            return details_mod.Details()
+        return details_mod.parse(html)
+
     def fetch_auctions(self) -> list[Auction]:
         """Hent alle aktive auktioner for de valgte regioner."""
         html = self._get(self.auction_list_url())
