@@ -26,11 +26,15 @@ Hvert 15. minut (auktionshusets vilkår tillader ikke hurtigere):
 ```bash
 python -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp .env.example .env        # udfyld DISCORD_WEBHOOK_URL
+export PYTHONPATH=src
 .venv/bin/python -m auction_hunter check        # viser konfiguration, tester Discord
 .venv/bin/python -m auction_hunter scan         # vis fund uden at gemme eller sende
 .venv/bin/python -m auction_hunter once         # én rigtig kørsel
 .venv/bin/python -m auction_hunter run          # kør i loop
 ```
+
+`PYTHONPATH=src` er nødvendig fordi pakken ikke installeres, men køres fra
+`src/`. Testene henter den selv via `pytest.ini`.
 
 `scan` er den sikre start: den hverken gemmer i databasen eller sender til
 Discord, så du kan se hvad profilen fanger, før du lader den løbe.
@@ -182,6 +186,7 @@ AI-nøglen følger samme mønster: `CLASSIFIER_API_KEY`,
 ## Test
 
 ```bash
+.venv/bin/pip install pytest    # ikke i requirements.txt, kun til udvikling
 .venv/bin/python -m pytest
 ```
 
