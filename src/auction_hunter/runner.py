@@ -263,7 +263,11 @@ def run_once(
         if new_matches and notifier is not None:
             result = notifier.send_matches(
                 new_matches,
-                heading=f"**{len(new_matches)} nyt fund** i {config.source.region_label}",
+                heading=(
+                    f"**{len(new_matches)} nyt fund** i {config.source.region_label}"
+                    if len(new_matches) == 1
+                    else f"**{len(new_matches)} nye fund** i {config.source.region_label}"
+                ),
             )
             stats.notified = len(result.sent)
             # Kun de fund der faktisk blev leveret markeres, så en fejlet

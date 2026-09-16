@@ -182,12 +182,17 @@ PYTHONPATH=src python -m auction_hunter web --port 8080
 
 | Fane | Hvad den gør |
 |---|---|
-| **Fund** | Aktive fund, grupperet pr. dag med tid tilbage |
+| **Fund** | Aktive fund som katalog, grupperet pr. dag, med pris og tid tilbage |
 | **Udløbet** | Fund hvis auktion sluttede inden for 48 timer |
-| **Arkiv** | Fritekstsøgning i *alt* agenten har set |
+| **Mine** | Det du selv har markeret, med det samlede beløb for bud og køb |
+| **Arkiv** | Fritekstsøgning i *alt* agenten har set, med auktion som filter |
 | **Interesser** | Redigér profilen og test en titel mod reglerne |
 | **Assistent** | Spørg om arkivet i almindeligt sprog |
-| **Statistik** | Hvilke kategorier støjer, og hvad er der sket |
+| **Statistik** | Antal, støjandel og hvad fundene reelt koster |
+
+Principperne bag udseendet, farverne og bevægelsen står i DESIGN.md. Alle
+beløb i dashboardet og i Discord er den reelle pris inkl. salær og moms. Et
+lot uden bud viser hvad første bud vil koste i stedet for 0 kr.
 
 ### Arkivet
 
@@ -198,7 +203,8 @@ en besked.
 
 Søgningen bruger SQLites FTS5 med begge danske foldninger, så både
 `hoejttaler` og `hojttaler` finder `højttaler`. Der kan filtreres på pris,
-status, kategori, hvornår lot'et blev set, og om det blev til et fund.
+status, kategori, **auktion** (hvor lot'et kommer fra), hvornår det blev set, og
+om det blev til et fund.
 
 ### Interesser
 
@@ -246,16 +252,18 @@ med `CACHE_IMAGES=0`.
 
 ### Markering til AI-træning
 
-Hvert fund har tre knapper: **Ikke interesseret**, **Budt** og **Købt**. De
+Hvert fund har tre knapper: **Afvis**, **Budt** og **Købt**. De
 gemmes i tabellen `feedback` som træningsdata — et menneskeligt svar på om
 nøgleordene og AI-trinnet ramte rigtigt. Klik igen for at fortryde.
 
 Bud og køb sker sjældent, men Udløbet-fanen gør det overkommeligt: der står
-kun det der er afgjort for nylig, så en dags fund kan markeres ad gangen.
+kun det der er afgjort for nylig, så en dags fund kan markeres ad gangen. Alt
+du har markeret samles under **Mine**, med det samlede beløb for bud og køb.
 
-Statistikfanen viser **støjandelen** pr. kategori — hvor stor en del af dens
-fund du har afvist. En høj andel betyder at kategoriens nøgleord er for brede.
-Markeringerne hentes som CSV derfra.
+Statistikfanen viser tre ting: **støjandelen** pr. kategori, altså hvor stor en
+del af dens fund du har afvist (en høj andel betyder at nøgleordene er for
+brede), hvor mange fund der ligger i hvert prisleje, og hvad fundene i
+gennemsnit koster. Markeringerne hentes som CSV derfra.
 
 ### Adgangskode
 

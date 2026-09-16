@@ -108,7 +108,7 @@ class TestDigest:
             }
         ]
         text = build_digest(rows)
-        assert "1 lot(er)" in text
+        assert "1 lot jeg er i tvivl om" in text
         assert "Div. lydudstyr" in text
         assert "Rodlot med adaptere" in text
         assert "https://auktionshuset.dk/lot/1" in text
@@ -139,3 +139,49 @@ class TestDigest:
         from auction_hunter.notifier import send_digest
 
         assert send_digest(DiscordNotifier("https://discord.invalid/hook"), []) is False
+
+# -- embed-indhold ----------------------------------------------------------
+
+def make_match(title, *, bid=500, hours=3, auction_title="Testauktion"):
+    """Et match med en sluttid, saa tid-tilbage kan testes."""
+    from datetime import datetime, timedelta, timezone
+
+    ends = datetime.now(timezone.utc) + timedelta(hours=hours) if hours else None
+    lot = Lot(
+        lot_id="E1", title=title, url="https://auktionshuset.dk/lots/1",
+        lot_number="7", auction_id="A1", auction_title=auction_title,
+        current_bid=bid, total_price=None, ends_at=ends,
+        image_url="", has_bids=bool(bid),
+    )
+    config = load_config("config/interests.yml")
+    matches = match_lot(lot, config, opening_bid=config.opening_bid)
+    assert matches, f"forventede match for {title!r}"
+    return matches[0]
+
+
+def test_embed_har_ingen_emoji_i_titlen():
+    """Emoji i titlen skubber det vigtige ud til hoejre og er ren pynt."""
+    embed = build_embed(make_match("Forstærker YAMAHA A-S301", bid=500))
+    emoji = [c for c in embed["title"] if ord(c) > 0x2100]
+    assert not emoji, f"emoji i titlen: {emoji}"
+
+
+def test_embed_viser_både_tid_tilbage_og_tidspunkt():
+    embed = build_embed(make_match("Forstærker YAMAHA A-S301", bid=500, hours=3))
+    felt = next(f for f in embed["fields"] if f["name"] == "Hammerslag")
+    assert felt["value"].startswith("Slutter om")
+    assert "/" in felt["value"], "det præcise tidspunkt mangler"
+
+
+def test_embed_uden_bud_er_markeret_som_estimat():
+    embed = build_embed(make_match("Forstærker YAMAHA A-S301", bid=None))
+    pris = next(f for f in embed["fields"] if f["name"] == "Pris")
+    assert "estimat" in pris["value"]
+    assert "~" in pris["value"]
+
+
+def test_embed_skriver_loftet_med_dansk_tusindtal():
+    embed = build_embed(make_match("Forstærker YAMAHA A-S301", bid=3000))
+    tekst = " ".join(f["value"] for f in embed["fields"])
+    assert "kr" in tekst
+    assert "," not in tekst, "tusindtal skal skrives med punktum"
