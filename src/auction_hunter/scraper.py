@@ -235,6 +235,36 @@ class Scraper:
         log.info("  %s: %d lots", auction.title[:50] or auction.url, len(lots))
         return lots
 
+    def _image_url(self, image_el) -> str:
+        """Find billedets rigtige URL.
+
+        Lazy-loadede billeder har en pladsholder i ``src`` og den rigtige adresse
+        i ``data-src`` eller ``srcset``. Uden dette gemmer vi en 1x1-gif eller en
+        base64-pladsholder, og dashboardet viser ingenting.
+        """
+        for attr in ("data-src", "data-lazy-src", "data-original", "src"):
+            value = (image_el.get(attr) or "").strip()
+            if value and not value.startswith("data:"):
+                return self._absolute(value)
+
+        # srcset: 'lille.jpg 300w, stor.jpg 900w' — tag den første adresse.
+        srcset = (image_el.get("srcset") or "").strip()
+        if srcset:
+            first = srcset.split(",")[0].strip().split(" ")[0]
+            if first and not first.startswith("data:"):
+                return self._absolute(first)
+        return ""
+
+    def _absolute(self, url: str) -> str:
+        """Gør en relativ adresse absolut, så browseren kan hente billedet."""
+        if url.startswith("http"):
+            return url
+        if url.startswith("//"):
+            return f"https:{url}"
+        if url.startswith("/"):
+            return f"{self.source.base_url}{url}"
+        return url
+
     def _parse_lots(self, html: str, auction: Auction) -> list[Lot]:
         soup = BeautifulSoup(html, "lxml")
         lots: list[Lot] = []
@@ -272,9 +302,7 @@ class Scraper:
                 total_price = current_bid
 
             image_el = item.select_one("img")
-            image_url = ""
-            if image_el:
-                image_url = image_el.get("src", "") or ""
+            image_url = self._image_url(image_el) if image_el else ""
 
             classes = item.get("class") or []
 

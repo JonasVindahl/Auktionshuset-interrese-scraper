@@ -166,6 +166,50 @@ python -m auction_hunter review
 python -m auction_hunter stats      # viser AI-fordelingen
 ```
 
+## Dashboard
+
+Ud over Discord kører der et lille webdashboard, så du kan se fundene samlet i
+stedet for at scrolle i en chat. Det starter automatisk med `docker compose up`
+og ligger på port 8080:
+
+```bash
+docker compose up -d          # scraper + dashboard
+# eller uden Docker:
+PYTHONPATH=src python -m auction_hunter web --port 8080
+```
+
+| Side | Hvad den viser |
+|---|---|
+| `/` | Aktive fund — dem hvor auktionen stadig løber |
+| `/expired` | Fund hvis auktion sluttede inden for de seneste 48 timer |
+
+Begge sider kan filtreres på kategori og pris, og sorteres efter tid eller
+pris. Forsiden har desuden et filter for auktioner der slutter inden for et
+døgn, og sortering efter hvad der slutter først — det er som regel det man skal
+handle på.
+
+Tiden tilbage vises på hvert fund og skifter farve: rød under 6 timer, orange
+under et døgn.
+
+### Markering til AI-træning
+
+Hvert fund har tre knapper: **Ikke interesseret**, **Budt** og **Købt**. De
+gemmes i tabellen `feedback` og er tænkt som træningsdata — et menneskeligt
+svar på om nøgleordene og AI-trinnet ramte rigtigt. Klik igen for at fortryde.
+
+Bud og køb sker sjældent, men `/expired` gør det overkommeligt: der står kun
+det der faktisk er afgjort for nylig, så du kan markere en dags fund ad gangen
+i stedet for at grave i hele historikken.
+
+Træningsdata trækkes ud med:
+
+```bash
+sqlite3 data/auction_hunter.db \
+  "SELECT action, title FROM feedback ORDER BY created_at DESC"
+```
+
+Dashboardet skriver kun til `feedback`. Al anden tilstand ejes af agenten.
+
 ## Hemmeligheder
 
 Discord-webhooken læses af `src/auction_hunter/secrets.py` på tre måder. Den
@@ -235,6 +279,7 @@ uden det.
 | `runner.py` | Kører loopet og binder delene sammen |
 | `secrets.py` | Læser hemmeligheder fra miljø, fil eller indirekte |
 | `fees.py` | Beregner bud og samlet pris inkl. gebyr |
+| `web.py` | Webdashboard: fund, filtrering, feedback |
 | `cli.py` | Kommandolinjen |
 
 Hukommelsen ligger i SQLite (`data/auction_hunter.db`) og gør tre ting: den
