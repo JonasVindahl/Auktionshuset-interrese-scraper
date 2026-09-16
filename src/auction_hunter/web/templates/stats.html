@@ -1,11 +1,13 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
+{% from "_empty.html" import empty_state %}
 
 {% block title %}Statistik · Auktionshuset Hunter{% endblock %}
 {% block page_class %}is-wide{% endblock %}
 
 {% block content %}
 <header class="page-head">
+  <p class="overline">{{ icon('spark', 13) }} Overblik</p>
   <h1>Statistik</h1>
   <p class="page-meta">Hvad agenten har set, hvad der blev fund, og hvordan profilen rammer.</p>
 </header>
@@ -56,7 +58,7 @@
   <p class="hint"><strong>Støjandel</strong> er hvor stor en del af kategoriens fund du har
     markeret ikke interesseret. En høj andel betyder at nøgleordene er for brede.</p>
   {% else %}
-  <p class="empty">Ingen fund sendt endnu.</p>
+  {{ empty_state('Ingen fund sendt endnu', 'Når agenten finder noget der matcher profilen, dukker kategorierne op her.', 'spark') }}
   {% endif %}
 </section>
 
@@ -102,7 +104,7 @@
     {% endfor %}
   </div>
   {% else %}
-  <p class="empty">Ingen fund med en pris endnu.</p>
+  {{ empty_state('Ingen fund med en pris endnu', 'Først når der er budt på et fund, har det en pris at regne med.', 'info') }}
   {% endif %}
 </section>
 
@@ -131,7 +133,7 @@
     {% endfor %}
   </ol>
   {% else %}
-  <p class="empty">Ingen kørsler registreret endnu.</p>
+  {{ empty_state('Ingen kørsler endnu', 'Agenten skriver en række hver gang den har været forbi auktionshuset.', 'info') }}
   {% endif %}
 </section>
 
@@ -148,7 +150,7 @@
     <p class="hint">Træningsdata til AI-trinnet.
       <a href="/export/feedback.csv">Hent dem som CSV</a>.</p>
     {% else %}
-    <p class="empty">Ingen markeringer endnu.</p>
+    {{ empty_state('Ingen markeringer endnu', 'Når du markerer fund, samles tallene her.', 'bookmark') }}
     {% endif %}
   </section>
 

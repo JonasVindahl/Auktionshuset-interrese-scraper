@@ -50,27 +50,27 @@
      Roller: 1-3 flader, 6-8 kanter, 11-14 tekst.
      Kontrast mod surface: text 12.1:1, text-2 7.4:1, text-3 4.6:1,
      text-4 3.1:1. text-4 er derfor IKKE til tekst, kun til ikoner og streger. */
-  --bg:#f8f4ef;
-  --surface:#fefcfa;
-  --surface-2:#f3eee8;
-  --surface-3:#ede7e0;
-  --border:#e6e0d7;
-  --border-strong:#d1c9c0;
-  --border-input:#948d85;   /* 3.12:1, så feltet har en synlig kant */
-  --text:#36322d;
-  --text-2:#57524b;
-  --text-3:#6b655d;   /* 5.0:1 paa den moerkeste flade den ligger paa */
-  --text-4:#948d85;   /* 3.1:1, kun ikoner og streger */
+  --bg:#ece3d5;
+  --surface:#fffdfa;
+  --surface-2:#f5efe4;
+  --surface-3:#e7ddce;
+  --border:#ded3c2;
+  --border-strong:#bfb2a0;
+  --border-input:#877e6f;   /* 3.3:1, så feltet har en synlig kant */
+  --text:#211c16;
+  --text-2:#4a433a;
+  --text-3:#6a6257;   /* 5.7:1 paa surface, 4.7:1 paa sidebaggrunden */
+  --text-4:#948b7d;   /* 3.2:1, kun ikoner og streger */
 
   /* Accent, amber H60. Trin 9 er hans #e8954a og er den eneste flade der
      bruges som brand. Lys tekst på den ville være 2.3:1, så knappen i lys
      tilstand bruger det dybe trin 12 med hvid tekst (5.2:1). */
-  --accent:#a05c16;          /* link og tekst, 5.2:1 på surface */
-  --accent-deep:#854a0b;
+  --accent:#8f4c0f;          /* link og tekst, 6.5:1 på surface */
+  --accent-deep:#713a08;
   --accent-solid:#e8954a;    /* brand, prikker, målere */
-  --accent-bright:#f5a259;
-  --accent-soft:#fff3e9;
-  --accent-line:#ffcea7;
+  --accent-bright:#f2a45c;
+  --accent-soft:#fff0df;
+  --accent-line:#f0c79c;
   --on-accent:#fffdfa;
 
   --ok:#2f7442; --ok-soft:#e7f4e9; --ok-line:#bcdcc4;
@@ -92,7 +92,7 @@
   --font:'Onest',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
   --font-display:'Bricolage Grotesque','Onest',system-ui,sans-serif;
   --font-mono:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace;
-  --fs-display:2.5rem; --fs-h1:1.75rem; --fs-h2:1.4375rem; --fs-h3:1.1875rem;
+  --fs-display:2.75rem; --fs-h1:2.125rem; --fs-h2:1.5rem; --fs-h3:1.1875rem; --fs-price:1.4375rem;
   --fs-body:0.9375rem; --fs-small:0.8125rem; --fs-caption:0.75rem; --fs-overline:0.6875rem;
 
   /* spacing */
@@ -103,10 +103,10 @@
   --r-1:3px; --r-2:5px; --r-3:8px; --r-4:12px; --r-pill:999px;
 
   /* dybde, varm skygge */
-  --e1:0 1px 1px rgba(50,38,22,.05),0 2px 4px rgba(50,38,22,.05);
-  --e2:0 2px 4px rgba(50,38,22,.06),0 8px 20px rgba(50,38,22,.08);
-  --e3:0 4px 8px rgba(50,38,22,.07),0 16px 36px rgba(50,38,22,.12);
-  --e4:0 8px 16px rgba(50,38,22,.08),0 24px 56px rgba(50,38,22,.18);
+  --e1:0 1px 1.5px rgba(50,38,22,.06),0 3px 7px rgba(50,38,22,.07);
+  --e2:0 3px 6px rgba(50,38,22,.08),0 12px 26px rgba(50,38,22,.11);
+  --e3:0 6px 12px rgba(50,38,22,.09),0 22px 44px rgba(50,38,22,.15);
+  --e4:0 10px 20px rgba(50,38,22,.10),0 30px 64px rgba(50,38,22,.22);
   --edge:inset 0 0 0 1px rgba(50,38,22,.06);
   --hi:inset 0 1px 0 rgba(255,255,255,.55);
 
@@ -127,13 +127,13 @@
     /* Mørk: dybde er lysere flader, ikke skygger. Hvert niveau løftes
        .025-.035 i L. Kontrast mod surface: text 15:1, text-2 11:1,
        text-3 8.1:1, text-4 5.5:1. */
-    --bg:#0e0c09; --surface:#161310; --surface-2:#1c1915; --surface-3:#24201b;
-    --border:#342f2a; --border-strong:#4d4740; --border-input:#746d66;
-    --text:#ebe7e2; --text-2:#cec9c3; --text-3:#b0aaa3; --text-4:#918b84;
+    --bg:#14110d; --surface:#1e1a15; --surface-2:#26211a; --surface-3:#2f2921;
+    --border:#3a332a; --border-strong:#554c40; --border-input:#7c7466;
+    --text:#f0eae1; --text-2:#d4cdc2; --text-3:#b3aba0; --text-4:#948c80;
 
-    --accent:#f5a259; --accent-deep:#ffbe8a; --accent-solid:#e8954b;
-    --accent-bright:#f5a259; --accent-soft:#3a2412; --accent-line:#653d19;
-    --on-accent:#1a1611;
+    --accent:#f3a55e; --accent-deep:#ffc392; --accent-solid:#e8954b;
+    --accent-bright:#f3a55e; --accent-soft:#3a2412; --accent-line:#6a411c;
+    --on-accent:#1a140d;
 
     --ok:#88ca95; --ok-soft:#16281a; --ok-line:#2f4d38;
     --warn:#e2c06d; --warn-soft:#2d240c; --warn-line:#51411f;
@@ -161,7 +161,12 @@
 *{margin:0;padding:0}
 html{-webkit-text-size-adjust:100%;scroll-padding-top:80px}
 body{
-  background:var(--bg);color:var(--text);
+  background:
+    radial-gradient(1200px 460px at 50% -220px,
+      color-mix(in oklab,var(--accent-solid) 14%,transparent),transparent 72%),
+    var(--bg);
+  background-attachment:fixed;
+  color:var(--text);
   font:400 var(--fs-body)/1.55 var(--font);
   font-synthesis:none;
   -webkit-font-smoothing:antialiased;
@@ -199,35 +204,40 @@ hr{border:0;border-top:1px solid var(--border)}
 /* ---- topbar ---- */
 .topbar{
   position:sticky;top:0;z-index:var(--z-sticky);
-  display:flex;align-items:center;gap:var(--sp-4);
-  height:60px;padding:0 var(--sp-6);
-  background:color-mix(in srgb,var(--surface) 82%,transparent);
-  backdrop-filter:saturate(160%) blur(12px);
-  border-bottom:1px solid color-mix(in srgb,var(--border) 70%,transparent);
+  display:flex;align-items:center;justify-content:center;gap:var(--sp-4);
+  height:64px;padding:0 var(--sp-6);
+  background:linear-gradient(180deg,
+    color-mix(in oklab,var(--surface) 94%,var(--accent-solid)),
+    color-mix(in oklab,var(--surface) 88%,var(--surface-2)));
+  backdrop-filter:saturate(150%) blur(14px);
+  border-bottom:1px solid var(--border-strong);
+  box-shadow:inset 0 3px 0 0 var(--accent-solid),0 8px 20px rgba(50,38,22,.07);
   animation:bar-in var(--dur-slower) var(--ease-out) both;
 }
-.brand{display:flex;align-items:center;gap:10px;flex:none;color:var(--text)}
+.topbar-inner{display:flex;align-items:center;gap:var(--sp-4);width:100%;max-width:1240px}
+.brand{display:flex;align-items:center;gap:11px;flex:none;color:var(--text)}
 .brand:hover{color:var(--text)}
 .brand-mark{
-  display:grid;place-items:center;width:30px;height:30px;flex:none;
-  border-radius:var(--r-3);color:var(--accent);
-  background:linear-gradient(150deg,var(--accent-soft),color-mix(in srgb,var(--accent-line) 60%,transparent));
-  box-shadow:var(--hi),var(--edge);
+  display:grid;place-items:center;width:36px;height:36px;flex:none;
+  border-radius:var(--r-3);color:var(--on-accent);
+  background:linear-gradient(150deg,var(--accent),var(--accent-deep));
+  box-shadow:var(--hi),0 2px 8px color-mix(in oklab,var(--accent) 34%,transparent);
 }
-.brand-name{font-family:var(--font-display);font-size:1.0625rem;font-weight:600;letter-spacing:-.02em;white-space:nowrap}
-.brand-name em{font-style:normal;font-weight:400;color:var(--text-3)}
+.brand-name{font-family:var(--font-display);font-size:1.1875rem;font-weight:700;letter-spacing:-.025em;white-space:nowrap}
+.brand-name em{font-style:normal;font-weight:500;color:var(--accent);letter-spacing:-.01em}
 
-.nav{display:flex;gap:2px;flex:1;overflow-x:auto;scrollbar-width:none}
+.nav{display:flex;gap:3px;flex:1;overflow-x:auto;scrollbar-width:none}
 .nav::-webkit-scrollbar{display:none}
 .nav-link{
   display:inline-flex;align-items:center;gap:6px;
-  padding:6px 12px;border-radius:var(--r-pill);
-  font-size:var(--fs-small);font-weight:500;color:var(--text-3);white-space:nowrap;
+  padding:7px 13px;border-radius:var(--r-2);
+  font-size:var(--fs-small);font-weight:500;color:var(--text-2);white-space:nowrap;
   transition:background-color var(--dur-fast) var(--ease-standard),
              color var(--dur-fast) var(--ease-standard);
 }
-.nav-link:hover{background:var(--surface-3);color:var(--text)}
-.nav-link.is-active{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.nav-link:hover{background:var(--surface-2);color:var(--text)}
+.nav-link.is-active{background:var(--accent-soft);color:var(--accent);font-weight:650;
+  box-shadow:inset 0 0 0 1px var(--accent-line)}
 .nav-badge{
   background:var(--accent);color:var(--on-accent);border-radius:var(--r-pill);
   font-size:.66rem;font-weight:700;padding:0 6px;line-height:16px;min-width:16px;text-align:center;
@@ -241,14 +251,20 @@ hr{border:0;border-top:1px solid var(--border)}
 /* ---- side og sektioner ---- */
 .page{max-width:1020px;margin:0 auto;padding:var(--sp-6) var(--sp-6) var(--sp-9)}
 .page.is-narrow{max-width:860px}
-.page.is-wide{max-width:1180px}
-.page-head{margin-bottom:var(--sp-5)}
+.page.is-wide{max-width:1240px}
+.page-head{margin-bottom:var(--sp-5);padding-bottom:var(--sp-4);
+  border-bottom:1px solid var(--border-strong);position:relative}
+.page-head::after{content:"";position:absolute;left:0;bottom:-2px;width:58px;height:3px;
+  border-radius:2px;background:var(--accent-solid)}
+.overline{display:inline-flex;align-items:center;gap:7px;
+  font-size:var(--fs-overline);font-weight:700;color:var(--accent);
+  text-transform:uppercase;letter-spacing:.14em;margin-bottom:7px}
 .page-head h1{
-  font-family:var(--font-display);font-size:var(--fs-h1);font-weight:600;
-  line-height:1.15;letter-spacing:-.015em;text-wrap:balance;
+  font-family:var(--font-display);font-size:var(--fs-h1);font-weight:700;
+  line-height:1.06;letter-spacing:-.025em;text-wrap:balance;
 }
-.page-meta{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:7px;
-  color:var(--text-3);font-size:var(--fs-small)}
+.page-meta{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:9px;
+  color:var(--text-2);font-size:var(--fs-small)}
 .page-meta #visible-count{color:var(--text-2);font-weight:500;font-variant-numeric:tabular-nums}
 .meta-sep{color:var(--text-3)}
 .meta-urgent{color:var(--urgent);font-weight:500}
@@ -486,10 +502,10 @@ select{appearance:none;padding-right:30px;cursor:pointer;
 .date-label{
   grid-column:1/-1;
   display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);
-  padding:6px 0 9px;margin-bottom:2px;
-  font-size:var(--fs-caption);font-weight:600;color:var(--text-3);
-  letter-spacing:.01em;
-  border-bottom:1px solid color-mix(in srgb,var(--border) 60%,transparent);
+  padding:9px 0 9px;margin-bottom:6px;
+  font-family:var(--font-display);font-size:1.0625rem;font-weight:700;
+  color:var(--text);letter-spacing:-.015em;
+  border-bottom:2px solid var(--text);
 }
 .date-label .count{
   background:var(--surface-3);color:var(--text-3);border-radius:var(--r-pill);
@@ -518,14 +534,19 @@ select{appearance:none;padding-right:30px;cursor:pointer;
 .card[data-feedback=bought]{border-color:color-mix(in srgb,var(--ok) 45%,transparent)}
 .card[data-feedback=bid]{border-color:color-mix(in srgb,var(--warn) 45%,transparent)}
 
-.card-media{position:relative;aspect-ratio:4/3;background:var(--surface-2)}
+.card-media{position:relative;aspect-ratio:3/2;
+  background:
+    repeating-linear-gradient(135deg,
+      color-mix(in oklab,var(--surface-3) 65%,transparent) 0 9px,transparent 9px 18px),
+    linear-gradient(160deg,var(--surface-2),var(--surface-3));
+}
 .thumb{position:absolute;inset:0;overflow:hidden}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block;
   transition:transform var(--dur-slow) var(--ease-out)}
 .card:hover .thumb img{transform:scale(1.03)}
 .thumb img.is-broken{display:none}
 .thumb-fallback{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-  color:var(--text-4);opacity:.45}
+  color:color-mix(in oklab,var(--accent) 60%,var(--text-4));opacity:.5}
 .thumb-link{position:absolute;inset:0;z-index:1}
 
 .badge-time,.badge-state{
@@ -548,11 +569,11 @@ select{appearance:none;padding-right:30px;cursor:pointer;
 
 .card-body{display:flex;flex-direction:column;gap:4px;padding:11px 13px 0}
 .card-facts{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
-.price{font-size:1.125rem;font-weight:650;letter-spacing:-.02em;color:var(--text)}
+.price{font-size:var(--fs-price);font-weight:750;letter-spacing:-.03em;line-height:1.1;color:var(--text)}
 .price-rise{font-size:var(--fs-caption);font-weight:600;color:var(--urgent)}
 .price-note{font-size:var(--fs-caption);color:var(--text-3);cursor:help}
 .card-title{
-  font-size:.9375rem;font-weight:600;line-height:1.35;letter-spacing:-.005em;
+  font-size:1rem;font-weight:600;line-height:1.32;letter-spacing:-.01em;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
 }
 /* Inline-padding udvider klikfladen til 24 px uden at ændre linjehøjden. */
@@ -576,15 +597,20 @@ select{appearance:none;padding-right:30px;cursor:pointer;
 .meta-item{font-size:var(--fs-caption);color:var(--text-3)}
 
 .card-actions{
-  display:flex;gap:2px;margin-top:auto;
-  padding:9px 11px 11px;
-  border-top:1px solid color-mix(in srgb,var(--border) 55%,transparent);
+  display:flex;gap:0;margin-top:auto;
+  padding:6px 7px 7px;
+  border-top:1px solid color-mix(in srgb,var(--border) 85%,transparent);
 }
-.card-actions .fb-btn{flex:1;justify-content:center}
+/* Fire markeringer paa en smal flise: teksten baerer, ikonet ville klemme
+   etiketten. Ikonerne kommer tilbage hvor der er plads, se .lot-page-actions. */
+.card-actions .fb-btn{flex:1;min-width:0;justify-content:center;gap:0;
+  border-radius:var(--r-1)}
+.card-actions .fb-btn .ic{display:none}
+.card-actions .fb-btn span{overflow:hidden;text-overflow:ellipsis;letter-spacing:.005em}
 .fb-btn{
   display:inline-flex;align-items:center;gap:5px;
-  min-height:30px;padding:4px 8px;
-  font-family:inherit;font-size:var(--fs-caption);font-weight:500;color:var(--text-3);
+  min-height:32px;padding:4px 8px;
+  font-family:inherit;font-size:var(--fs-caption);font-weight:600;color:var(--text-2);
   background:transparent;border:1px solid transparent;border-radius:var(--r-2);
   cursor:pointer;white-space:nowrap;
   transition:background-color var(--dur-fast) var(--ease-standard),
@@ -592,7 +618,7 @@ select{appearance:none;padding-right:30px;cursor:pointer;
              color var(--dur-fast) var(--ease-standard),
              transform var(--dur-instant) var(--ease-out);
 }
-.fb-btn:hover{background:var(--surface-3);color:var(--text)}
+.fb-btn:hover{background:var(--surface-2);color:var(--text);border-color:var(--border)}
 .fb-btn:active{transform:scale(.94)}
 .fb-btn[aria-pressed=true]{font-weight:600;animation:pop var(--dur-fast) var(--ease-expressive)}
 .fb-btn[data-action=skip][aria-pressed=true]{background:var(--urgent-soft);color:var(--urgent);border-color:var(--urgent-line)}
@@ -777,7 +803,7 @@ th.col-meter{width:160px}
 .login-form .btn{min-height:44px;font-size:var(--fs-body)}
 
 /* ---- sidefod ---- */
-.site-foot{max-width:1120px;margin:0 auto;padding:var(--sp-7) var(--sp-6) var(--sp-8);
+.site-foot{max-width:1240px;margin:0 auto;padding:var(--sp-7) var(--sp-6) var(--sp-8);
   color:var(--text-3);font-size:var(--fs-small);
   display:flex;flex-wrap:wrap;gap:10px 24px;justify-content:space-between;align-items:center}
 .site-foot-links{display:flex;gap:20px}
@@ -804,10 +830,11 @@ details[open]>.cat-body{animation:reveal var(--dur-base) var(--ease-out) both}
   .site-foot{padding:var(--sp-6) var(--sp-4) var(--sp-7)}
 }
 @media (max-width:760px){
-  .topbar{flex-wrap:wrap;height:auto;padding:10px var(--sp-4) 0;gap:4px 12px}
+  .topbar{height:auto;padding:0 var(--sp-4)}
+  .topbar-inner{flex-wrap:wrap;gap:4px 12px;padding:10px 0}
   .brand{margin-right:auto}
   .brand-name{font-size:.95rem}
-  .nav{order:3;flex-basis:100%;flex-wrap:wrap;padding-bottom:9px;gap:3px}
+  .nav{order:3;flex-basis:100%;width:100%;flex-wrap:wrap;padding-bottom:2px;gap:3px}
   .nav-link{font-size:.79rem;padding:5px 9px}
   .lot-grid,.date-group,.flat-list{grid-template-columns:repeat(auto-fill,minmax(208px,1fr))}
   .cat-meta-price{display:none}
@@ -833,8 +860,8 @@ details[open]>.cat-body{animation:reveal var(--dur-base) var(--ease-out) both}
 @media (max-width:560px){
   .lot-grid,.date-group,.flat-list{grid-template-columns:1fr 1fr;gap:var(--sp-3)}
   .card-body{padding:9px 10px 0}
-  .card-actions{padding:8px 9px 9px}
-  .fb-btn span{display:none}
+  .card-actions{padding:8px 9px 9px;flex-wrap:wrap;gap:2px}
+  .card-actions .fb-btn{flex:1 1 calc(50% - 2px)}
 }
 @media (max-width:520px){
   .search-form{flex-wrap:wrap}
@@ -845,7 +872,7 @@ details[open]>.cat-body{animation:reveal var(--dur-base) var(--ease-out) both}
 }
 
 @media (hover:hover) and (min-width:761px){
-  .fb-btn{opacity:.78}
+  .fb-btn{opacity:.94}
   .card:hover .fb-btn,.fb-btn:focus-visible,.fb-btn[aria-pressed=true]{opacity:1}
 }
 
@@ -1046,8 +1073,9 @@ details[open]>.cat-body{animation:reveal var(--dur-base) var(--ease-out) both}
 [data-view=kompakt] .card-sub{display:none}
 [data-view=kompakt] .card-meta{margin:0}
 [data-view=kompakt] .card-actions{padding:0;border:0;margin:0}
-[data-view=kompakt] .card-actions .fb-btn{min-height:28px;padding:2px 8px}
-[data-view=kompakt] .card-actions .fb-btn span{display:none}
+[data-view=kompakt] .card-actions .fb-btn{min-height:30px;padding:3px 10px;gap:5px;flex:0 0 auto}
+[data-view=kompakt] .card-actions .fb-btn .ic{display:inline-flex}
+[data-view=kompakt] .card-actions .fb-btn span{display:inline}
 @media (max-width:560px){
   [data-view=kompakt] .card{grid-template-columns:40px minmax(0,1fr) auto;gap:9px}
   [data-view=kompakt] .card-media{width:40px;height:40px}
@@ -1103,7 +1131,10 @@ tr.run-error td{background:var(--urgent-soft);color:var(--urgent);font-size:var(
 .lot-page-media{display:flex;flex-direction:column;gap:var(--sp-3)}
 .thumb.is-large{position:relative;width:100%;height:auto;aspect-ratio:4/3;border-radius:var(--r-4)}
 .lot-page-actions{border:0;padding:0;gap:6px}
-.lot-page-actions .fb-btn{flex:1;justify-content:center}
+.lot-page-actions .fb-btn{flex:1;justify-content:center;gap:6px;min-height:38px;
+  border:1px solid var(--border);background:var(--surface);box-shadow:var(--e1)}
+.lot-page-actions .fb-btn .ic{display:inline-flex}
+.lot-page-actions .fb-btn:hover{border-color:var(--border-strong)}
 .lot-page-link{align-self:flex-start}
 .lot-page-facts{display:flex;flex-direction:column;gap:var(--sp-2);min-width:0}
 .lot-page-comps{min-width:0}
@@ -1158,3 +1189,69 @@ tr.run-error td{background:var(--urgent-soft);color:var(--urgent);font-size:var(
   font-size:var(--fs-small);line-height:1.65;color:var(--text-2);
   white-space:pre-wrap;
 }
+
+/* ---- tomme tilstande ---- */
+/* En tom skaerm er et designet oejeblik, ikke et hul. Den hvide boks var det
+   mest kliniske ved hele fladen. */
+.empty{
+  display:block;max-width:54ch;margin:var(--sp-5) auto;padding:var(--sp-6) var(--sp-5);
+  text-align:center;color:var(--text-2);font-size:var(--fs-body);line-height:1.6;
+  background:color-mix(in oklab,var(--surface) 72%,transparent);
+  border:1px dashed var(--border-strong);border-radius:var(--r-4);
+}
+.empty a{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
+.empty-state{
+  display:flex;flex-direction:column;align-items:center;gap:11px;text-align:center;
+  max-width:58ch;margin:var(--sp-6) auto;padding:var(--sp-7) var(--sp-6);
+  background:
+    radial-gradient(circle at 50% -20%,var(--accent-soft),transparent 68%),
+    var(--surface);
+  border:1px solid var(--border);border-radius:var(--r-4);box-shadow:var(--e2),var(--edge);
+}
+.empty-glyph{
+  display:grid;place-items:center;width:58px;height:58px;border-radius:50%;
+  color:var(--accent);background:var(--accent-soft);
+  box-shadow:inset 0 0 0 1px var(--accent-line);
+}
+.empty-state h2{
+  font-family:var(--font-display);font-size:1.3125rem;font-weight:700;
+  letter-spacing:-.02em;color:var(--text);
+}
+.empty-state p{color:var(--text-2);font-size:var(--fs-small);line-height:1.65;max-width:48ch}
+.empty-state p a{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
+.empty-state .btn{margin-top:4px}
+
+/* ---- et enkelt lot: prisen er helten ---- */
+.lot-price{
+  padding:18px 20px 16px;background:var(--surface);border-radius:var(--r-4);
+  box-shadow:var(--e2),var(--edge);border-top:3px solid var(--accent-solid);
+}
+.lot-price .overline{margin-bottom:6px}
+.lot-price-value{
+  font-size:2.375rem;font-weight:750;letter-spacing:-.035em;line-height:1;
+  color:var(--text);font-variant-numeric:tabular-nums lining-nums;
+}
+.lot-price-sub{
+  display:flex;flex-wrap:wrap;gap:10px 28px;margin-top:16px;padding-top:14px;
+  border-top:1px solid color-mix(in srgb,var(--border) 80%,transparent);
+}
+.lot-price-sub dt{
+  font-size:var(--fs-overline);font-weight:700;color:var(--text-3);
+  text-transform:uppercase;letter-spacing:.1em;
+}
+.lot-price-sub dd{
+  margin-top:4px;font-size:var(--fs-body);font-weight:650;color:var(--text);
+  font-variant-numeric:tabular-nums lining-nums;
+}
+.lot-origin{margin-top:var(--sp-5)}
+.lot-origin .deflist{margin-top:0}
+
+/* ---- statistik: stoerre tal, tydeligere bjaelker ---- */
+.metric{padding:16px 18px}
+.metric dd{font-size:2.25rem;font-weight:750;letter-spacing:-.03em;line-height:1.05}
+.bar-row{padding:12px 18px}
+.bar-label{font-size:var(--fs-body)}
+.bar-track{height:12px}
+.bar-fill{box-shadow:inset 0 -1px 0 rgba(0,0,0,.08)}
+.panel{box-shadow:var(--e2),var(--edge)}
+.section-title .count{background:var(--surface-3);color:var(--text-2)}

@@ -2,6 +2,7 @@
 {% from "_icons.html" import icon %}
 {% from "_card.html" import card with context %}
 {% from "_view.html" import view_toggle %}
+{% from "_empty.html" import empty_state %}
 {% set ending_soon = rows|selectattr('ends_in', 'gt', 0)|selectattr('ends_in', 'le', 86400)|list|length %}
 
 {% block title %}{{ heading }} · Auktionshuset Hunter{% endblock %}
@@ -9,6 +10,7 @@
 
 {% block content %}
 <header class="page-head">
+  <p class="overline">{{ icon('spark', 13) }} Katalog</p>
   <h1>{{ heading }}</h1>
   <p class="page-meta">
     <span id="visible-count" role="status" aria-live="polite">{{ rows|length }} fund</span>
@@ -89,7 +91,11 @@
   </div>
 </div>
 
-<p class="empty" id="no-results" hidden>Ingen fund matcher filteret.</p>
+<div class="empty-state" id="no-results" hidden>
+  <span class="empty-glyph" aria-hidden="true">{{ icon('ban', 28) }}</span>
+  <h2>Ingen fund matcher filteret</h2>
+  <p>Prøv at fjerne et filter, eller ryd dem alle.</p>
+</div>
 
 <div id="cards-container">
   {% for label, items in groups %}
@@ -102,7 +108,8 @@
 <div id="flat-list" class="flat-list" hidden></div>
 
 {% else %}
-<p class="empty">{{ empty }}</p>
+{{ empty_state(empty,
+     'Agenten kører videre og lægger nye fund her, så snart der er noget der matcher profilen.', 'search') }}
 {% endif %}
 
 {% if reviews %}

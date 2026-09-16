@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
 {% from "_card.html" import card with context %}
+{% from "_empty.html" import empty_state %}
 
 {% set filter_labels = {
   'søgeord': 'Søgeord', 'min_pris': 'Fra', 'maks_pris': 'Til',
@@ -12,6 +13,7 @@
 
 {% block content %}
 <header class="page-head">
+  <p class="overline">{{ icon('search', 13) }} Spørg arkivet</p>
   <h1>Assistent</h1>
   <p class="page-meta">Stil et spørgsmål i almindeligt sprog, og få et svar bygget på arkivet.</p>
 </header>
@@ -86,8 +88,11 @@
 </section>
 
 {% else %}
+{{ empty_state('Spørg arkivet',
+   'Jeg leder i alt hvad agenten har set, også de lots der aldrig blev til et fund. Spørgsmålet oversættes til en søgning, og det er Python der bygger den, så en mærkelig lot-titel kan ikke narre mig til at hente noget andet end lots.',
+   'search') }}
 <section class="section">
-  <p class="hint">Jeg leder i alt hvad agenten har set, også de lots der aldrig blev til et fund. Spørgsmålet oversættes til en søgning, og det er Python der bygger den. En mærkelig lot-titel kan derfor ikke narre mig til at hente noget andet end lots.</p>
+  <h2 class="section-title">Prøv også</h2>
   <div class="suggestions">
     {% for suggestion in [
       'Har der været Sennheiser-forstærkere under 1.000 kr?',

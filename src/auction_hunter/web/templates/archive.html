@@ -2,6 +2,7 @@
 {% from "_icons.html" import icon %}
 {% from "_card.html" import card with context %}
 {% from "_view.html" import view_toggle %}
+{% from "_empty.html" import empty_state %}
 {% set q = result.query %}
 {% set advanced = q.min_price or q.max_price or q.matched != 'alle' or q.category or q.days_back or q.sort != 'relevans' %}
 
@@ -9,6 +10,7 @@
 
 {% block content %}
 <header class="page-head">
+  <p class="overline">{{ icon('search', 13) }} Alle lots</p>
   <h1>Arkiv</h1>
   <p class="page-meta">
     <span>{{ archive.total }} lots i arkivet</span>
@@ -148,10 +150,11 @@
     </nav>
     {% endif %}
   {% elif q.is_empty %}
-    <p class="empty">Skriv et søgeord eller vælg et filter for at lede i arkivet.</p>
-    <p class="hint">Søgningen folder danske tegn, så <code>hojttaler</code> finder <code>højttaler</code>. Arkivet rummer hvert lot agenten har set, også dem der aldrig ramte profilen.</p>
+    {{ empty_state('Søg i arkivet',
+       'Skriv et søgeord eller vælg et filter. Søgningen folder danske tegn, så hojttaler finder højttaler. Arkivet rummer hvert lot agenten har set, også dem der aldrig ramte profilen.',
+       'search') }}
   {% else %}
-    <p class="empty">Ingen lots matcher søgningen. Prøv et bredere søgeord, eller ryd filtrene.</p>
+    {{ empty_state('Ingen lots matcher søgningen', 'Prøv et bredere søgeord, eller ryd filtrene.', 'ban', '/archive', 'Ryd filtre') }}
   {% endif %}
 </section>
 {% endblock %}
