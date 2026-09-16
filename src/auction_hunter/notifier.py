@@ -18,6 +18,8 @@ from dataclasses import dataclass, field
 
 import requests
 
+from .details import FLAG_LABELS
+from .formatting import kr, time_left
 from .matcher import Match, last_chance
 
 log = logging.getLogger(__name__)
@@ -44,20 +46,26 @@ class NotifyResult:
 
 
 def _format_price(match: Match) -> str:
-    """Prisfelt med tydelig markering af estimerede beløb."""
+    """Prisfelt med tydelig markering af estimerede beløb.
+
+    Formateringen deles med webdashboardet, saa et beløb ikke kan skrives på
+    to måder alt efter hvor man læser det.
+    """
     price = match.price
     if price.current_total is not None:
-        base = f"**{price.current_total:,} kr**".replace(",", ".")
-        base += f"\n(aktuelt bud {price.current_bid:,} kr inkl. moms & salær)".replace(",", ".")
+        base = f"**{kr(price.current_total)}**"
+        base += f"\n(aktuelt bud {kr(price.current_bid)} inkl. moms & salær)"
     else:
-        base = f"**~{price.entry_cost:,} kr**".replace(",", ".")
+        base = f"**~{kr(price.entry_cost)}**"
         base += "\n(estimat: første bud inkl. moms & salær)"
     if price.vat_exempt:
         base += "\nMomsfri auktion"
     return base
 
 
-def build_embed(match: Match, *, last_chance_hours: float = 24) -> dict:
+def build_embed(
+    match: Match, *, last_chance_hours: float = 24, flags: tuple[str, ...] = ()
+) -> dict:
     """Byg én Discord-embed for et fund."""
     lot = match.lot
 
@@ -82,30 +90,35 @@ def build_embed(match: Match, *, last_chance_hours: float = 24) -> dict:
     ]
 
     if lot.ends_at:
-        fields.append(
-            {
-                "name": "Hammerslag",
-                "value": lot.ends_at.strftime("%d/%m %H:%M"),
-                "inline": True,
-            }
-        )
+        # Både hvor lang tid der er igen og det præcise tidspunkt: det første
+        # afgør om man skal handle nu, det andet hvornår man skal sidde klar.
+        left, _css, _secs = time_left(lot.ends_at.isoformat())
+        value = f"{left}\n{lot.ends_at.strftime('%d/%m %H:%M')}" if left else \
+            lot.ends_at.strftime("%d/%m %H:%M")
+        fields.append({"name": "Hammerslag", "value": value, "inline": True})
 
     auction_title = lot.auction_title or "–"
     if len(auction_title) > 200:
         auction_title = auction_title[:197] + "…"
     fields.append({"name": "Auktion", "value": auction_title, "inline": False})
 
+    if flags:
+        labels = [FLAG_LABELS.get(flag, flag) for flag in flags]
+        fields.append({"name": "Stand", "value": " · ".join(labels), "inline": False})
+
     if match.over_budget:
         fields.append(
             {
                 "name": "Bemærk",
-                "value": f"Over dit loft på {match.category.max_price} kr",
+                "value": f"Over dit loft på {kr(match.category.max_price)}",
                 "inline": False,
             }
         )
 
     embed = {
-        "title": f"{match.category.emoji} {title}".strip(),
+        # Ingen emoji: kategorien står i footeren, og et ikon i titlen er pynt
+        # der skubber det, der betyder noget, ud til højre.
+        "title": title,
         "url": lot.url or None,
         "color": color,
         "fields": fields,
@@ -116,9 +129,19 @@ def build_embed(match: Match, *, last_chance_hours: float = 24) -> dict:
     return {k: v for k, v in embed.items() if v is not None}
 
 
-def build_payload(matches: list[Match], *, heading: str, username: str = "Auktionshuset Hunter") -> dict:
+def build_payload(
+    matches: list[Match],
+    *,
+    heading: str,
+    username: str = "Auktionshuset Hunter",
+    details: dict[str, tuple[str, ...]] | None = None,
+) -> dict:
     """Byg en Discord-webhook-payload for op til 10 fund."""
-    embeds = [build_embed(m) for m in matches[:MAX_EMBEDS_PER_MESSAGE]]
+    details = details or {}
+    embeds = [
+        build_embed(m, flags=details.get(m.lot.lot_id, ()))
+        for m in matches[:MAX_EMBEDS_PER_MESSAGE]
+    ]
     return {
         "username": username,
         "content": heading[:2000],
@@ -155,6 +178,7 @@ class DiscordNotifier:
                     except (ValueError, AttributeError):
                         pass
                     log.warning("Discord rate limit — venter %.1fs", retry_after)
+                    last_error = DiscordError(f"rate limit, ventede {retry_after:.1f}s")
                     time.sleep(min(retry_after, 30))
                     continue
                 if response.status_code in (500, 502, 503, 504):
@@ -167,12 +191,18 @@ class DiscordNotifier:
                 time.sleep(min(2 ** attempt, 10))
         raise DiscordError(f"Kunne ikke sende til Discord efter {self.max_retries} forsøg: {last_error}")
 
-    def send_matches(self, matches: list[Match], *, heading: str) -> NotifyResult:
+    def send_matches(
+        self,
+        matches: list[Match],
+        *,
+        heading: str,
+        details: dict[str, tuple[str, ...]] | None = None,
+    ) -> NotifyResult:
         """Send fund i grupper på højst 10 embeds pr. besked."""
         result = NotifyResult()
         for offset in range(0, len(matches), MAX_EMBEDS_PER_MESSAGE):
             chunk = matches[offset : offset + MAX_EMBEDS_PER_MESSAGE]
-            payload = build_payload(chunk, heading=heading)
+            payload = build_payload(chunk, heading=heading, details=details)
             try:
                 self._post(payload)
             except DiscordError as exc:
@@ -208,7 +238,10 @@ def build_digest(rows: list[dict], *, max_items: int = 15) -> str:
     if not rows:
         return ""
 
-    lines = [f"**{len(rows)} lot(er) jeg er i tvivl om** — værd at kigge på:\n"]
+    lines = [
+        f"**{len(rows)} {'lot' if len(rows) == 1 else 'lots'} jeg er i tvivl om**"
+        " — værd at kigge på:\n"
+    ]
     for row in rows[:max_items]:
         title = (row.get("title") or "").strip()
         if len(title) > 110:

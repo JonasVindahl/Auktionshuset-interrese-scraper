@@ -12,6 +12,7 @@
      data-price="{{ row.cost }}"
      data-endsin="{{ row.ends_in }}"
      data-lot="{{ row.lot_id }}"
+     data-bid="{{ 1 if row.bid else 0 }}"
      data-feedback="{{ row.feedback }}">
 
   <div class="card-media">
@@ -23,7 +24,7 @@
       {%- if row.url %}<a class="thumb-link" href="{{ row.url }}" target="_blank" rel="noopener"
             aria-hidden="true" tabindex="-1"></a>{% endif %}
     </div>
-    {% if row.time_left %}<span class="badge-time {{ row.time_css }}">{{ icon('clock', 12) }}{{ row.time_left }}</span>{% endif %}
+    {% if row.time_left %}<span class="badge-time {{ row.time_css }}" aria-hidden="true">{{ icon('clock', 12) }}{{ row.time_left }}</span>{% endif %}
     {% if row.feedback %}<span class="badge-state is-{{ row.feedback }}">{{ state[row.feedback] }}</span>{% endif %}
   </div>
 
@@ -32,6 +33,22 @@
       {%- if row.price_label %}<span class="price-label" title="Prisen for første bud inkl. salær og moms">{{ row.price_label }}</span>{% endif %}
       <span class="price">{{ row.price }}</span>
       {%- if row.rise %}<span class="price-rise" title="Stigning siden første registrerede bud">+{{ row.rise }}</span>{% endif %}
+      {%- if row.time_left %}<span class="time-inline {{ row.time_css }}">{{ icon('clock', 12) }}{{ row.time_left }}</span>{% endif %}
+      {%- if row.series and row.series|length > 1 %}
+      {#- Prisforløbet tegnes som en lille kurve. Databasen har haft tallene
+          hele tiden; det er kun visningen der har manglet. -#}
+      {%- set lo = row.series|min %}
+      {%- set hi = row.series|max %}
+      {%- set span = (hi - lo) if hi > lo else 1 %}
+      <span class="spark{% if row.series[-1] > row.series[0] %} is-up{% elif row.series[-1] < row.series[0] %} is-down{% endif %}"
+            title="Prisforløb over {{ row.series|length }} observationer">
+        <svg width="66" height="18" viewBox="0 0 66 18" aria-hidden="true" focusable="false">
+          <polyline fill="none" stroke="currentColor" stroke-width="1.6"
+                    stroke-linejoin="round" stroke-linecap="round"
+                    points="{% for v in row.series %}{{ (loop.index0 / (row.series|length - 1) * 64)|round(1) }},{{ (15 - (v - lo) / span * 12)|round(1) }}{% if not loop.last %} {% endif %}{% endfor %}"/>
+        </svg>
+      </span>
+      {%- endif %}
     </p>
 
     <h3 class="card-title">
@@ -42,9 +59,12 @@
     <p class="card-meta">
       {%- if row.category %}<span class="tag-cat" data-cat="{{ row.category }}" title="{{ row.category }}">{{ category_labels.get(row.category, row.category) }}</span>{% endif %}
       {%- if is_vat_exempt(row.auction) %}<span class="tag-vat" title="Momsfri auktion: salæret er momsbelagt, hammerprisen ikke">momsfri</span>{% endif %}
+      {%- if row.has_serious_flag %}<span class="tag-flag" title="Fra lot-siden: {{ row.flags_label }}">stand: {{ row.flags_label|lower }}</span>{% endif %}
       {%- if row.lot_number %}<span class="meta-item">Lot {{ row.lot_number }}</span>{% endif %}
       {%- if show_seen and row.seen_rel %}<span class="meta-item" title="{{ row.seen_full }}">set {{ row.seen_rel }}</span>{% endif %}
       {%- if row.was_match is defined and not row.was_match %}<span class="meta-item tag-miss">ikke et fund</span>{% endif %}
+      <a class="meta-link" href="/lot/{{ row.lot_id }}"
+         title="Prisforløb og hvad samme slags er gået for">historik</a>
     </p>
     {% if row.auction %}<p class="card-sub" title="{{ row.auction }}">{{ row.auction }}</p>{% endif %}
   </div>
@@ -53,6 +73,7 @@
     {# Den synlige tekst er også det tilgængelige navn. #}
     {%- for action, label, tip, ic in [
       ('skip', 'Afvis', 'Ikke interesseret i dette lot', 'ban'),
+      ('watch', 'Følg', 'Hold øje med dette lot', 'eye'),
       ('bid', 'Budt', 'Jeg har budt på det', 'bookmark'),
       ('bought', 'Købt', 'Jeg købte det', 'check')
     ] %}

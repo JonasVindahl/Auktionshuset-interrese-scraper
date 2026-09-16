@@ -140,6 +140,8 @@ def search(conn: sqlite3.Connection, query: SearchQuery) -> SearchResult:
         return SearchResult(query=query)
 
     image = "l.image_url" if has_column(conn, "lots", "image_url") else "''"
+    details_flags = ("l.details_flags" if has_column(conn, "lots", "details_flags")
+                     else "'' AS details_flags")
     feedback_join = (
         "LEFT JOIN feedback f ON f.lot_id = l.lot_id"
         if has_table(conn, "feedback") else ""
@@ -208,7 +210,7 @@ def search(conn: sqlite3.Connection, query: SearchQuery) -> SearchResult:
     select = f"""
         SELECT DISTINCT l.lot_id, l.title, l.url, l.auction_title, l.lot_number,
                l.first_seen, l.last_seen, l.ends_at,
-               l.first_bid, l.last_bid, l.last_total,
+               l.first_bid, l.last_bid, l.last_total, {details_flags},
                {image} AS image_url,
                n.category_key, n.sent_at, n.cost,
                {feedback_col} AS feedback_action,

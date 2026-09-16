@@ -1,0 +1,15 @@
+{% from "_icons.html" import icon %}
+{#- Skifter mellem katalog og kompakt liste. Valget gemmes i localStorage og
+    sættes som data-view på <html>, så CSS'en kan gøre arbejdet. -#}
+{% macro view_toggle() -%}
+<div class="view-toggle" role="group" aria-label="Visning">
+  <button type="button" class="view-btn" data-view="katalog" aria-pressed="true"
+          title="Katalog med billeder">
+    {{ icon('grid', 15) }}<span class="sr-only">Katalog</span>
+  </button>
+  <button type="button" class="view-btn" data-view="kompakt" aria-pressed="false"
+          title="Kompakt liste">
+    {{ icon('list', 15) }}<span class="sr-only">Kompakt</span>
+  </button>
+</div>
+{%- endmacro %}

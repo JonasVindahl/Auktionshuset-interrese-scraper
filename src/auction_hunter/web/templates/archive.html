@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
 {% from "_card.html" import card with context %}
+{% from "_view.html" import view_toggle %}
 {% set q = result.query %}
 {% set advanced = q.min_price or q.max_price or q.matched != 'alle' or q.category or q.days_back or q.sort != 'relevans' %}
 
@@ -36,8 +37,9 @@
       <a href="{{ tab.url }}"{% if tab.active %} aria-current="page"{% endif %}>{{ tab.label }}</a>
       {% endfor %}
     </nav>
+    {{ view_toggle() }}
     {% if result.total %}
-    <p class="result-count">
+    <p class="result-count" style="margin-left:auto">
       Viser {{ result.rows|length }} af {{ result.total }}{% if result.truncated %}+{% endif %}
       {%- if result.pages > 1 %}, side {{ result.page }} af {{ result.pages }}{% endif %}
       {%- if result.truncated %} (flere resultater er skåret fra, præcisér søgningen){% endif %}

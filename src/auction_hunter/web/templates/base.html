@@ -42,10 +42,32 @@
 <footer class="site-foot">
   <p>Fund sendes til Discord. Markeringer gemmes lokalt som træningsdata til AI-trinnet.</p>
   <p class="site-foot-links">
-    <a href="/export/feedback.csv">{{ icon('download', 14) }} Hent markeringer som CSV</a>
+    <button type="button" class="linkish" data-keys-open>{{ icon('keyboard', 14) }} Tastaturgenveje</button>
+    <a href="/export/feedback.csv">{{ icon('download', 14) }} Markeringer som CSV</a>
+    <a href="/export/archive.csv">{{ icon('download', 14) }} Arkiv som CSV</a>
     <a href="/logout">{{ icon('logout', 14) }} Log ud</a>
   </p>
 </footer>
+
+<div class="key-help" id="key-help" hidden>
+  <div class="key-help-card" role="dialog" aria-label="Tastaturgenveje">
+    <h2>Tastatur</h2>
+    <dl class="key-list">
+      <div><dt>j</dt><dd>næste lot</dd></div>
+      <div><dt>k</dt><dd>forrige lot</dd></div>
+      <div><dt>Enter</dt><dd>åbn det valgte lot</dd></div>
+      <div><dt>x</dt><dd>afvis</dd></div>
+      <div><dt>w</dt><dd>hold øje</dd></div>
+      <div><dt>b</dt><dd>budt</dd></div>
+      <div><dt>c</dt><dd>købt</dd></div>
+      <div><dt>/</dt><dd>søgefeltet</dd></div>
+      <div><dt>?</dt><dd>denne liste</dd></div>
+      <div><dt>Esc</dt><dd>luk</dd></div>
+    </dl>
+    <p class="hint">Genvejene virker på lister og rører ikke felter, du skriver i.</p>
+    <button type="button" class="btn is-quiet" data-keys-close>Luk</button>
+  </div>
+</div>
 
 <script src="/static/app.js" defer></script>
 {% block scripts %}{% endblock %}

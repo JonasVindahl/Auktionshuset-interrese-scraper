@@ -104,7 +104,8 @@ def cmd_stats(args: argparse.Namespace) -> int:
 
         pending = store.pending_review_count()
         if pending:
-            print(f"\nTil gennemsyn: {pending} lot(er) venter på næste digest")
+            print(f"\nTil gennemsyn: {pending} "
+                  f"{'lot' if pending == 1 else 'lots'} venter på næste digest")
 
         risers = store.price_risers(limit=10)
         if risers:
@@ -120,9 +121,9 @@ def cmd_review(args: argparse.Namespace) -> int:
     with Store(args.db) as store:
         rows = store.pending_reviews(limit=args.limit)
     if not rows:
-        print("Ingen lotter til gennemsyn.")
+        print("Ingen lots til gennemsyn.")
         return 0
-    print(f"{len(rows)} lot(er) til gennemsyn:\n")
+    print(f"{len(rows)} {'lot' if len(rows) == 1 else 'lots'} til gennemsyn:\n")
     for row in rows:
         print(f"  {row['title'][:78]}")
         if row["reason"]:

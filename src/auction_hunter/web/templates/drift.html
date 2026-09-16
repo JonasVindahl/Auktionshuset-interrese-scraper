@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+
+{% block title %}Drift · Auktionshuset Hunter{% endblock %}
+{% block page_class %}is-wide{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <h1>Drift</h1>
+  <p class="page-meta">
+    <span class="dot{% if stale %} is-stale{% endif %}" aria-hidden="true"></span>
+    {{ pulse }}
+    {%- if stale %}<span class="meta-sep">·</span><span class="meta-urgent">agenten har ikke kørt længe</span>{% endif %}
+  </p>
+</header>
+
+<section class="section">
+  <h2 class="section-title">Hukommelsen</h2>
+  <dl class="metrics">
+    <div class="metric"><dt>Database</dt><dd>{{ (db_bytes / 1024 / 1024)|round(1) }} <span class="metric-unit">MB</span></dd></div>
+    <div class="metric"><dt>Lots</dt><dd>{{ tables.lots or 0 }}</dd></div>
+    <div class="metric"><dt>Fund sendt</dt><dd>{{ tables.notifications or 0 }}</dd></div>
+    <div class="metric"><dt>Prisobservationer</dt><dd>{{ tables.price_history or 0 }}</dd></div>
+    <div class="metric"><dt>Kørsler</dt><dd>{{ tables.runs or 0 }}</dd></div>
+    <div class="metric"><dt>Til gennemsyn</dt><dd>{{ reviews }}</dd></div>
+  </dl>
+  {% if span.first %}
+  <p class="hint">
+    Arkivet dækker fra {{ span.first[:10] }} til {{ span.last[:10] }}.
+    Seneste normale kørsel gav {{ normal_lots or '?' }} lots; falder tallet til under
+    halvdelen, sender agenten en blindheds-advarsel.
+    {%- if blind_at %} Sidste advarsel: {{ blind_at[:16].replace('T', ' ') }}.{% endif %}
+  </p>
+  {% endif %}
+</section>
+
+<section class="section">
+  <h2 class="section-title">Billedcachen</h2>
+  <dl class="metrics">
+    <div class="metric"><dt>Billeder</dt><dd>{{ image_count }}</dd></div>
+    <div class="metric"><dt>Størrelse</dt><dd>{{ (image_bytes / 1024 / 1024)|round(1) }} <span class="metric-unit">MB</span></dd></div>
+  </dl>
+  <p class="hint">Billeder hentes kun for fund, og kun mens lot'et er aktivt. De ryddes
+    automatisk efter 180 dage.</p>
+</section>
+
+<section class="section">
+  <h2 class="section-title">Konfigurationen</h2>
+  {% if not settings.readable %}
+  <p class="banner is-err" role="alert">{{ icon('alert', 15) }}
+    <span>Filen kunne ikke læses: {{ settings.error }}</span></p>
+  {% endif %}
+  <dl class="metrics">
+    <div class="metric"><dt>Kategorier</dt><dd>{{ settings.categories or '?' }}</dd></div>
+    <div class="metric"><dt>Nøgleord</dt><dd>{{ settings.keywords or '?' }}</dd></div>
+    <div class="metric"><dt>Udelukkelser</dt><dd>{{ settings.excludes or '?' }}</dd></div>
+    <div class="metric"><dt>Prisloft</dt><dd>{{ settings.max_price|kr if settings.max_price else '?' }}</dd></div>
+    <div class="metric"><dt>Åbningsbud</dt><dd>{{ settings.opening_bid|kr if settings.opening_bid else '?' }}</dd></div>
+    <div class="metric"><dt>AI-trin</dt><dd>{{ 'til' if settings.ai_enabled else 'fra' }}</dd></div>
+  </dl>
+  <dl class="deflist">
+    <div><dt>Fil</dt><dd><code>{{ settings.path }}</code>
+      {%- if settings.writable %} (kan redigeres herfra){% else %} (skrivebeskyttet){% endif %}</dd></div>
+    <div><dt>Region</dt><dd>{{ settings.region or '?' }}</dd></div>
+    <div><dt>Over loftet</dt><dd>rapporteres indtil {{ settings.soft or '?' }} gange loftet</dd></div>
+    <div><dt>AI-model</dt><dd>{{ settings.ai_model or '?' }} <span class="muted-note">{{ settings.ai_base or '' }}</span></dd></div>
+    {% for name, state in secrets.items() %}
+    <div><dt>{{ name }}</dt><dd>
+      {%- if state == 'sat' %}{{ icon('check', 13) }} sat
+      {%- elif state == 'ikke sat' %}<span class="muted-note">ikke sat</span>
+      {%- else %}<span class="status is-err">{{ icon('alert', 13) }} {{ state }}</span>{% endif %}
+    </dd></div>
+    {% endfor %}
+  </dl>
+</section>
+
+<section class="section">
+  <h2 class="section-title">Seneste kørsler</h2>
+  <div class="panel">
+    <div class="table-wrap">
+      <table class="stack">
+        <thead>
+          <tr>
+            <th scope="col">Tidspunkt</th>
+            <th scope="col" class="num">Auktioner</th>
+            <th scope="col" class="num">Lots</th>
+            <th scope="col" class="num">Fund</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for run in runs %}
+          {% set rel, full = rel_past(run.finished_at) %}
+          <tr>
+            <td title="{{ full }}">{{ rel }}</td>
+            <td class="num" data-label="Auktioner">{{ run.auctions }}</td>
+            <td class="num" data-label="Lots">{{ run.lots }}</td>
+            <td class="num" data-label="Fund">{{ run.matches }}</td>
+            <td data-label="Status">
+              {% if run.error %}<span class="status is-err" title="{{ run.error }}">{{ icon('alert', 13) }} fejl</span>
+              {% elif run.lots == 0 %}<span class="status is-warn">{{ icon('alert', 13) }} ingen lots</span>
+              {% else %}<span class="status is-ok">{{ icon('check', 13) }} ok</span>{% endif %}
+            </td>
+          </tr>
+          {% if run.error %}
+          <tr class="run-error"><td colspan="5">{{ run.error }}</td></tr>
+          {% endif %}
+          {% else %}
+          <tr><td colspan="5" class="empty">Ingen kørsler registreret endnu.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{% endblock %}

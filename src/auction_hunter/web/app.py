@@ -29,8 +29,17 @@ from .. import images as images_mod
 from ..classifier import OpenAICompatibleClient
 from ..config import DEFAULT_CONFIG_PATH, ConfigError, load_config
 from ..fees import DEFAULT_OPENING_BID, is_vat_exempt
+from ..details import FLAG_LABELS
+from ..formatting import MONTHS_DA
 from ..secrets import SecretError, get_secret
-from . import auth, chat as chat_mod, queries, rows as rows_mod, search as search_mod
+from . import (
+    auth,
+    chat as chat_mod,
+    queries,
+    rows as rows_mod,
+    search as search_mod,
+    similar as similar_mod,
+)
 from .formatting import date_label, kr, rel_past, time_left, timestamp
 from .yamledit import EditError, InterestsFile, LEVELS
 
@@ -48,6 +57,7 @@ NAV = (
     ("/interests", "Interesser"),
     ("/chat", "Assistent"),
     ("/stats", "Statistik"),
+    ("/drift", "Drift"),
 )
 
 
@@ -198,6 +208,26 @@ def status_tabs(query: search_mod.SearchQuery) -> list[dict[str, Any]]:
     ]
 
 
+def _safe_config() -> Any | None:
+    """Konfigurationen, eller None hvis filen ikke kan læses."""
+    try:
+        return load_config(config_path())
+    except ConfigError:
+        return None
+
+
+def secret_status(name: str) -> str:
+    """Om en hemmelighed er sat. Aldrig værdien, kun tilstanden.
+
+    En hemmelighed der er sat men ikke kan læses er en fejl nogen skal se, ikke
+    noget der skal skjules bag "ikke sat".
+    """
+    try:
+        return "sat" if get_secret(name) else "ikke sat"
+    except SecretError:
+        return "sat, men kunne ikke læses"
+
+
 # Etiketter til sorterings-chippen, så opsummeringen bliver dansk frem for
 # feltnavne.
 _ARCHIVE_SORT_LABELS = {
@@ -326,6 +356,19 @@ def create_app() -> FastAPI:
     templates.env.globals["is_vat_exempt"] = is_vat_exempt
     templates.env.globals["nav"] = NAV
 
+    def with_series(rows: list[dict]) -> list[dict]:
+        """Læg prisforløbet på de forberedte rækker, i ét opslag."""
+        if not rows:
+            return rows
+        conn = ro_conn(db_path())
+        try:
+            series = queries.price_series(conn, [r["lot_id"] for r in rows])
+        finally:
+            conn.close()
+        for row in rows:
+            row["series"] = series.get(row["lot_id"], [])
+        return rows
+
     def page(request: Request, name: str, **context: Any) -> HTMLResponse:
         """Render en side med det fælles sidehoved allerede udfyldt."""
         conn = ro_conn(db_path())
@@ -404,7 +447,7 @@ def create_app() -> FastAPI:
         finally:
             conn.close()
         categories = sorted({r["category_key"] for r in active if r["category_key"]})
-        prepared = rows_mod.prepare_all(active, db_path=db_path(), opening_bid=opening_bid())
+        prepared = with_series(rows_mod.prepare_all(active, db_path=db_path(), opening_bid=opening_bid()))
         return page(
             request, "finds.html",
             rows=prepared, groups=rows_mod.group_by_date(prepared),
@@ -423,7 +466,7 @@ def create_app() -> FastAPI:
         finally:
             conn.close()
         categories = sorted({r["category_key"] for r in gone if r["category_key"]})
-        prepared = rows_mod.prepare_all(gone, db_path=db_path(), opening_bid=opening_bid())
+        prepared = with_series(rows_mod.prepare_all(gone, db_path=db_path(), opening_bid=opening_bid()))
         return page(
             request, "finds.html",
             rows=prepared, groups=rows_mod.group_by_date(prepared),
@@ -446,20 +489,43 @@ def create_app() -> FastAPI:
         finally:
             conn.close()
 
-        prepared = rows_mod.prepare_all(
+        prepared = with_series(rows_mod.prepare_all(
             rows, seen_field="created_at", db_path=db_path(), opening_bid=opening_bid()
-        )
+        ))
         groups = [
             (key, label, [r for r in prepared if r["feedback"] == key])
-            for key, label in (("bought", "Købt"), ("bid", "Budt"), ("skip", "Afvist"))
+            for key, label in (("bought", "Købt"), ("bid", "Budt"),
+                               ("watch", "Følger"), ("skip", "Afvist"))
         ]
         groups = [(key, label, items) for key, label, items in groups if items]
         committed = [r for r in prepared if r["feedback"] in ("bid", "bought")]
         total = sum(r["cost"] or 0 for r in committed)
 
+        # Månedligt resumé: hvad er der budt og købt for, måned for måned.
+        month_of = {raw["lot_id"]: (raw["created_at"] or "")[:7] for raw in rows}
+        months: dict[str, dict[str, int]] = {}
+        for row in committed:
+            month = month_of.get(row["lot_id"], "")
+            if not month:
+                continue
+            entry = months.setdefault(month, {"n": 0, "sum": 0})
+            entry["n"] += 1
+            entry["sum"] += row["cost"] or 0
+        monthly = [
+            {
+                "key": month,
+                "label": f"{MONTHS_DA[int(month[5:7]) - 1]} {month[:4]}",
+                "n": data["n"],
+                "sum": data["sum"],
+            }
+            for month, data in sorted(months.items(), reverse=True)
+            if len(month) == 7 and month[5:7].isdigit()
+        ]
+
         return page(
             request, "mine.html",
-            groups=groups, count=len(prepared), committed=len(committed), total=total,
+            groups=groups, count=len(prepared), committed=len(committed),
+            total=total, monthly=monthly,
         )
 
     @app.post("/feedback")
@@ -529,7 +595,7 @@ def create_app() -> FastAPI:
         return page(
             request, "archive.html",
             result=result,
-            rows=rows_mod.prepare_all(result.rows, seen_field="first_seen", db_path=db_path(), opening_bid=opening_bid()),
+            rows=with_series(rows_mod.prepare_all(result.rows, seen_field="first_seen", db_path=db_path(), opening_bid=opening_bid())),
             archive=stats, categories=categories, page_url=page_url,
             filters=filter_chips(result.query),
             status_tabs=status_tabs(result.query),
@@ -687,6 +753,7 @@ def create_app() -> FastAPI:
     def chat_page(
         request: Request,
         q: str = Query("", max_length=chat_mod.MAX_QUESTION_LENGTH),
+        alle: bool = False,
         _: None = Depends(require_login),
     ) -> HTMLResponse:
         answer = None
@@ -696,13 +763,13 @@ def create_app() -> FastAPI:
         if q.strip():
             conn = ro_conn(db_path())
             try:
-                answer = chat_mod.ask(conn, client, q)
+                answer = chat_mod.ask(conn, client, q, show_all=alle)
             finally:
                 conn.close()
         return page(
             request, "chat.html",
-            question=q, answer=answer,
-            rows=rows_mod.prepare_all(answer.rows, seen_field="first_seen", db_path=db_path(), opening_bid=opening_bid()) if answer else [],
+            question=q, answer=answer, show_all=alle,
+            rows=with_series(rows_mod.prepare_all(answer.rows, seen_field="first_seen", db_path=db_path(), opening_bid=opening_bid())) if answer else [],
             has_key=client is not None,
         )
 
@@ -720,6 +787,9 @@ def create_app() -> FastAPI:
                 "archive": search_mod.archive_stats(conn),
                 "prices": queries.price_summary(conn),
                 "bands": queries.price_bands(conn),
+                # Analyse af nøgleord kræver profilen. Kan den ikke læses, vises
+                # resten af statistikken stadig.
+                "noise": queries.keyword_noise(conn, _safe_config()),
             }
         finally:
             conn.close()
@@ -729,6 +799,137 @@ def create_app() -> FastAPI:
             "mb": round(total / 1024 / 1024, 1),
         }
         return page(request, "stats.html", **context)
+
+    # -- et enkelt lot ------------------------------------------------------
+
+    @app.get("/lot/{lot_id}", response_class=HTMLResponse)
+    def lot_page(
+        request: Request, lot_id: str, _: None = Depends(require_login)
+    ) -> HTMLResponse:
+        """Alt om ét lot: prisen, forløbet og hvad samme slags er gået for."""
+        conn = ro_conn(db_path())
+        try:
+            row = queries.lot_detail(conn, lot_id)
+        finally:
+            conn.close()
+        if row is None:
+            raise HTTPException(404, "lot findes ikke")
+
+        prepared = with_series(rows_mod.prepare_all(
+            [row], seen_field="first_seen", db_path=db_path(), opening_bid=opening_bid()
+        ))[0]
+
+        conn = ro_conn(db_path())
+        try:
+            comps = similar_mod.find(conn, lot_id=lot_id, title=prepared["title"])
+        finally:
+            conn.close()
+
+        return page(request, "lot.html", row=prepared, comps=comps,
+                    FLAG_LABELS=FLAG_LABELS)
+
+    # -- drift -------------------------------------------------------------
+
+    @app.get("/drift", response_class=HTMLResponse)
+    def drift(request: Request, _: None = Depends(require_login)) -> HTMLResponse:
+        """Alt det der ellers kun står i loggen: kørsler, størrelser og tilstand."""
+        conn = ro_conn(db_path())
+        try:
+            tables = queries.table_counts(conn)
+            span = queries.memory_span(conn)
+            runs = queries.run_history(conn, limit=12)
+            pulse, stale = queries.last_run(conn)
+            blind_at = queries.meta_value(conn, "blind_alert_at")
+            normal_lots = queries.last_normal_lot_count(conn)
+            reviews = conn.execute(
+                "SELECT COUNT(*) FROM review_queue WHERE digested_at IS NULL"
+            ).fetchone()[0] if queries.has_table(conn, "review_queue") else 0
+        finally:
+            conn.close()
+
+        db = db_path()
+        try:
+            db_bytes = os.path.getsize(db)
+        except OSError:
+            db_bytes = 0
+        image_count, image_bytes = images_mod.usage(db)
+
+        config_file = config_path() or "config/interests.yml"
+        settings: dict[str, Any] = {
+            "path": config_file,
+            "readable": True,
+            "writable": os.access(config_file, os.W_OK),
+            "error": "",
+        }
+        try:
+            config = load_config(config_path())
+            settings |= {
+                "categories": len(config.categories),
+                "keywords": sum(
+                    len(c.strong) + len(c.weak) + len(c.brands) + len(c.exact)
+                    for c in config.categories
+                ),
+                "excludes": len(config.exclude),
+                "max_price": config.max_price,
+                "soft": config.soft_over_budget_factor,
+                "opening_bid": config.opening_bid,
+                "region": config.source.region_label,
+                "ai_enabled": config.classifier.enabled,
+                "ai_model": config.classifier.model,
+                "ai_base": config.classifier.base_url,
+            }
+        except ConfigError as exc:
+            settings |= {"readable": False, "error": str(exc)}
+
+        ai_key = secret_status("CLASSIFIER_API_KEY")
+        if ai_key == "ikke sat":
+            ai_key = secret_status("OPENAI_API_KEY")
+
+        return page(
+            request, "drift.html",
+            pulse=pulse, stale=stale, tables=tables, span=span, runs=runs,
+            blind_at=blind_at, normal_lots=normal_lots, reviews=reviews,
+            db_bytes=db_bytes, image_count=image_count, image_bytes=image_bytes,
+            settings=settings,
+            secrets={
+                "Discord-webhook": secret_status("DISCORD_WEBHOOK_URL"),
+                "AI-noegle": ai_key,
+                "Adgangskode": secret_status("WEB_PASSWORD"),
+            },
+        )
+
+    @app.get("/export/archive.csv")
+    def export_archive(_: None = Depends(require_login)) -> StreamingResponse:
+        """Hele arkivet som CSV, saa priserne kan undersøges i et regneark.
+
+        Markeringerne har haft deres egen eksport længe; arkivet er den store
+        datamængde, og det er den man vil analysere.
+        """
+        conn = ro_conn(db_path())
+        try:
+            rows = queries.archive_export(conn)
+        finally:
+            conn.close()
+
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(["lot_id", "titel", "auktion", "lot_nr", "kategori",
+                         "bud", "total", "første_bud", "slutter", "set_første_gang",
+                         "set_sidst", "url"])
+        for row in rows:
+            writer.writerow([
+                _csv_safe(row["lot_id"]), _csv_safe(row["title"]),
+                _csv_safe(row["auction_title"]), row["lot_number"],
+                row["category_key"], row["last_bid"] or "", row["last_total"] or "",
+                row["first_bid"] or "", row["ends_at"] or "",
+                row["first_seen"] or "", row["last_seen"] or "", row["url"] or "",
+            ])
+        buffer.seek(0)
+        return StreamingResponse(
+            iter([buffer.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": 'attachment; filename="arkiv.csv"'},
+        )
 
     @app.get("/export/feedback.csv")
     def export_feedback(_: None = Depends(require_login)) -> StreamingResponse:

@@ -75,6 +75,22 @@ classifier:
     interessant end en bunke dele. Er du i tvivl om et lot er et reelt stykke
     udstyr eller et rodlot, svar 'måske' frem for 'ja'.
 
+# Lot-siderne: stand, skader og praktiske bemærkninger.
+#
+# Lot-listen indeholder kun en titel, og en titel kan ikke sige om varen er i
+# stykker. Slået til henter agenten lot-siden for hvert fund og leder efter
+# danske vendinger som "defekt", "reserverede" og "afhentning".
+#
+# Slået FRA som standard: det er et ekstra kald til auktionshuset for hvert
+# fund, og deres vilkår tillader kun ét katalog-scrape hvert 15. minut. Har du
+# læst vilkårene og vil have det, så hold loftet lavt.
+details:
+  enabled: false
+  # Højst så mange lot-sider pr. kørsel.
+  max_per_run: 10
+  # Pause mellem kaldene.
+  pause_seconds: 2.0
+
 # Nøgleord der ALTID gør et lot uinteressant, uanset hvilken kategori det
 # ellers ville matche. Brugeren er eksplicit ligeglad med høretelefoner,
 # keyboards og mus — derfor udelukkes de her i stedet for at skulle undgås

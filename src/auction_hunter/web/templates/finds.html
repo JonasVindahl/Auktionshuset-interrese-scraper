@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
 {% from "_card.html" import card with context %}
+{% from "_view.html" import view_toggle %}
 {% set ending_soon = rows|selectattr('ends_in', 'gt', 0)|selectattr('ends_in', 'le', 86400)|list|length %}
 
 {% block title %}{{ heading }} · Auktionshuset Hunter{% endblock %}
@@ -30,9 +31,12 @@
     <button type="button" class="chip" data-cat="{{ cat }}" aria-pressed="false" title="Vis kun {{ category_labels.get(cat, cat) }}">{{ category_labels.get(cat, cat) }}</button>
     {% endfor %}
   </div>
-  <button type="button" class="btn is-quiet" id="filter-toggle" aria-expanded="false" aria-controls="filter-panel">
-    {{ icon('filter', 15) }}<span>Filtre</span><span class="filter-count" hidden></span>
-  </button>
+  <div class="toolbar-actions">
+    {{ view_toggle() }}
+    <button type="button" class="btn is-quiet" id="filter-toggle" aria-expanded="false" aria-controls="filter-panel">
+      {{ icon('filter', 15) }}<span>Filtre</span><span class="filter-count" hidden></span>
+    </button>
+  </div>
 </div>
 
 <div class="active-filters" id="active-filters" hidden></div>
@@ -48,6 +52,16 @@
     </div>
   </div>
   {% endif %}
+
+  <div class="filter-group">
+    <span class="filter-label" id="filter-bud">Bud</span>
+    <div class="chip-row" role="group" aria-labelledby="filter-bud">
+      <button type="button" class="chip" id="nobid-chip" aria-pressed="false"
+              title="Lots hvor der endnu ikke er budt, saa du kan være den første">
+        Ingen bud endnu
+      </button>
+    </div>
+  </div>
 
   <div class="filter-group">
     <span class="filter-label" id="filter-pris">Pris</span>
@@ -112,6 +126,7 @@
       <div class="card-actions review-actions">
         {%- for action, label, tip, ic in [
           ('skip', 'Afvis', 'Ikke interesseret i dette lot', 'ban'),
+          ('watch', 'Følg', 'Hold øje med dette lot', 'eye'),
           ('bid', 'Budt', 'Jeg har budt på det', 'bookmark'),
           ('bought', 'Købt', 'Jeg købte det', 'check')
         ] %}

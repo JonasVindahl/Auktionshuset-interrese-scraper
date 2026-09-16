@@ -14,8 +14,17 @@ from typing import Any
 from urllib.parse import quote
 
 from .. import images
+from ..details import FLAG_LABELS, SERIOUS_FLAGS
 from ..fees import DEFAULT_OPENING_BID, estimate as price_estimate
-from .formatting import date_label, kr, rel_past, time_left, timestamp
+from .formatting import (
+    LOCAL_TZ,
+    date_label,
+    kr,
+    parse_dt,
+    rel_past,
+    time_left,
+    timestamp,
+)
 
 
 def _get(row: sqlite3.Row, key: str, default: Any = None) -> Any:
@@ -60,6 +69,16 @@ def prepare(
     left, css, ends_in = time_left(ends_at)
     seen_rel, seen_full = rel_past(seen)
 
+    # Det præcise tidspunkt ved siden af den relative tid: den ene siger om man
+    # skal handle nu, den anden hvornår man skal sidde klar.
+    flags = tuple(
+        flag for flag in str(_get(row, "details_flags") or "").split(",") if flag
+    )
+
+    ends_dt = parse_dt(ends_at)
+    ends_text = (ends_dt.astimezone(LOCAL_TZ).strftime("%d/%m %H:%M")
+                 if ends_dt else "")
+
     lot_id = _get(row, "lot_id", "")
     image = _get(row, "image_url") or ""
     if not str(image).startswith("http"):
@@ -84,6 +103,13 @@ def prepare(
         "cost": cost,
         "price": price_text,
         "price_label": price_label,
+        "flags": flags,
+        "details": _get(row, "details") or "",
+        "flags_label": ", ".join(FLAG_LABELS.get(f, f) for f in flags),
+        "has_serious_flag": any(f in SERIOUS_FLAGS for f in flags),
+        "bid": last_bid or 0,
+        "bid_text": kr(last_bid) if last_bid else "–",
+        "ends_at_text": ends_text,
         "rise": rise,
         "is_estimate": price.is_estimate,
         "ts": timestamp(seen),

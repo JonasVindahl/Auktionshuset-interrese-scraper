@@ -44,7 +44,7 @@ def locked_client(sample_db, sample_config, monkeypatch):
 
 @pytest.mark.parametrize("path", [
     "/", "/expired", "/mine", "/archive", "/interests", "/chat", "/stats",
-    "/healthz", "/export/feedback.csv",
+    "/drift", "/healthz", "/export/feedback.csv",
 ])
 def test_siden_svarer(client, path):
     response = client.get(path)

@@ -63,7 +63,43 @@ class RunStats:
     blind_alert_sent: bool = False
     pruned: int = 0
     images_cached: int = 0
+    details_fetched: int = 0
     errors: list[str] = field(default_factory=list)
+
+
+def _fetch_details(
+    config: Config,
+    store: Store,
+    scraper: Scraper,
+    matches: list[Match],
+    stats: RunStats,
+) -> dict[str, tuple[str, ...]]:
+    """Hent lot-siderne for nye fund og gem hvad de sagde om standen.
+
+    Returnerer flagene pr. lot, så notifikationen kan bære dem med det samme.
+    """
+    settings = config.details
+    lots = [match.lot for match in matches]
+    missing = set(store.lots_without_details([lot.lot_id for lot in lots]))
+    flags: dict[str, tuple[str, ...]] = {}
+
+    for lot in lots:
+        if lot.lot_id not in missing:
+            continue
+        if stats.details_fetched >= settings.max_per_run:
+            log.info("Loftet for lot-sider nået (%d)", settings.max_per_run)
+            break
+        details = scraper.fetch_details(lot)
+        # Markeres som forsøgt uanset udfaldet: en underside der er væk skal
+        # ikke hentes igen hver kørsel i månedsvis.
+        store.record_details(lot.lot_id, details.text, details.flags)
+        stats.details_fetched += 1
+        if details.flags:
+            flags[lot.lot_id] = details.flags
+        if settings.pause_seconds:
+            time.sleep(settings.pause_seconds)
+
+    return flags
 
 
 def build_classifier(config: Config, store: Store) -> Classifier | None:
@@ -260,10 +296,23 @@ def run_once(
                     log.info("AI afviste: %s", match.lot.title[:70])
                 new_matches = verdicts.accepted
 
+        # Lot-siderne hentes kun for fund, og kun hvis nogen har slået det til:
+        # det er et ekstra kald til auktionshuset pr. lot. Loftet pr. kørsel og
+        # pausen holder belastningen nede, og et svar der ikke kan hentes
+        # markeres som forsøgt så det ikke prøves i det uendelige.
+        details_flags: dict[str, tuple[str, ...]] = {}
+        if config.details.enabled and new_matches:
+            details_flags = _fetch_details(config, store, scraper, new_matches, stats)
+
         if new_matches and notifier is not None:
             result = notifier.send_matches(
                 new_matches,
-                heading=f"**{len(new_matches)} nyt fund** i {config.source.region_label}",
+                heading=(
+                    f"**{len(new_matches)} nyt fund** i {config.source.region_label}"
+                    if len(new_matches) == 1
+                    else f"**{len(new_matches)} nye fund** i {config.source.region_label}"
+                ),
+                details=details_flags,
             )
             stats.notified = len(result.sent)
             # Kun de fund der faktisk blev leveret markeres, så en fejlet
