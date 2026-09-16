@@ -33,6 +33,7 @@ from ..config import Config
 from ..matcher import match_lot
 from ..scraper import Lot
 from ..textmatch import find_keywords
+from . import similar
 from .formatting import kr, time_left
 from .search import SearchQuery, search
 
@@ -77,8 +78,18 @@ ANSWER_SYSTEM = (
     "rækkefølge de skal vises. Vælg kun dem der er et svar; er ingen "
     "relevante, så brug en tom liste.\n"
     "svar     højst tre sætninger. Nævn priser og hvornår ting slutter når det "
-    "er relevant. Find ikke på lots der ikke står i listen."
+    "er relevant. Find ikke på lots der ikke står i listen, og find ikke på "
+    "beløb. Du får også et prisoverblik over det fundne sæt og, når det "
+    "findes, hvad samme slags er gået for tidligere; brug de tal hvis "
+    "spørgsmålet handler om hvad noget er værd."
 )
+
+_FEEDBACK_LABELS = {
+    "skip": "du har afvist",
+    "watch": "du følger",
+    "bid": "du har budt",
+    "bought": "du har købt",
+}
 
 SUGGEST_SYSTEM = (
     "Du hjælper med at forbedre en dansk auktionsagents nøgleordsprofil. "
@@ -221,8 +232,52 @@ def _rows_for_model(rows: list[sqlite3.Row]) -> str:
         left, _, _ = time_left(row["ends_at"])
         status = left or "ukendt sluttidspunkt"
         matched = "matchede profilen" if row["was_match"] else "ikke et fund"
-        lines.append(f"{number}. {row['title']} | {price} | {status} | {matched}")
+        # Din egen markering er en oplysning modellen kan svare ud fra, fx
+        # "har jeg afvist noget lignende".
+        action = row["feedback_action"] if "feedback_action" in row.keys() else ""
+        feedback = f" | {_FEEDBACK_LABELS[action]}" if action in _FEEDBACK_LABELS else ""
+        lines.append(f"{number}. {row['title']} | {price} | {status} | {matched}{feedback}")
     return "\n".join(lines)
+
+
+def _price_summary(rows: list[sqlite3.Row]) -> str:
+    """Median og spænd over de fundne lots, så modellen kan svare på hvad de koster."""
+    prices = sorted(
+        int(row["last_total"] or row["last_bid"])
+        for row in rows
+        if (row["last_total"] or row["last_bid"])
+    )
+    if not prices:
+        return ""
+    middle = len(prices) // 2
+    median = (
+        prices[middle] if len(prices) % 2
+        else round((prices[middle - 1] + prices[middle]) / 2)
+    )
+    return (
+        f"Priser i det fundne sæt: median {kr(median)}, laveste {kr(prices[0])}, "
+        f"højeste {kr(prices[-1])}, over {len(prices)} af {len(rows)} lots med en pris."
+    )
+
+
+def _comparables_note(conn: sqlite3.Connection, rows: list[sqlite3.Row], *, limit: int = 2) -> str:
+    """Hvad samme slags er gået for, for de øverste kandidater.
+
+    Tallene kommer fra arkivets egne afsluttede salg, ikke fra modellen, så et
+    svar om hvad noget er værd kan bygge på noget virkeligt.
+    """
+    parts: list[str] = []
+    for row in rows[:limit]:
+        try:
+            comps = similar.find(conn, lot_id=row["lot_id"], title=row["title"] or "")
+        except sqlite3.Error:
+            continue
+        if comps.count and comps.median is not None:
+            parts.append(
+                f"{(row['title'] or '')[:60]}: median {kr(comps.median)} "
+                f"over {comps.count} tidligere salg"
+            )
+    return "; ".join(parts)
 
 
 def _selected_rows(rows: list[sqlite3.Row], valgte: Any) -> list[sqlite3.Row]:
@@ -354,11 +409,19 @@ def ask(
             total=result.total,
         ))
 
+    context_lines = [line for line in (
+        _price_summary(candidates),
+        (f"Tidligere salg af samme slags: {_comparables_note(conn, candidates)}"
+         if candidates else ""),
+    ) if line]
+    context = ("\n" + "\n".join(context_lines) + "\n") if context_lines else ""
+
     user = (
         f"Spørgsmål: {question}\n\n"
         f"Databasen fandt {result.total} lots. Her er {len(candidates)},\n"
         f"nummereret fra 1:\n"
         f"{_rows_for_model(candidates)}"
+        f"{context}"
     )
     try:
         raw = client.complete(system=ANSWER_SYSTEM, user=user, max_tokens=700)

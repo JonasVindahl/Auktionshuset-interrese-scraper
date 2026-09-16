@@ -258,6 +258,21 @@ databasen — det værste der kan ske er en mærkelig søgning.
 Assistenten bruger samme nøgle som AI-trinnet (`CLASSIFIER_API_KEY`). Uden
 nøgle virker siden stadig, men som en almindelig nøgleordssøgning.
 
+Modellen udvider spørgsmålet med beslægtede produkttyper og mærker i stedet for
+kun at søge på de ord du selv skrev, og ordene lægges sammen med OR. Et
+spørgsmål om «ting der normalt har SSD eller NVMe» bliver derfor til NAS,
+mini-PC'er, servere og de øvrige produkttyper, ikke en ordret søgning efter
+"nvme ssd". Den kan også vælge en kategori.
+
+Finder søgeordene ingenting, slippes teksten og de strukturerede filtre
+beholdes, så svaret ikke ender i ingenting. Under svaret er der et link til
+arkivet med samme filter, hvor det kan rettes.
+
+Svaret bygger også på tal fra arkivet selv: en median og et spænd over de
+fundne lots, og hvad samme slags er gået for tidligere. Modellen finder ikke på
+beløb, og hver række den får, bærer din egen markering, så den kan svare på
+«har jeg afvist noget lignende».
+
 ### Billeder
 
 Auktionshuset fjerner et lots billede i samme øjeblik auktionen lukker. Det er

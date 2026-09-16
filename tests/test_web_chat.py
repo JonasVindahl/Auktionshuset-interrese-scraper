@@ -317,3 +317,48 @@ def test_tomt_soegeresultat_reddes_af_de_andre_filtre(conn):
     assert answer.rows
     assert "søgeordene" in answer.text
     assert answer.archive_url.startswith("/archive?")
+
+
+# -- prisoversigt, sammenlignelige salg og markeringer ---------------------
+
+def test_prisoversigt_regner_median():
+    from auction_hunter.web.chat import _price_summary
+
+    rows = [
+        {"last_total": 100, "last_bid": 80},
+        {"last_total": 300, "last_bid": 300},
+        {"last_total": None, "last_bid": 200},
+    ]
+    text = _price_summary(rows)
+    assert "median 200" in text
+    assert "laveste 100" in text
+    assert "3 af 3" in text
+
+
+def test_prisoversigt_uden_priser_er_tom():
+    from auction_hunter.web.chat import _price_summary
+    assert _price_summary([{"last_total": None, "last_bid": None}]) == ""
+
+
+def test_raekker_til_modellen_naevner_markering():
+    from auction_hunter.web.chat import _rows_for_model
+
+    rows = [{
+        "title": "Synology DS1817+ NAS", "last_total": 4400, "last_bid": 4000,
+        "ends_at": None, "was_match": 1, "feedback_action": "skip",
+    }]
+    assert "du har afvist" in _rows_for_model(rows)
+
+
+def test_sammenlignelige_er_tomt_naar_intet_ligner(conn):
+    from auction_hunter.web.chat import _comparables_note
+    assert _comparables_note(conn, []) == ""
+
+
+def test_svaret_faar_prisoversigt_med(conn):
+    client = FakeClient(
+        json.dumps({"kategori": "it_tech"}),
+        json.dumps({"valgte": [1], "svar": "Svar."}),
+    )
+    ask(conn, client, "hvad koster de?", categories=["it_tech"])
+    assert "median" in client.calls[1]["user"]
