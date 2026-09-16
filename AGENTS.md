@@ -73,13 +73,27 @@ loftet udskydes til næste kørsel; de sendes aldrig ufiltreret.
 `templates/_icons.html`. Kategoriernes `emoji`-felt i `interests.yml` læses
 ikke længere af skabelonerne, men feltet er urørt.
 
-**Alt visuelt er tokens i `static/app.css`.** Farver, radius og fonte ligger på
-`:root`, og kun værdierne skifter i mørk tilstand. De tre tekstniveauer
-`--text`, `--muted` og `--faint` er valgt så alle tre er over 4.5:1 på både
-`--surface` og `--raised`. Ændrer man en farve, skal kontrasten regnes efter.
-`--border-input` er den mørkere kant på formularfelter, og `--on-accent` er
-tekstfarven på accentbaggrunde. Hvid tekst på den lyse amber i mørk tilstand
-giver kun 2.4:1 og må ikke bruges.
+**Alt visuelt står i `DESIGN.md` og som tokens i `static/app.css`.** Læs
+DESIGN.md før du rører farver, typografi, spacing eller bevægelse; den forklarer
+hvorfor tallene er som de er, og hvilke regler der ikke må brydes.
+
+Kort: UI-skriften er **Onest** (variabel, selvhostet) og display-skriften
+**Bricolage Grotesque**, som kun bruges over 24 px. Plus Jakarta Sans blev målt
+og forkastet, fordi dens mellemrum er 0,17 em og fik "Slutter om 1 dag 8 t" til
+at læse som "Slutterom 1 dag 8 t". Der er fire tekstniveauer, og `--text-4` må
+**kun** bruges til ikoner og streger; al tekst skal være mindst `--text-3`
+(4,6:1). Den lyse primærknap bruger `--accent` med `--on-accent`, fordi
+brand-amberen med hvid tekst kun giver 2,3:1. Kategorifarverne kommer fra
+Okabe-Ito og har en prik-variant til grafik og en tekstvariant til etiketten.
+
+**Bevægelse er en del af systemet.** Varigheder og kurver er tokens
+(`--dur-*`, `--ease-*`). Der animeres kun `transform` og `opacity`, aldrig
+`transition: all` eller layout-egenskaber. Kort får en forskudt indgang via
+`--i`, som sættes i skabelonen og begrænses til 9.
+
+**Kortets struktur.** `.card` er billede plus indhold, og `.card-row` holder
+fakta og handlinger på samme linje, så højden styres af billedet og der ikke
+opstår et tomt bånd i bunden.
 
 **Kontrakten mellem skabelon, CSS og `app.js` er id'er og data-attributter:**
 `#cards-container`, `#flat-list`, `#no-results`, `#visible-count`,
@@ -98,6 +112,27 @@ skifter tilbage til 'nyeste'.
 **Progressiv afsløring er standarden.** Filtre, kategori-blokke, niveauer og
 tilføj-formularer ligger bag `<details>` og virker uden JavaScript. Alle
 arkivfiltre er stadig server-side via GET-formularen.
+
+**Ingen inline JavaScript i skabelonerne.** CSP'en tillader kun script fra
+`/static`. Bekræftelser ligger på `data-confirm` og håndteres af en delegeret
+`submit`-lytter, og billedfejl fanges af en global `error`-lytter i
+capture-fasen. En inline `onsubmit` med et nøgleord indsat ville desuden kunne
+bryde ud af JavaScript-strengen, fordi browseren HTML-dekoder attributten før
+JS-parsing.
+
+**Adgangskoden fejler lukket.** Kan `WEB_PASSWORD` ikke læses, rejser
+`auth.configured_password` en `AuthConfigError` som giver 503. Forskellen
+mellem "ingen adgangskode er sat" og "adgangskoden kunne ikke læses" er hele
+pointen; uden den står dashboardet åbent på en tastefejl i en filsti.
+
+**Søgeparametre clampes i `SearchQuery.normalized`.** En formular kan sende
+hvad som helst, og et prisloft over 2^63 får sqlite3 til at kaste mens et
+`days_back` på 740000 løber tør for datoer. Det skal give en tom søgning, ikke
+en 500.
+
+**Dansk tid og danske månedsnavne.** `formatting.LOCAL_TZ` er
+Europe/Copenhagen, fordi containeren kører UTC, og månedsnavnene kommer fra en
+fast liste fordi `strftime("%B")` følger systemets locale.
 
 **Kategori-etiketter er fælles for siderne.** `app.category_labels()` giver
 `key -> label` fra `interests.yml`, og `app.filter_chips()` bygger de

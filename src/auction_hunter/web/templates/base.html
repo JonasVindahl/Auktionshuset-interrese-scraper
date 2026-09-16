@@ -7,6 +7,7 @@
 <meta name="color-scheme" content="light dark">
 <meta name="robots" content="noindex,nofollow">
 <title>{% block title %}Auktionshuset Hunter{% endblock %}</title>
+<link rel="preload" href="/static/fonts/onest.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/app.css">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a35a12' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 11.4V5.6A2.6 2.6 0 0 1 5.6 3h5.8L21 12.6 12.6 21 3 11.4Z'/%3E%3Ccircle cx='8' cy='8' r='1.35'/%3E%3C/svg%3E">
 </head>
@@ -32,7 +33,7 @@
   </p>
 </header>
 
-<main id="main" class="page">
+<main id="main" class="page {% block page_class %}{% endblock %}">
   {% if message %}<p class="banner is-ok" role="status">{{ icon('check', 15) }}<span>{{ message }}</span></p>{% endif %}
   {% if error %}<p class="banner is-err" role="alert">{{ icon('alert', 15) }}<span>{{ error }}</span></p>{% endif %}
   {% block content %}{% endblock %}

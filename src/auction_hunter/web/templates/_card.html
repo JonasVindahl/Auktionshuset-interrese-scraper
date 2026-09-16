@@ -1,57 +1,68 @@
 {% from "_icons.html" import icon %}
-{#- Ét lot-kort. Rækken er forberedt i Python (se rows.prepare).
+{#- Ét lot som felt i et katalog. Rækken er forberedt i Python (se rows.prepare).
 
-    Informationsrækkefølgen er bevidst: titel, dernæst pris og tid tilbage
-    (det man beslutter ud fra), og først derefter de stille metadata. -#}
-{% macro card(row, show_seen=False) -%}
-<article class="card"
+    Billedet er det bærende element: auktionshuset fjerner det når lot'et lukker,
+    og titlen alene er ofte ikke nok til at vurdere en vare. Derfor er flisen
+    bygget som et medieobjekt og ikke som en tabelrække. -#}
+{% macro card(row, show_seen=False, index=0) -%}
+{% set state = {'skip': 'Afvist', 'bid': 'Budt', 'bought': 'Købt'} %}
+<article class="card" style="--i:{{ index if index < 9 else 9 }}"
      data-cat="{{ row.category }}"
      data-ts="{{ row.ts }}"
      data-price="{{ row.cost }}"
      data-endsin="{{ row.ends_in }}"
      data-lot="{{ row.lot_id }}"
      data-feedback="{{ row.feedback }}">
-  <div class="thumb">
-    <span class="thumb-fallback">{{ icon('image', 20) }}</span>
-    {%- if row.image %}
-    <img src="{{ row.image }}" alt="" loading="lazy" decoding="async"
-         referrerpolicy="no-referrer" onerror="this.classList.add('is-broken')">
-    {%- endif %}
+
+  <div class="card-media">
+    <div class="thumb">
+      <span class="thumb-fallback">{{ icon('image', 26) }}</span>
+      {%- if row.image %}
+      <img src="{{ row.image }}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">
+      {%- endif %}
+      {%- if row.url %}<a class="thumb-link" href="{{ row.url }}" target="_blank" rel="noopener"
+            aria-hidden="true" tabindex="-1"></a>{% endif %}
+    </div>
+    {% if row.time_left %}<span class="badge-time {{ row.time_css }}">{{ icon('clock', 12) }}{{ row.time_left }}</span>{% endif %}
+    {% if row.feedback %}<span class="badge-state is-{{ row.feedback }}">{{ state[row.feedback] }}</span>{% endif %}
   </div>
 
-  <div class="card-main">
+  <div class="card-body">
+    <p class="card-facts">
+      {%- if row.price_label %}<span class="price-label" title="Prisen for første bud inkl. salær og moms">{{ row.price_label }}</span>{% endif %}
+      <span class="price">{{ row.price }}</span>
+      {%- if row.rise %}<span class="price-rise" title="Stigning siden første registrerede bud">+{{ row.rise }}</span>{% endif %}
+    </p>
+
     <h3 class="card-title">
       {%- if row.url %}<a href="{{ row.url }}" target="_blank" rel="noopener">{{ row.title }}</a>
       {%- else %}{{ row.title }}{%- endif %}
     </h3>
 
-    <p class="card-facts">
-      <span class="price">{{ row.price }}</span>
-      {%- if row.rise %}<span class="price-rise" title="Stigning siden første registrerede bud">+{{ row.rise }}</span>{% endif %}
-      {%- if row.is_estimate %}<span class="price-note" title="Auktionshusets eget estimat, ikke et bud">estimat</span>{% endif %}
-      {%- if row.time_left %}<span class="time {{ row.time_css }}">{{ icon('clock', 13) }}<span>{{ row.time_left }}</span></span>{% endif %}
+    <p class="card-meta">
       {%- if row.category %}<span class="tag-cat" data-cat="{{ row.category }}" title="{{ row.category }}">{{ category_labels.get(row.category, row.category) }}</span>{% endif %}
+      {%- if is_vat_exempt(row.auction) %}<span class="tag-vat" title="Momsfri auktion: salæret er momsbelagt, hammerprisen ikke">momsfri</span>{% endif %}
       {%- if row.lot_number %}<span class="meta-item">Lot {{ row.lot_number }}</span>{% endif %}
       {%- if show_seen and row.seen_rel %}<span class="meta-item" title="{{ row.seen_full }}">set {{ row.seen_rel }}</span>{% endif %}
       {%- if row.was_match is defined and not row.was_match %}<span class="meta-item tag-miss">ikke et fund</span>{% endif %}
     </p>
-
     {% if row.auction %}<p class="card-sub" title="{{ row.auction }}">{{ row.auction }}</p>{% endif %}
+  </div>
 
-    <div class="card-actions">
-      {%- for action, label, tip, ic in [
-        ('skip', 'Ikke interesseret', 'Ikke interesseret', 'ban'),
-        ('bid', 'Budt', 'Jeg har budt på det', 'bookmark'),
-        ('bought', 'Købt', 'Jeg købte det', 'check')
-      ] %}
-      <button type="button" class="fb-btn" data-action="{{ action }}"
-              data-lot-id="{{ row.lot_id }}" data-cat-key="{{ row.category }}"
-              title="{{ tip }}" aria-label="{{ tip }}"
-              aria-pressed="{{ 'true' if row.feedback == action else 'false' }}">
-        {{ icon(ic, 13) }}<span>{{ label }}</span>
-      </button>
-      {%- endfor %}
-    </div>
+  <div class="card-actions">
+    {# Den synlige tekst er også det tilgængelige navn. #}
+    {%- for action, label, tip, ic in [
+      ('skip', 'Afvis', 'Ikke interesseret i dette lot', 'ban'),
+      ('bid', 'Budt', 'Jeg har budt på det', 'bookmark'),
+      ('bought', 'Købt', 'Jeg købte det', 'check')
+    ] %}
+    <button type="button" class="fb-btn" data-action="{{ action }}"
+            data-lot-id="{{ row.lot_id }}" data-cat-key="{{ row.category }}"
+            title="{{ tip }}" aria-label="{{ label }}"
+            aria-pressed="{{ 'true' if row.feedback == action else 'false' }}">
+      {{ icon(ic, 14) }}<span>{{ label }}</span>
+    </button>
+    {%- endfor %}
   </div>
 </article>
 {%- endmacro %}

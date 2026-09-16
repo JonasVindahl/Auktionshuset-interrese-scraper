@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% from "_card.html" import card with context %}
+
+{% block title %}Mine markeringer · Auktionshuset Hunter{% endblock %}
+{% block page_class %}is-wide{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <h1>Mine markeringer</h1>
+  <p class="page-meta">
+    <span>{{ count }} i alt</span>
+    {%- if total %}
+    <span class="meta-sep">·</span>
+    <span>{{ committed }} budt eller købt for <strong>{{ total|kr }}</strong> tilsammen</span>
+    {%- endif %}
+  </p>
+</header>
+
+{% if groups %}
+  {% for key, label, items in groups %}
+  <section class="section">
+    <h2 class="section-title">{{ label }} <span class="count">{{ items|length }}</span></h2>
+    <div class="lot-grid">
+      {% for row in items %}{{ card(row, show_seen=True, index=loop.index0) }}{% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+
+  <p class="hint">
+    Beløbene er den reelle pris inkl. salær og moms. Markeringerne gemmes lokalt som
+    træningsdata til AI-trinnet og kan <a href="/export/feedback.csv">hentes som CSV</a>.
+  </p>
+{% else %}
+  <p class="empty">Du har ikke markeret noget endnu. Knapperne Afvis, Budt og Købt på hvert
+    lot gemmer et menneskeligt svar på om profilen ramte rigtigt.</p>
+{% endif %}
+{% endblock %}

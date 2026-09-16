@@ -4,13 +4,22 @@
 {% set ending_soon = rows|selectattr('ends_in', 'gt', 0)|selectattr('ends_in', 'le', 86400)|list|length %}
 
 {% block title %}{{ heading }} · Auktionshuset Hunter{% endblock %}
+{% block page_class %}is-wide{% endblock %}
 
 {% block content %}
 <header class="page-head">
   <h1>{{ heading }}</h1>
   <p class="page-meta">
     <span id="visible-count" role="status" aria-live="polite">{{ rows|length }} fund</span>
-    {%- if ending_soon %}<span class="meta-sep">·</span><span class="meta-urgent">{{ ending_soon }} slutter inden for et døgn</span>{% endif %}
+    {%- if ending_soon %}
+    <span class="meta-sep">·</span>
+    {# Tiden er det eneste filter der haster, så det ligger frit fremme i
+       stedet for inde i filterpanelet. #}
+    <button type="button" class="meta-toggle" id="ending-chip" aria-pressed="false"
+            title="Vis kun de fund der slutter inden for et døgn">
+      {{ icon('clock', 13) }}<span>{{ ending_soon }} slutter inden for et døgn</span>
+    </button>
+    {%- endif %}
   </p>
 </header>
 
@@ -36,15 +45,6 @@
       <button type="button" class="chip" data-period="all" aria-pressed="true">Alle</button>
       <button type="button" class="chip" data-period="today" aria-pressed="false">I dag</button>
       <button type="button" class="chip" data-period="week" aria-pressed="false">7 dage</button>
-    </div>
-  </div>
-  {% endif %}
-
-  {% if show_ending %}
-  <div class="filter-group">
-    <span class="filter-label" id="filter-tid">Tid tilbage</span>
-    <div class="chip-row" role="group" aria-labelledby="filter-tid">
-      <button type="button" class="chip" id="ending-chip" aria-pressed="false">{{ icon('clock', 13) }} Slutter inden for 24 timer</button>
     </div>
   </div>
   {% endif %}
@@ -81,7 +81,7 @@
   {% for label, items in groups %}
   <section class="date-group">
     <h2 class="date-label">{{ label }}</h2>
-    {% for row in items %}{{ card(row, show_seen=(not show_period)) }}{% endfor %}
+    {% for row in items %}{{ card(row, show_seen=(not show_period), index=loop.index0) }}{% endfor %}
   </section>
   {% endfor %}
 </div>
@@ -108,6 +108,20 @@
         {%- else %}{{ review.title }}{%- endif %}
       </h3>
       {% if review.reason %}<p class="review-reason">{{ review.reason }}</p>{% endif %}
+      {# Køen havde ingen handlinger: den kunne ses men ikke afgøres. #}
+      <div class="card-actions review-actions">
+        {%- for action, label, tip, ic in [
+          ('skip', 'Afvis', 'Ikke interesseret i dette lot', 'ban'),
+          ('bid', 'Budt', 'Jeg har budt på det', 'bookmark'),
+          ('bought', 'Købt', 'Jeg købte det', 'check')
+        ] %}
+        <button type="button" class="fb-btn" data-action="{{ action }}"
+                data-lot-id="{{ review.lot_id }}" data-cat-key="{{ review.category_key }}"
+                title="{{ tip }}" aria-label="{{ label }}" aria-pressed="false">
+          {{ icon(ic, 14) }}<span>{{ label }}</span>
+        </button>
+        {%- endfor %}
+      </div>
     </article>
     {% endfor %}
   </div>

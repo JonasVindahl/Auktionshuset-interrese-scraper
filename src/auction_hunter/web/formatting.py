@@ -10,10 +10,32 @@ se ud til at ligge i fremtiden.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+# Containeren kører UTC, men brugeren sidder i Danmark. Alt der vises som et
+# klokkeslæt eller grupperes pr. dag skal derfor regnes i dansk tid, ellers
+# stemmer "I dag" og "set 10 min siden" ikke med det brugeren ser på uret.
+try:
+    LOCAL_TZ: Any = ZoneInfo("Europe/Copenhagen")
+except ZoneInfoNotFoundError:      # pragma: no cover - kun hvis tzdata mangler
+    LOCAL_TZ = timezone.utc
 
 # Under så mange timer tilbage markeres et lot som "haster".
 URGENT_HOURS = 6
 SOON_HOURS = 24
+
+# Danske månedsnavne. strftime("%B") følger systemets locale, og både containeren
+# og dette miljø kører med C-locale, hvor måneden hedder "February". Derfor listen
+# her i stedet, så datoer ældre end en uge ikke skifter sprog under brugeren.
+MONTHS_DA = (
+    "januar", "februar", "marts", "april", "maj", "juni",
+    "juli", "august", "september", "oktober", "november", "december",
+)
+
+
+def _danish_date(day) -> str:
+    return f"{day.day}. {MONTHS_DA[day.month - 1]}"
 
 
 def parse_dt(value: str | None) -> datetime | None:
@@ -45,14 +67,15 @@ def rel_past(value: str | None) -> tuple[str, str]:
     if dt is None:
         return "", ""
     secs = int((datetime.now(timezone.utc) - dt).total_seconds())
-    full = dt.astimezone().strftime("%d/%m %H:%M")
+    full = dt.astimezone(LOCAL_TZ).strftime("%d/%m %H:%M")
     if secs < 120:
         return "lige nu", full
     if secs < 3600:
-        return f"{secs // 60} min siden", full
+        return f"for {secs // 60} min. siden", full
     if secs < 86400:
-        return f"{secs // 3600} t siden", full
-    return f"{secs // 86400} dage siden", full
+        return f"for {secs // 3600} t. siden", full
+    days = secs // 86400
+    return (f"for {days} dag siden" if days == 1 else f"for {days} dage siden"), full
 
 
 def time_left(ends_at: str | None) -> tuple[str, str, int]:
@@ -63,7 +86,9 @@ def time_left(ends_at: str | None) -> tuple[str, str, int]:
     """
     dt = parse_dt(ends_at)
     if dt is None:
-        return "", "", 0
+        # Uden en sluttid er der ingen nedtælling. At vise ingenting skjuler at
+        # data mangler, så det siges højt i samme stil som de øvrige tider.
+        return "Sluttid ukendt", "unknown", 0
 
     secs = int((dt - datetime.now(timezone.utc)).total_seconds())
 
@@ -73,10 +98,16 @@ def time_left(ends_at: str | None) -> tuple[str, str, int]:
             return f"Sluttede {past // 60} min siden", "ended", 0
         if past < 86400:
             return f"Sluttede {past // 3600} t siden", "ended", 0
-        return f"Sluttede {past // 86400} dage siden", "ended", 0
+        days = past // 86400
+        return (
+            f"Sluttede {days} dag siden" if days == 1
+            else f"Sluttede {days} dage siden"
+        ), "ended", 0
 
     # Timer og minutter under et døgn. Ren timevisning trunkerer 2t59m til
     # "2 t", hvilket ser ud som om der er en time mindre tilbage end der er.
+    if secs < 60:
+        return "Slutter om under et minut", "urgent", secs
     if secs < 3600:
         return f"Slutter om {secs // 60} min", "urgent", secs
     if secs < SOON_HOURS * 3600:
@@ -95,13 +126,16 @@ def date_label(value: str | None) -> str:
     dt = parse_dt(value)
     if dt is None:
         return "Ukendt"
-    day = dt.date()
-    today = datetime.now(timezone.utc).date()
+    day = dt.astimezone(LOCAL_TZ).date()
+    today = datetime.now(LOCAL_TZ).date()
     delta = (today - day).days
+    if delta < 0:
+        # En dato i fremtiden må ikke blive "-1 dage siden".
+        return "Senere"
     if delta == 0:
         return "I dag"
     if delta == 1:
         return "I går"
     if delta < 7:
         return f"{delta} dage siden"
-    return day.strftime("%-d. %B %Y") if delta > 300 else day.strftime("%-d. %B")
+    return _danish_date(day) + (f" {day.year}" if delta > 300 else "")
