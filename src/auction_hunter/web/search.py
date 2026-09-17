@@ -67,13 +67,18 @@ class SearchQuery:
 
     def normalized(self) -> "SearchQuery":
         """Ret ugyldige værdier til deres standard i stedet for at fejle."""
+        matched = self.matched if self.matched in MATCH_CHOICES else "alle"
+        # Et ikke-fund har ingen notifikation og dermed ingen kategori. De to
+        # filtre kan ikke kombineres, og sammen giver de altid nul — hvilket så
+        # ud som om arkivet var tomt for noget der lå lige foran.
+        category = "" if matched == "kun_ikke_fund" else self.category.strip()[:64]
         return SearchQuery(
             text=self.text.strip()[:200],
             min_price=_positive(self.min_price, MAX_PRICE),
             max_price=_positive(self.max_price, MAX_PRICE),
             status=self.status if self.status in STATUS_CHOICES else "alle",
-            matched=self.matched if self.matched in MATCH_CHOICES else "alle",
-            category=self.category.strip()[:64],
+            matched=matched,
+            category=category,
             auction=self.auction.strip()[:160],
             days_back=_positive(self.days_back, MAX_DAYS_BACK),
             sort=self.sort if self.sort in SORT_CHOICES else "relevans",

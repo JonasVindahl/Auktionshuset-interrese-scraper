@@ -344,6 +344,35 @@ def test_soegeord_renses_for_citationstegn():
     assert "rackmonteret" in query.text
 
 
+def test_kategorien_loesnes_naar_den_giver_nul(tmp_path, lot_factory):
+    from auction_hunter.storage import Store
+
+    with Store(tmp_path / "t.db") as store:
+        store.record_lot(
+            lot_factory("nf", "Computer LENOVO ThinkCentre M720q", first_bid=325), None
+        )
+        store.conn.commit()
+        client = FakeClient(
+            json.dumps({"soegeord": ["thinkcentre"], "kategori": "it_tech"}),
+            json.dumps({"valgte": [1], "svar": "Her er den."}),
+        )
+        answer = ask(store.conn, client, "find thinkcentre", categories=["it_tech"])
+
+    assert answer.rows
+    assert "hele arkivet" in answer.text
+
+
+def test_filteret_viser_kategorien(conn):
+    client = FakeClient(
+        json.dumps({"kategori": "it_tech"}),
+        json.dumps({"valgte": [1], "svar": "Svar."}),
+    )
+    answer = ask(
+        conn, client, "it?", categories=["it_tech"], labels={"it_tech": "IT / tech"}
+    )
+    assert answer.filter_used.get("kategori") == "IT / tech"
+
+
 def test_rangordning_uden_stigninger(conn):
     client = FakeClient(json.dumps({"liste": "stigere"}))
     answer = ask(conn, client, "hvad er steget mest i pris?")
