@@ -387,6 +387,21 @@ select{appearance:none;padding-right:30px;cursor:pointer;
 .field-price{border:0}
 .price-inputs{display:flex;align-items:center;gap:7px}
 .filter-dash,.filter-unit{color:var(--text-3);font-size:var(--fs-caption)}
+/* En boolean i filterpanelet er ikke et valg fra en liste, men den faar samme
+   ramme som select'ene, saa panelet staar ens. */
+.field-check .check{
+  display:flex;align-items:center;gap:9px;
+  min-height:34px;padding:7px 11px;
+  background:var(--surface);border:1px solid var(--border-input);
+  border-radius:var(--r-2);box-shadow:var(--hi);cursor:pointer;
+  font-size:var(--fs-small);font-weight:500;color:var(--text);
+  text-transform:none;letter-spacing:0;
+}
+.field-check .check:hover{border-color:var(--border-strong)}
+.field-check input[type=checkbox]{
+  width:16px;height:16px;margin:0;flex:none;
+  accent-color:var(--accent);cursor:pointer;
+}
 
 /* ---- chips ---- */
 .chip-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
