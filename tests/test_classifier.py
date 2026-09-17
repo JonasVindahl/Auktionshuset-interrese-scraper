@@ -313,6 +313,70 @@ class TestClassifyMatching:
         classifier.classify_matches(matches)
         assert len(store.classification_counts()) <= 1
 
+    def test_cache_hits_koster_ikke_budget(self, store, settings):
+        """Loftet skal taelle kald til modellen, ikke fund.
+
+        Foer talte et cache-opslag med, saa 25 cachede fund kunne bruge hele
+        budgettet uden at der blev ringet én gang, og det 26. blev udskudt
+        uden grund.
+        """
+        config = load_config("config/interests.yml")
+        lots = [make_lot(t, lot_id=f"L{i}") for i, t in enumerate(
+            ["Server Dell PowerEdge", "Switch TP-LINK", "Pladespiller Thorens"]
+        )]
+        matches = [m for lot in lots for m in match_lot(lot, config)]
+        assert len(matches) >= 3
+
+        calls = {"n": 0}
+
+        def counting(*, url, headers, payload, timeout):
+            calls["n"] += 1
+            return 200, {"choices": [{"message": {"content": '{"verdict":"ja"}'}}]}
+
+        # Foerste runde uden loft: alt bliver klassificeret og cachet.
+        rummelig = ClassifierSettings(
+            enabled=True, model="test-model", api_key="x", profile=PROFILE,
+            max_per_run=99,
+        )
+        make_classifier(store, rummelig, counting).classify_matches(matches)
+        foerste = calls["n"]
+        assert foerste >= 3
+
+        # Anden runde med et loft paa 1: alt ligger i cachen, saa intet maa
+        # udskydes og der maa ikke ringes.
+        stramt = ClassifierSettings(
+            enabled=True, model="test-model", api_key="x", profile=PROFILE,
+            max_per_run=1,
+        )
+        result = make_classifier(store, stramt, counting).classify_matches(matches)
+        assert calls["n"] == foerste, "cache-opslag maatte ikke give et kald"
+        assert result.deferred == [], "cachede fund maatte ikke udskydes"
+
+    def test_aendret_profil_ugyldiggoer_cachen(self, store, settings):
+        """Profilen er prompten, saa en rettelse skal give nye opslag.
+
+        Uden profilen i noeglen genbrugte cachen gamle domme i op til 180 dage,
+        og den eneste vej til at rydde dem var at haeve en konstant i koden.
+        """
+        config = load_config("config/interests.yml")
+        match = match_lot(make_lot("Server Dell PowerEdge"), config)[0]
+
+        classifier = make_classifier(store, settings, reply('{"verdict":"nej"}'))
+        assert classifier.classify_one(match).verdict is Verdict.NO
+        assert classifier.classify_one(match).source == "cache"
+
+        # Samme lot, samme model, ny profiltekst: cachen maa ikke svare.
+        ny = ClassifierSettings(
+            enabled=True, model="test-model", api_key="x",
+            profile=PROFILE + " Jeg vil alligevel gerne have servere.",
+            max_per_run=10,
+        )
+        anden = make_classifier(store, ny, reply('{"verdict":"ja"}'))
+        resultat = anden.classify_one(match)
+        assert resultat.source == "model", "profilen skulle have ugyldiggjort cachen"
+        assert resultat.verdict is Verdict.YES
+
+
 class TestSettingsGuard:
     def test_usable_requires_key_and_profile(self):
         assert not ClassifierSettings(enabled=True, api_key=None, profile=PROFILE).usable
