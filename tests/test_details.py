@@ -72,3 +72,43 @@ def test_find_signals_er_tilfaeldiguafhaengig():
 def test_lang_tekst_afkortes():
     detaljer = parse("<div><p>" + "ord " * 500 + "</p></div>", limit=100)
     assert len(detaljer.text) <= 100
+
+
+def test_auktionsbetingelser_i_dropdown_giver_ikke_flag():
+    """Vilkaarene ligger i en dropdown og handler ikke om varens stand.
+
+    I rigtige data staar der ord som "reparation", "afhentning" og
+    "momsfritagelse" i dem. Laeste vi hele siden, fik hvert eneste lot de
+    samme falske flag: defekt, afhentning, momsfri.
+    """
+    html = """<!doctype html><html><body>
+      <div class="indhold">
+        <div class=" space-y-4 prosa"><p>Forbehold for evt. manglende stroemkabler</p></div>
+      </div>
+      <div class="dropdown closed">
+        <div class="dropdown-clicker"><h3>Auktionsbetingelser</h3></div>
+        <div class="dropdown-body prosa">
+          <p>1. Varer koebt som beset. Beskadigelse ved afhentning.
+          Reparation og moms afregnes saerskilt. Momsfritagelse kraever
+          dokumentation.</p>
+        </div>
+      </div>
+    </body></html>"""
+    detaljer = parse(html)
+    assert detaljer.flags == ()
+    assert "Forbehold" in detaljer.text
+    assert "Varer koebt" not in detaljer.text
+
+
+def test_beskrivelse_i_prosa_flagger_stadig():
+    html = '<div class="prosa"><p>Tonearmen er defekt og der mangler dele.</p></div>'
+    assert parse(html).flags == ("defekt",)
+
+
+def test_tom_beskrivelse_falder_ikke_tilbage_til_hele_siden():
+    html = """<html><body><div class="prosa"></div>
+      <div class="dropdown"><div class="dropdown-body prosa">
+      Varen er defekt og til reparation.</div></div></body></html>"""
+    detaljer = parse(html)
+    assert detaljer.text == ""
+    assert detaljer.flags == ()
