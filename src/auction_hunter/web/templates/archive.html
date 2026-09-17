@@ -90,6 +90,34 @@
       </div>
 
       <div class="field">
+        <label for="f-region">Landsdel</label>
+        <select id="f-region" name="region">
+          <option value="">Alle</option>
+          {% for r in regions %}
+          <option value="{{ r }}" {% if q.region == r %}selected{% endif %}>{{ r }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="f-type">Auktionstype</label>
+        <select id="f-type" name="auction_type">
+          <option value="">Alle</option>
+          {% for t in auction_types %}
+          <option value="{{ t }}" {% if q.auction_type == t %}selected{% endif %}>{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field field-check">
+        <label class="check">
+          <input type="checkbox" name="shipping" value="1" {% if q.shipping %}checked{% endif %}>
+          Kan sendes
+        </label>
+        <span class="field-hint">Kun auktioner hvor forsendelse er tilgængelig.</span>
+      </div>
+
+      <div class="field">
         <label for="f-days">Set inden for</label>
         <select id="f-days" name="days_back">
           <option value="">Altid</option>

@@ -107,6 +107,10 @@ class Source:
     region_ids: tuple[str, ...] = ("lyr0boj4d8",)
     region_label: str = "Sjælland"
     auction_status: int = 1
+    # id -> læsbart navn, så hver auktion kan mærkes med sin landsdel. Siden
+    # viser den ikke på kortet; den findes kun som filter på auktionslisten,
+    # så navnet kommer fra det kald der gav auktionen.
+    region_names: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -359,6 +363,7 @@ def load_config(path: str | Path | None = None) -> Config:
         region_ids=region_ids,
         region_label=_region_label(source_raw, regions_map, region_ids),
         auction_status=_env_int("AUCTION_STATUS", int(source_raw.get("auction_status", 1))),
+        region_names={value: name for name, value in regions_map.items()},
     )
 
     budget_raw = raw.get("budget") or {}

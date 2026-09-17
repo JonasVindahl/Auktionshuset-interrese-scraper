@@ -58,6 +58,21 @@ def has_schema(conn: sqlite3.Connection, *tables: str) -> bool:
     return all(has_table(conn, table) for table in tables)
 
 
+def auction_columns(conn: sqlite3.Connection) -> str:
+    """Auktionsinfo-kolonner med fald til tomme værdier.
+
+    Kolonnerne kom med en migration, og web-containeren kan starte før agenten
+    har kørt den. En manglende kolonne skal give tomme felter, ikke en 500.
+    """
+    wanted = ("region", "auction_type", "address", "shipping")
+    fallback = {"shipping": "0"}
+    parts = []
+    for column in wanted:
+        expr = f"l.{column}" if has_column(conn, "lots", column) else fallback.get(column, "''")
+        parts.append(f"{expr} AS {column}")
+    return ", ".join(parts)
+
+
 # -- fund ------------------------------------------------------------------
 
 def notifications(conn: sqlite3.Connection, limit: int = 400) -> list[sqlite3.Row]:
@@ -73,11 +88,13 @@ def notifications(conn: sqlite3.Connection, limit: int = 400) -> list[sqlite3.Ro
     # web-containeren kan starte foer agenten har migreret.
     profile = ("n.profile_key" if has_column(conn, "notifications", "profile_key")
                else "'standard' AS profile_key")
+    auction = auction_columns(conn)
     return conn.execute(
         f"""
         SELECT n.lot_id, n.category_key, {profile}, n.sent_at, n.cost,
                l.title, l.url, l.auction_title, l.ends_at, l.lot_number,
                l.first_bid, l.last_bid, l.last_total, {flags}, {image},
+               {auction},
                COALESCE(f.action, '') AS feedback_action
         FROM notifications n
         JOIN lots l ON n.lot_id = l.lot_id
@@ -303,11 +320,12 @@ def lot_detail(conn: sqlite3.Connection, lot_id: str) -> sqlite3.Row | None:
     category = (
         "n.category_key" if has_table(conn, "notifications") else "'' AS category_key"
     )
+    auction = auction_columns(conn)
     return conn.execute(
         f"""
         SELECT l.lot_id, l.title, l.url, l.auction_title, l.lot_number,
                l.first_seen, l.last_seen, l.first_bid, l.last_bid, l.last_total,
-               l.ends_at, {details}, {details_flags},
+               l.ends_at, {details}, {details_flags}, {auction},
                {image}, {category}, {sent_at}, {cost}, {feedback}
         FROM lots l
         {notif}
@@ -336,12 +354,13 @@ def lots_by_ids(conn: sqlite3.Connection, lot_ids: list[str]) -> list[sqlite3.Ro
         if has_table(conn, "feedback") else ""
     )
     feedback_col = "COALESCE(f.action,'')" if feedback_join else "''"
+    auction = auction_columns(conn)
     marks = ",".join("?" * len(lot_ids))
     rows = conn.execute(
         f"""
         SELECT DISTINCT l.lot_id, l.title, l.url, l.auction_title, l.lot_number,
                l.first_seen, l.last_seen, l.ends_at,
-               l.first_bid, l.last_bid, l.last_total, {details_flags},
+               l.first_bid, l.last_bid, l.last_total, {details_flags}, {auction},
                {image} AS image_url,
                n.category_key, n.sent_at, n.cost,
                {feedback_col} AS feedback_action,
@@ -372,11 +391,12 @@ def risers(conn: sqlite3.Connection, limit: int = 12) -> list[sqlite3.Row]:
         if has_table(conn, "feedback") else ""
     )
     feedback_col = "COALESCE(f.action,'')" if feedback_join else "''"
+    auction = auction_columns(conn)
     return conn.execute(
         f"""
         SELECT DISTINCT l.lot_id, l.title, l.url, l.auction_title, l.lot_number,
                l.first_seen, l.last_seen, l.ends_at,
-               l.first_bid, l.last_bid, l.last_total, {details_flags},
+               l.first_bid, l.last_bid, l.last_total, {details_flags}, {auction},
                {image} AS image_url,
                n.category_key, n.sent_at, n.cost,
                {feedback_col} AS feedback_action,

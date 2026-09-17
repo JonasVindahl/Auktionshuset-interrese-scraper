@@ -1076,6 +1076,12 @@ details[open]>.cat-body{animation:reveal var(--dur-base) var(--ease-out) both}
   font-size:var(--fs-caption);font-weight:600;color:var(--ok);
   background:var(--ok-soft);border-radius:var(--r-1);padding:2px 8px;cursor:help;
 }
+/* Levering. Samme groenne som moms-mærket, men sit eget navn saa de kan
+   styles hver for sig. "kan sendes" er dét der goer et fjernt lot relevant. */
+.tag-ship{
+  font-size:var(--fs-caption);font-weight:600;color:var(--ok);
+  background:var(--ok-soft);border-radius:var(--r-1);padding:2px 8px;cursor:help;
+}
 .review-actions{border-top:1px solid color-mix(in srgb,var(--border) 55%,transparent);
   padding:9px 0 0}
 /* Prisfeltet er to tal, saa det skal have mere plads end de øvrige felter. */

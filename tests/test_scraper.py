@@ -172,3 +172,64 @@ def test_user_agent_kan_saettes_uden_kodeaendring(monkeypatch):
 
     monkeypatch.setenv("SCRAPER_USER_AGENT", "hunter/1.1 (+mig@eksempel.dk)")
     assert _make_scraper().session.headers["User-Agent"] == "hunter/1.1 (+mig@eksempel.dk)"
+
+
+# -- auktionsinfo: adresse og levering --------------------------------------
+
+def _panel(shipping: bool) -> str:
+    levering = "Forsendelse tilgængelig" if shipping else "Forsendelse ikke tilgængelig"
+    return f"""<html><body>
+      <div class="dropdown-body">
+        <div><p class="opacity-75">Auktionsadresse</p>
+             <p class="font-heading">Vej 1<br/>DK-8361 Hasselager</p></div>
+        <div><p class="opacity-75">Eftersyn</p><p class="font-heading">Ingen</p></div>
+        <div class="flex flex-col gap-2">
+          <div class="flex gap-1 items-center">
+            <div title="Det er ikke muligt at faa tilsendt varer"><div></div></div>
+            <div>{levering}</div>
+          </div>
+        </div>
+      </div>
+    </body></html>"""
+
+
+def test_parse_auction_info_henter_adresse_og_forsendelse():
+    scraper = _make_scraper()
+    assert scraper._parse_auction_info(_panel(True)) == {
+        "address": "Vej 1 DK-8361 Hasselager", "shipping": True,
+    }
+    assert scraper._parse_auction_info(_panel(False))["shipping"] is False
+
+
+def test_parse_auction_info_uden_panel_giver_ingen_felter():
+    assert _make_scraper()._parse_auction_info("<html><body><p>tom</p></body></html>") == {}
+
+
+def test_parse_auctions_maerker_region():
+    scraper = _make_scraper()
+    html = _auction_page(["a1"])
+    auctions = scraper._parse_auctions(html, "Sjælland")
+    assert auctions and auctions[0].region == "Sjælland"
+
+
+def test_fetch_auctions_henter_en_landdel_ad_gangen():
+    """Regionen staar ikke paa kortet, saa den kommer fra det kald der gav det."""
+    from auction_hunter.config import Source
+
+    scraper = Scraper(
+        Source(region_ids=("r1", "r2"), region_names={"r1": "Sjælland", "r2": "Fyn"}),
+        delay_seconds=0,
+    )
+
+    def fake_get(url: str) -> str:
+        if "r1" in url:
+            return _auction_page(["a1"])
+        if "r2" in url:
+            return _auction_page(["b1"])
+        return _auction_page([])
+
+    scraper._get = fake_get
+    auctions = scraper.fetch_auctions()
+    assert {(a.auction_id, a.region) for a in auctions} == {
+        ("a1", "Sjælland"), ("b1", "Fyn"),
+    }

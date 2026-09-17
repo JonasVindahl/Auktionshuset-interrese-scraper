@@ -394,6 +394,20 @@ Ordene vægtes efter hvor sjældne de er i arkivet, så "Sennheiser HD 650"
 rangerer de andre HD 650'er øverst frem for alle Sennheiser-lots.
 Beløbene er inkl. salær og moms, altså til at sammenligne med prisen på kortet.
 
+### Auktionsdata
+
+Auktionshuset viser mere om et lot end titlen: auktionsadresse, levering
+(Forsendelse, Gaffeltruck, Palleløfter), eftersyn, udlevering og sælger. Alt
+sammen står i katalog-HTML'en som agenten allerede henter, så det koster ikke
+et ekstra kald.
+
+Landsdel, auktionstype, adresse og "kan sendes" gemmes nu pr. lot. Kortet viser
+landsdel og et grønt "kan sendes"-mærke, lot-siden viser hele auktionsinfoen,
+og arkivsøgningen kan filtrere på landsdel, auktionstype og levering. Landsdel
+står ikke på auktionskortet, så auktionslisten hentes én gang pr. landdel for
+at kunne mærke hver auktion. Feltlisten står i
+[docs/lot-felter-og-soegning.md](docs/lot-felter-og-soegning.md).
+
 ### Markering til AI-træning
 
 Hvert fund har fire knapper: **Afvis**, **Følg**, **Budt** og **Købt**. De

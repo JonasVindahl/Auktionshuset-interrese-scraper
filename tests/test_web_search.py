@@ -253,3 +253,47 @@ def test_prisfilter_rammer_den_viste_pris(tmp_path, lot_factory):
         )
         store.conn.commit()
         assert search(store.conn, SearchQuery(min_price=487, max_price=489)).total == 1
+
+
+# -- auktionsinfo: landsdel, type og levering -------------------------------
+
+def _lot_with_info(lot_factory, lot_id, title, *, region="", auction_type="", shipping=False):
+    from dataclasses import replace
+
+    return replace(
+        lot_factory(lot_id, title),
+        region=region, auction_type=auction_type,
+        address="Vej 1 DK-8361 Hasselager", shipping=shipping,
+    )
+
+
+def test_leveringsfilter(tmp_path, lot_factory):
+    """"Kan sendes" er dét der goer et lot i den anden ende af landet relevant."""
+    with Store(tmp_path / "t.db") as store:
+        store.record_lots([
+            _lot_with_info(lot_factory, "a", "Switch med forsendelse", shipping=True),
+            _lot_with_info(lot_factory, "b", "Switch uden forsendelse", shipping=False),
+        ], {"a": 150, "b": 150})
+        store.conn.commit()
+        result = search(store.conn, SearchQuery(shipping=True))
+        assert [row["lot_id"] for row in result.rows] == ["a"]
+
+
+def test_regions_og_type_filter(tmp_path, lot_factory):
+    from auction_hunter.web.search import auction_types_seen, regions_seen
+
+    with Store(tmp_path / "t.db") as store:
+        store.record_lots([
+            _lot_with_info(lot_factory, "a", "Switch i Sjælland",
+                           region="Sjælland", auction_type="Konkursauktion"),
+            _lot_with_info(lot_factory, "b", "Switch i Fyn",
+                           region="Fyn", auction_type="Ophørsauktion"),
+        ], {"a": 150, "b": 150})
+        store.conn.commit()
+
+        assert [r["lot_id"] for r in search(store.conn, SearchQuery(region="Fyn")).rows] == ["b"]
+        assert [r["lot_id"] for r in search(
+            store.conn, SearchQuery(auction_type="Konkursauktion")
+        ).rows] == ["a"]
+        assert regions_seen(store.conn) == ["Fyn", "Sjælland"]
+        assert auction_types_seen(store.conn) == ["Konkursauktion", "Ophørsauktion"]
