@@ -341,7 +341,7 @@ def _comparables_note(
         # De enkelte salg med pris og dato, saa svaret kan naevne konkrete tal
         # i stedet for kun et gennemsnit.
         examples = "; ".join(
-            f"{kr(sale.total)} ({sale.ended_at[:10]})" for sale in comps.items[:sales]
+            f"{kr(sale.total)} ({sale.ended_at[:10]})" for sale in comps.sales[:sales]
         )
         parts.append(f"{head}. Eksempler: {examples}" if examples else head)
     return " ".join(parts)
@@ -429,11 +429,11 @@ def _valuation_dict(valuation: Valuation) -> dict:
             "median": comps.median,
             "low": comps.low,
             "high": comps.high,
-            "items": [
+            "sales": [
                 {"lot_id": sale.lot_id, "title": sale.title, "hammer": sale.hammer,
                  "total": sale.total, "ended_at": sale.ended_at,
                  "shared": list(sale.shared)}
-                for sale in comps.items
+                for sale in comps.sales
             ],
         },
     }

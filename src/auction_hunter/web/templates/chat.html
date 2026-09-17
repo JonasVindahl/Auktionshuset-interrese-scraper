@@ -94,7 +94,7 @@
             <div><dt>Højeste</dt><dd>{{ comps.high|kr }}</dd></div>
           </div>
           <ol class="comp-list">
-            {% for sale in comps["items"] %}
+            {% for sale in comps.sales %}
             <li class="comp">
               <span class="comp-price">{{ sale.total|kr }}</span>
               <span class="comp-title">

@@ -1046,6 +1046,20 @@ def create_app() -> FastAPI:
         """Samtalerne ligger i deres egen fil, ikke i agentens database."""
         return chatstore.ChatStore(chatstore.chat_db_path(db_path()))
 
+    def _compat_meta(meta: dict) -> dict:
+        """Loft en gemt besked op paa den nuvaerende form.
+
+        Sammenligningerne laa under noeglen 'items', indtil det viste sig at
+        Jinja finder dict.items foer noeglen af samme navn, saa panelet gav
+        500. Feltet hedder nu 'sales'. Samtaler gemt foer det ligger stadig i
+        conversations.db i op til 90 dage, saa den gamle noegle laeses videre
+        her i stedet for at lade gamle samtaler vaere i stykker.
+        """
+        comps = (meta.get("valuation") or {}).get("comps")
+        if isinstance(comps, dict) and "sales" not in comps and "items" in comps:
+            comps["sales"] = comps.pop("items")
+        return meta
+
     def _thread_rows(store: chatstore.ChatStore, conversation_id: int, conn) -> list[dict]:
         """Beskedrækkerne klar til skabelonen, med deres kort og meta."""
         items: list[dict] = []
@@ -1054,7 +1068,7 @@ def create_app() -> FastAPI:
             meta: dict = {}
             if message["meta"]:
                 try:
-                    meta = json.loads(message["meta"])
+                    meta = _compat_meta(json.loads(message["meta"]))
                 except ValueError:
                     meta = {}
             cards = []
