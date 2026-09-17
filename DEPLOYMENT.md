@@ -229,7 +229,5 @@ Versionen ligger ét sted (`auction_hunter.__version__`) og vises i `/healthz`,
 
 ## 10. Kendte mangler
 
-- `LICENSE` siger "alle rettigheder forbeholdt". Vil du gøre koden
-  genbrugelig, skal den skiftes til fx MIT eller Apache-2.0.
 - CI er ikke aktiveret endnu; se afsnit 9.
 - Ens bruger og én adgangskode. Profilerne er interessesæt, ikke brugere.

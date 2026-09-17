@@ -544,11 +544,9 @@ profilændringer tilbage. Se `DEPLOYMENT.md` for detaljer.
 
 ## Licens
 
-Alle rettigheder forbeholdt. Dette er et privat projekt, og der gives ingen
-licens til at bruge, kopiere eller videredistribuere koden. Se `LICENSE`.
+MIT. Se `LICENSE`.
 
-Vil du i stedet gøre den genbrugelig, er MIT eller Apache-2.0 de nærmeste
-standardvalg, men det er en beslutning om ejerskab som værktøjet ikke træffer.
-
-Ingen — privat projekt.
+Kort fortalt: du må bruge, ændre og videredistribuere koden, også
+kommercielt, så længe copyright-linjen følger med. Softwaren leveres uden
+garanti.
 

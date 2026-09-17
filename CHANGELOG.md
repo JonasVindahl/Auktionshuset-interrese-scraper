@@ -3,6 +3,18 @@
 Formatet følger [Keep a Changelog](https://keepachangelog.com/da/1.1.0/), og
 versionerne er [semantiske](https://semver.org/lang/da/).
 
+## [Unreleased]
+
+### Tilføjet
+
+- `LICENSE`: MIT.
+
+### Ændret
+
+- `auction_hunter backup` tager nu hele hukommelsen med: agentens database,
+  samtalernes database og billedcachen, i én `tar.gz`. Gendannelse sikrer hver
+  del der overskrives og kan rulles tilbage.
+
 ## [1.1.0] - 2026-09-17
 
 Produktionsfundament og dynamiske interesseprofiler. Funktionerne er de samme,
