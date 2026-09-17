@@ -1,89 +1,180 @@
-"""Backup og gendannelse af SQLite-hukommelsen."""
+"""Backup og gendannelse af hele hukommelsen."""
 
 from __future__ import annotations
 
+import io
 import sqlite3
+import tarfile
 from pathlib import Path
 
 import pytest
 
-from auction_hunter.backup import BackupError, backup, integrity_check, restore
+from auction_hunter.backup import (
+    BackupError,
+    backup,
+    integrity_check,
+    restore,
+)
 
 
-def _db(path: Path, rows: int) -> Path:
+@pytest.fixture(autouse=True)
+def _ingen_chat_sti(monkeypatch):
+    # chat_db_path slår CHAT_DB_PATH op først; uden dette ville testene skrive
+    # samtaler et tilfældigt sted.
+    monkeypatch.delenv("CHAT_DB_PATH", raising=False)
+
+
+def _db(path: Path, rows: int, table: str = "notifications") -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path)
-    conn.execute(
-        "CREATE TABLE notifications (lot_id TEXT PRIMARY KEY, category_key TEXT)"
-    )
+    conn.execute(f"CREATE TABLE {table} (id TEXT PRIMARY KEY)")
     for i in range(rows):
-        conn.execute("INSERT INTO notifications VALUES (?,?)", (f"L{i}", "it_tech"))
+        conn.execute(f"INSERT INTO {table} VALUES (?)", (f"L{i}",))
     conn.commit()
     conn.close()
     return path
 
 
-def _count(path) -> int:
+def _count(path: Path, table: str = "notifications") -> int:
     conn = sqlite3.connect(path)
     try:
-        return conn.execute("SELECT COUNT(*) FROM notifications").fetchone()[0]
+        return conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
     finally:
         conn.close()
 
 
-def test_backup_giver_en_intakt_enkeltfil(tmp_path):
-    source = _db(tmp_path / "hunter.db", 3)
-    target = backup(source, tmp_path / "backups", stamp="20260101T000000Z")
+def _full_tree(tmp_path: Path) -> Path:
+    db = _db(tmp_path / "data" / "hunter.db", 5)
+    _db(tmp_path / "data" / "conversations.db", 2, table="conversations")
+    images = tmp_path / "data" / "images"
+    images.mkdir(parents=True, exist_ok=True)
+    (images / "abc.jpg").write_bytes(b"billede-et")
+    (images / "def.jpg").write_bytes(b"billede-to")
+    return db
 
-    assert target.name == "hunter-20260101T000000Z.db"
-    assert integrity_check(target) == "ok"
-    # VACUUM INTO giver praecis én fil, uden WAL-soeskende.
-    assert not Path(str(target) + "-wal").exists()
-    assert not Path(str(target) + "-shm").exists()
-    assert _count(target) == 3
+
+# -- backup ----------------------------------------------------------------
+
+def test_backup_indeholder_database_samtaler_og_billeder(tmp_path):
+    db = _full_tree(tmp_path)
+    result = backup(db, tmp_path / "backups", stamp="fast")
+
+    assert result.path.name == "hunter-fast.tar.gz"
+    assert result.has_conversations is True
+    assert result.image_count == 2
+
+    with tarfile.open(result.path) as tar:
+        names = sorted(tar.getnames())
+    assert "db/main.db" in names
+    assert "db/conversations.db" in names
+    assert "images/abc.jpg" in names
+    assert "images/def.jpg" in names
+
+
+def test_backup_uden_samtaler_og_billeder_har_kun_databasen(tmp_path):
+    db = _db(tmp_path / "hunter.db", 1)
+    result = backup(db, tmp_path / "b", stamp="fast")
+    assert result.has_conversations is False
+    assert result.image_count == 0
+
+    with tarfile.open(result.path) as tar:
+        assert tar.getnames() == ["db/main.db"]
+
+
+def test_databasen_i_arkivet_er_intakt(tmp_path):
+    db = _full_tree(tmp_path)
+    result = backup(db, tmp_path / "b", stamp="fast")
+    with tarfile.open(result.path) as tar:
+        data = tar.extractfile("db/main.db").read()
+    assert data.startswith(b"SQLite format 3")
 
 
 def test_backup_af_manglende_database_fe_jler(tmp_path):
     with pytest.raises(BackupError):
-        backup(tmp_path / "findes-ikke.db", tmp_path / "backups")
+        backup(tmp_path / "findes-ikke.db", tmp_path / "b")
 
 
 def test_backup_overskriver_ikke_et_eksisterende_navn(tmp_path):
-    source = _db(tmp_path / "hunter.db", 1)
-    backup(source, tmp_path / "b", stamp="fast")
+    db = _db(tmp_path / "hunter.db", 1)
+    backup(db, tmp_path / "b", stamp="fast")
     with pytest.raises(BackupError):
-        backup(source, tmp_path / "b", stamp="fast")
+        backup(db, tmp_path / "b", stamp="fast")
 
 
-def test_restore_gendanner_indhold_og_sikrer_det_gamle(tmp_path):
-    source = _db(tmp_path / "hunter.db", 5)
-    snapshot = backup(source, tmp_path / "b", stamp="fast")
+# -- gendannelse -----------------------------------------------------------
 
-    conn = sqlite3.connect(source)
-    conn.execute("INSERT INTO notifications VALUES ('NY','it_tech')")
+def test_gendannelse_af_arkiv_giver_alt_tilbage(tmp_path):
+    db = _full_tree(tmp_path)
+    result = backup(db, tmp_path / "b", stamp="fast")
+
+    fresh = tmp_path / "ny" / "hunter.db"
+    restored = restore(result.path, fresh, stamp="nu")
+
+    assert _count(fresh) == 5
+    assert (tmp_path / "ny" / "conversations.db").exists()
+    assert _count(tmp_path / "ny" / "conversations.db", "conversations") == 2
+    images = tmp_path / "ny" / "images"
+    assert sorted(p.name for p in images.iterdir()) == ["abc.jpg", "def.jpg"]
+    assert restored.image_count == 2
+    assert restored.has_conversations is True
+    assert restored.safety == ()
+
+
+def test_gendannelse_sikrer_det_gamle(tmp_path):
+    db = _full_tree(tmp_path)
+    result = backup(db, tmp_path / "b", stamp="fast")
+
+    conn = sqlite3.connect(db)
+    conn.execute("INSERT INTO notifications VALUES ('NY')")
     conn.commit()
     conn.close()
-    assert _count(source) == 6
+    (tmp_path / "data" / "images" / "nyt.jpg").write_bytes(b"nyt")
 
-    safety = restore(snapshot, source, stamp="nu")
-    assert safety is not None and safety.exists()
-    assert _count(source) == 5
-    # Sikkerhedskopien indeholder den version der blev erstattet.
-    assert _count(safety) == 6
+    restored = restore(result.path, db, stamp="nu")
 
-
-def test_restore_uden_eksisterende_database_giver_ingen_sikkerhedskopi(tmp_path):
-    source = _db(tmp_path / "hunter.db", 2)
-    snapshot = backup(source, tmp_path / "b", stamp="fast")
-    target = tmp_path / "ny.db"
-    assert restore(snapshot, target, stamp="nu") is None
-    assert _count(target) == 2
+    assert _count(db) == 5
+    assert len(restored.safety) == 3
+    assert all(path.exists() for path in restored.safety)
+    billedsikker = [p for p in restored.safety if p.name.startswith("images")][0]
+    assert (billedsikker / "nyt.jpg").exists()
 
 
-def test_restore_afviser_en_fil_der_ikke_er_en_database(tmp_path):
+def test_gendannelse_af_enkel_databasefil_virker_stadig(tmp_path):
+    db = _db(tmp_path / "hunter.db", 5)
+    enkel = _db(tmp_path / "enkel.db", 1)
+
+    result = restore(enkel, db, stamp="nu")
+    assert _count(db) == 1
+    assert result.safety and result.safety[0].exists()
+
+
+def test_gendannelse_afviser_skrald(tmp_path):
     bogus = tmp_path / "skrald.db"
     bogus.write_text("dette er ikke en database", encoding="utf-8")
     with pytest.raises(BackupError):
         restore(bogus, tmp_path / "hunter.db")
+
+
+def test_gendannelse_afviser_arkiv_uden_database(tmp_path):
+    archive = tmp_path / "tom.tar.gz"
+    with tarfile.open(archive, "w:gz") as tar:
+        info = tarfile.TarInfo("laesmig.txt")
+        payload = b"ingen database her"
+        info.size = len(payload)
+        tar.addfile(info, io.BytesIO(payload))
+    with pytest.raises(BackupError):
+        restore(archive, tmp_path / "hunter.db")
+
+
+def test_gendannelse_afviser_sti_uden_for_maalet(tmp_path):
+    archive = tmp_path / "ondsindet.tar.gz"
+    with tarfile.open(archive, "w:gz") as tar:
+        info = tarfile.TarInfo("../udenfor.txt")
+        payload = b"nej"
+        info.size = len(payload)
+        tar.addfile(info, io.BytesIO(payload))
+    with pytest.raises(BackupError):
+        restore(archive, tmp_path / "hunter.db")
 
 
 def test_integritetstjek_paa_skrald_giver_tekst(tmp_path):

@@ -104,19 +104,26 @@ database i WAL-tilstand kan mangle de sidste transaktioner, så den er ikke nok.
     # eller inde i containeren:
     docker compose exec hunter python -m auction_hunter backup --out /app/reports/backups
 
-Kommandoen skriver én ren fil med tidsstempel, tjekker integriteten, og sletter
-filen igen hvis tjekket fejler. Et ugyldigt backup der bliver liggende er værre
-end intet backup, fordi det ser ud som om man er dækket ind.
+Backup'en er én `tar.gz` med alt der ikke ligger i git:
+
+    db/main.db            agentens database
+    db/conversations.db   samtalernes database, hvis den findes
+    images/               de cachede miniaturebilleder, hvis de findes
+
+Kommandoen tjekker integriteten af snapshotet, og skriver slet ikke arkivet hvis
+tjekket fejler. Et ugyldigt backup der bliver liggende er værre end intet
+backup, fordi det ser ud som om man er dækket ind.
 
 Gendannelse kræver at `web` og `hunter` er stoppet:
 
     docker compose stop web hunter
-    .venv/bin/python -m auction_hunter restore backups/hunter-<tidsstempel>.db --yes
+    .venv/bin/python -m auction_hunter restore backups/hunter-<tidsstempel>.tar.gz --yes
     docker compose start
 
-Den gamle database gemmes automatisk som `...foer-gendannelse-<tidsstempel>`, så
-en gendannelse kan rulles tilbage. Billederne i `data/images` og
-`config/interests.yml` er ikke med i backup'en og skal sikres separat.
+Hver del der overskrives gemmes automatisk som `...foer-gendannelse-<tidsstempel>`,
+saa en gendannelse kan rulles tilbage. `config/interests.yml` er bevidst ikke
+med: den ligger i git, og en gendannelse skal ikke kunne rulle profilændringer
+tilbage. En gammel `.db`-fil kan stadig gendannes, men rører kun databasen.
 
 Backup-stien i homelabben er Proxmox Backup Server og TrueNAS NFS.
 
@@ -222,8 +229,7 @@ Versionen ligger ét sted (`auction_hunter.__version__`) og vises i `/healthz`,
 
 ## 10. Kendte mangler
 
-- Ingen `LICENSE` i repoet. Det er en beslutning, ikke en forglemmelse.
+- `LICENSE` siger "alle rettigheder forbeholdt". Vil du gøre koden
+  genbrugelig, skal den skiftes til fx MIT eller Apache-2.0.
 - CI er ikke aktiveret endnu; se afsnit 9.
-- Billederne i `data/images` er ikke med i `auction_hunter backup`; de skal
-  sikres separat.
 - Ens bruger og én adgangskode. Profilerne er interessesæt, ikke brugere.

@@ -523,17 +523,32 @@ højst én gang i døgnet, så den ikke selv bliver spam.
 
 ```bash
 .venv/bin/python -m auction_hunter backup --out backups
-.venv/bin/python -m auction_hunter restore backups/hunter-<tidsstempel>.db --yes
+.venv/bin/python -m auction_hunter restore backups/hunter-<tidsstempel>.tar.gz --yes
 ```
 
-Backup bruger SQLites `VACUUM INTO`, som tager et konsistent øjebliksbillede
-mens agenten kører, og giver én ren fil uden WAL-søskende. Et backup der fejler
-integritetstjekket bliver slettet igen. Gendannelse kræver at `web` og
-`hunter` er stoppet, sikrer den gamle database først, og skriver den nye på
-plads i ét flyt. Billederne i `data/images` er ikke med og skal sikres separat.
-Se `DEPLOYMENT.md` for detaljer.
+Backup er én `tar.gz` med alt der ikke ligger i git:
+
+```
+db/main.db            agentens database
+db/conversations.db   samtalernes database, hvis den findes
+images/               de cachede miniaturebilleder, hvis de findes
+```
+
+Databaserne tages med SQLites `VACUUM INTO`, som giver et konsistent
+øjebliksbillede mens agenten skriver, og som giver rene filer uden
+WAL-søskende. Et snapshot der fejler integritetstjekket bliver ikke skrevet.
+Gendannelse kræver at `web` og `hunter` er stoppet, sikrer alle tre dele
+først, og skriver dem på plads i ét flyt. `config/interests.yml` er bevidst
+ikke med: den ligger i git, og en gendannelse skal ikke kunne rulle
+profilændringer tilbage. Se `DEPLOYMENT.md` for detaljer.
 
 ## Licens
+
+Alle rettigheder forbeholdt. Dette er et privat projekt, og der gives ingen
+licens til at bruge, kopiere eller videredistribuere koden. Se `LICENSE`.
+
+Vil du i stedet gøre den genbrugelig, er MIT eller Apache-2.0 de nærmeste
+standardvalg, men det er en beslutning om ejerskab som værktøjet ikke træffer.
 
 Ingen — privat projekt.
 
