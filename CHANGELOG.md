@@ -14,6 +14,11 @@ versionerne er [semantiske](https://semver.org/lang/da/).
   arkivsøgningen kan filtrere på landsdel, auktionstype og levering. Landsdel
   står ikke på auktionskortet, så auktionslisten hentes nu én gang pr. landdel
   for at kunne mærke hver auktion. Se `docs/lot-felter-og-soegning.md`.
+- **Hjemlandsdele: fjerne lots kræver forsendelse.** `region_ids` kan nu stå på
+  `all` mens `local_region_ids` holder de landsdele man selv kan køre til. Et lot
+  uden for dem bliver kun et fund hvis auktionen kan sende. Uden feltet er alle
+  valgte regioner lokale, så gamle konfigurationer er uændrede. Et lot med
+  ukendt landsdel slippes igennem, så et ændret HTML-udtræk ikke koster fund.
 
 ### Rettet
 

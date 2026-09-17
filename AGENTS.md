@@ -267,6 +267,11 @@ mod den, aldrig mod et snapshot.
   udlevering står i `dropdown-body`-panelet på katalogsiden, som allerede
   hentes for at få lot'ene. `_parse_auction_info` læser det; landet, typen,
   adressen og `shipping` gemmes pr. lot ligesom `auction_title`.
+- **Hjemlandsdele og levering.** `region_ids` styrer hvad der hentes,
+  `local_region_ids` hvad man selv kan køre til. `match_lot` dropper et lot
+  uden for hjemlandsdelene medmindre `shipping` er sand. Ukendt region ('' eller
+  et ukendt navn) slippes igennem, så et ændret HTML-udtræk ikke koster fund, og
+  uden `local_region_ids` er alle valgte regioner lokale og reglen inaktiv.
 - `Dockerfile` kopierer kun `src/` og `config/` — `tests/` og `tools/` er ikke
   i imaget.
 

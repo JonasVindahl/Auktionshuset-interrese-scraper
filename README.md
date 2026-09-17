@@ -143,6 +143,24 @@ overstyres med `REGION_LABEL` eller `region_label`. Uden det ville varslerne
 påstå "Sjælland" mens agenten fulgte hele landet. `REGION_IDS` i miljøet vinder
 over YAML-filen.
 
+### Hjemlandsdele og levering
+
+`region_ids` bestemmer hvad agenten **henter**. `local_region_ids` bestemmer
+hvad du selv kan køre til. Et lot uden for dem bliver kun et fund hvis
+auktionen kan sende, så hele landet kan følges uden at få støj fra varer du
+ikke kan hente:
+
+```yaml
+source:
+  region_ids: all              # hent hele landet
+  local_region_ids: Sjælland   # men kun fund fra Sjælland, medmindre der kan sendes
+```
+
+Navne eller id'er, eller `all`. Uden feltet er alle valgte regioner lokale, så
+en gammel konfiguration er uændret. `LOCAL_REGION_IDS` i miljøet vinder over
+YAML-filen. Et lot med ukendt landsdel, fx fra før feltet fandtes, slippes
+igennem, så et ændret HTML-udtræk ikke koster fund.
+
 ### Profiler
 
 En profil er et navngivet interessesæt med sine egne kategorier, sit eget

@@ -80,6 +80,13 @@ def match_lot(
     if find_keywords(haystack, config.profile_exclude(profile)):
         return []
 
+    # Et lot uden for hjemlandsdelene er kun et fund hvis auktionen kan sende.
+    # Ellers ville et landsdaekkende scrape give stoj fra varer man ikke kan
+    # hente. En ukendt region slippes igennem, saa et aendret HTML-udtraek
+    # ikke koster fund.
+    if not config.source.is_local_region(lot.region) and not lot.shipping:
+        return []
+
     price = estimate(
         lot.current_bid,
         auction_title=lot.auction_title,
