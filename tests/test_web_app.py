@@ -647,3 +647,88 @@ def test_drift_viser_version_og_regioner(client):
     assert "Version" in body
     assert "Python" in body
     assert "Regioner" in body
+
+
+# -- profiler i webben -----------------------------------------------------
+
+PROFIL_CONFIG = """\
+source:
+  region_ids: all
+regions:
+  Sjaelland: sjae
+  Fyn: fyn
+budget:
+  max_price: 5000
+  soft_over_budget_factor: 2.5
+categories:
+  it_tech:
+    label: IT
+    strong: [server]
+  audio_hifi:
+    label: Audio
+    strong: [forstaerker]
+profiles:
+  it:
+    label: IT og netvaerk
+    categories: [it_tech]
+  lyd:
+    label: Lyd
+    categories: [audio_hifi]
+    webhook_env: DISCORD_WEBHOOK_LYD
+"""
+
+
+@pytest.fixture()
+def profile_client(sample_db, tmp_path, monkeypatch):
+    """Dashboard med to profiler i konfigurationen."""
+    config = tmp_path / "profiler.yml"
+    config.write_text(PROFIL_CONFIG, encoding="utf-8")
+    monkeypatch.setenv("DB_PATH", sample_db)
+    monkeypatch.setenv("CONFIG_PATH", str(config))
+    monkeypatch.delenv("WEB_PASSWORD", raising=False)
+    monkeypatch.delenv("WEB_PASSWORD_FILE", raising=False)
+    monkeypatch.delenv("WEB_PASSWORD_FROM_ENV", raising=False)
+    monkeypatch.delenv("DISCORD_WEBHOOK_LYD", raising=False)
+    monkeypatch.delenv("DISCORD_WEBHOOK_LYD_FILE", raising=False)
+    monkeypatch.delenv("DISCORD_WEBHOOK_LYD_FROM_ENV", raising=False)
+    return TestClient(create_app())
+
+
+def _mark_profile(db: str, lot_id: str, category: str, profile: str, cost: int = 100):
+    from auction_hunter.storage import Store
+
+    with Store(db) as store:
+        store.mark_notified(lot_id, category, cost, profile)
+
+
+def test_fund_kan_filtreres_paa_profil(profile_client, sample_db):
+    _mark_profile(sample_db, "a1", "audio_hifi", "lyd")
+
+    alle = profile_client.get("/").text
+    assert 'data-profile="standard"' in alle
+    assert 'data-lot="a2"' in alle
+
+    kun_lyd = profile_client.get("/?profile=lyd").text
+    assert 'data-lot="a1"' in kun_lyd
+    assert 'data-profile="lyd"' in kun_lyd
+    assert 'data-lot="a2"' not in kun_lyd
+
+
+def test_fund_viser_profilnavn_naar_den_ikke_er_standard(profile_client, sample_db):
+    _mark_profile(sample_db, "a1", "audio_hifi", "lyd")
+    body = profile_client.get("/?profile=lyd").text
+    assert "Lyd" in body
+
+
+def test_fund_viser_profilchips(profile_client):
+    body = profile_client.get("/").text
+    assert "IT og netvaerk" in body
+    assert "profile=lyd" in body
+
+
+def test_drift_viser_profiler_med_webhookstatus(profile_client):
+    body = profile_client.get("/drift").text
+    assert "Profiler" in body
+    assert "DISCORD_WEBHOOK_LYD" in body
+    assert "ikke sat" in body
+

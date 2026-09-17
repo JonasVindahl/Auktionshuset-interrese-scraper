@@ -78,6 +78,44 @@
   </dl>
 </section>
 
+{% if profiles %}
+<section class="section">
+  <h2 class="section-title">Profiler <span class="count">{{ profiles|length }}</span></h2>
+  <p class="section-note">Hver profil har sine egne kategorier, sit eget prisloft og
+    sin egen webhook. Uden profiler i interests.yml er der én implicit standardprofil.</p>
+  <div class="panel">
+    <div class="table-wrap">
+      <table class="stack">
+        <thead>
+          <tr>
+            <th scope="col">Profil</th>
+            <th scope="col">Kategorier</th>
+            <th scope="col" class="num">Prisloft</th>
+            <th scope="col">Webhook</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in profiles %}
+          <tr>
+            <td data-label="Profil">{{ p.label }} <code>{{ p.key }}</code></td>
+            <td data-label="Kategorier">{% if p.all_categories %}alle{% else %}{{ p.categories|join(', ') }}{% endif %}</td>
+            <td class="num" data-label="Prisloft">{{ p.max_price|kr if p.max_price else 'arves' }}</td>
+            <td data-label="Webhook">
+              {%- if p.webhook_env %}<code>{{ p.webhook_env }}</code>
+                {%- if p.webhook == 'sat' %} sat{% else %} <span class="muted-note">ikke sat</span>{% endif %}
+              {%- else %}<span class="muted-note">fælles</span>{% endif %}
+            </td>
+            <td data-label="Status">{{ 'til' if p.enabled else 'fra' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{% endif %}
+
 <section class="section">
   <h2 class="section-title">Seneste kørsler</h2>
   <div class="panel">

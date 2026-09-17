@@ -69,9 +69,13 @@ def notifications(conn: sqlite3.Connection, limit: int = 400) -> list[sqlite3.Ro
     # starte før agenten har kørt sin første migration.
     flags = ("l.details_flags" if has_column(conn, "lots", "details_flags")
              else "'' AS details_flags")
+    # Samme forsigtighed som ovenfor: profile_key kom med profilerne, og
+    # web-containeren kan starte foer agenten har migreret.
+    profile = ("n.profile_key" if has_column(conn, "notifications", "profile_key")
+               else "'standard' AS profile_key")
     return conn.execute(
         f"""
-        SELECT n.lot_id, n.category_key, n.sent_at, n.cost,
+        SELECT n.lot_id, n.category_key, {profile}, n.sent_at, n.cost,
                l.title, l.url, l.auction_title, l.ends_at, l.lot_number,
                l.first_bid, l.last_bid, l.last_total, {flags}, {image},
                COALESCE(f.action, '') AS feedback_action

@@ -99,6 +99,7 @@ def prepare(
         "auction": _get(row, "auction_title") or "",
         "lot_number": _get(row, "lot_number") or "",
         "category": _get(row, "category_key") or "",
+        "profile_key": _get(row, "profile_key") or "standard",
         "feedback": _get(row, "feedback_action") or "",
         "image": image,
         "cost": cost,

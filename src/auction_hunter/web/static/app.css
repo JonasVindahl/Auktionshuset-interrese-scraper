@@ -1146,6 +1146,21 @@ details[open]>.cat-body{animation:reveal var(--dur-base) var(--ease-out) both}
 /* markering fra tastaturnavigation */
 .card.is-selected{outline:2px solid var(--accent);outline-offset:2px}
 
+/* ---- profiler ----
+ * Profilnavnet er et signal om hvor et fund kom fra, ikke en kategori. Det
+ * holdes derfor neutralt, saa det ikke konkurrerer med kategorifarven.
+ */
+.tag-profile{
+  font-size:var(--fs-caption);font-weight:600;background:var(--surface-2);
+  color:var(--text-2);border-radius:var(--r-1);padding:2px 8px;
+}
+.profile-row{margin-bottom:10px}
+.chip-label{
+  font-size:var(--fs-overline);font-weight:700;color:var(--text-3);
+  text-transform:uppercase;letter-spacing:.08em;margin-right:2px;
+}
+a.chip.is-on{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
+
 /* ---- tastaturgenveje ---- */
 .linkish{
   display:inline-flex;align-items:center;gap:6px;min-height:24px;padding:2px 0;
