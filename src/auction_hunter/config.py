@@ -74,6 +74,32 @@ class Category:
 
 
 @dataclass(frozen=True)
+class Profile:
+    """En navngivet interesseprofil.
+
+    Uden 'profiles' i YAML'en findes én implicit profil bygget på topniveauet,
+    så en eksisterende konfiguration opfører sig praecis som før. En profil kan
+    indsnævre hvilke kategorier der gælder, have sit eget prisloft, sine egne
+    udelukkelser og sin egen webhook, fx så HiFi-fund går til en anden kanal
+    end vaerktoj.
+
+    categories=None betyder "alle kategorier". En tom liste betyder ingen.
+    max_price=None arver loftet fra topniveauet; er den sat, erstatter den
+    kategoriernes loft for denne profil.
+    """
+
+    key: str
+    label: str
+    categories: tuple[str, ...] | None = None
+    exclude: tuple[str, ...] = ()
+    max_price: int | None = None
+    soft_over_budget_factor: float | None = None
+    classifier_profile: str = ""
+    webhook_env: str = ""
+    enabled: bool = True
+
+
+@dataclass(frozen=True)
 class Source:
     base_url: str = "https://auktionshuset.dk"
     region_ids: tuple[str, ...] = ("lyr0boj4d8",)
@@ -128,9 +154,39 @@ class Config:
     opening_bid: int = DEFAULT_OPENING_BID
     classifier: ClassifierConfig = field(default_factory=ClassifierConfig)
     details: DetailsConfig = field(default_factory=DetailsConfig)
+    profiles: tuple[Profile, ...] = ()
 
     def category(self, key: str) -> Category | None:
         return next((c for c in self.categories if c.key == key), None)
+
+    def default_profile(self) -> Profile:
+        """Profilen der bruges når ingen er valgt.
+
+        Den bærer ingen egne indstillinger; alt arves fra topniveauet, så
+        matchningen er uændret for konfigurationer uden 'profiles'.
+        """
+        return Profile(key="standard", label="Standard")
+
+    def active_profiles(self) -> tuple[Profile, ...]:
+        """De profiler der skal matche. Uden 'profiles' er der én implicit."""
+        if self.profiles:
+            return tuple(p for p in self.profiles if p.enabled)
+        return (self.default_profile(),)
+
+    def profile(self, key: str) -> Profile | None:
+        return next((p for p in self.profiles if p.key == key), None)
+
+    def profile_categories(self, profile: Profile | None) -> tuple[Category, ...]:
+        if profile is None or profile.categories is None:
+            return self.categories
+        wanted = set(profile.categories)
+        return tuple(c for c in self.categories if c.key in wanted)
+
+    def profile_exclude(self, profile: Profile | None) -> tuple[str, ...]:
+        """Globale udelukkelser gælder altid; profilen lægger sine egne oveni."""
+        if profile is None:
+            return self.exclude
+        return self.exclude + profile.exclude
 
     def is_excluded(self, text: str) -> tuple[str, ...]:
         """Nøgleord der eksplicit gør et lot uinteressant.
@@ -232,6 +288,47 @@ def _region_label(
     return ", ".join(names)
 
 
+def _load_profiles(raw_profiles: Any) -> tuple[Profile, ...]:
+    """Laes 'profiles' fra YAML. Fravær giver ingen profiler og dermed den
+    implicitte standardprofil, så gamle konfigurationer er uændrede.
+    """
+    if not raw_profiles:
+        return ()
+    if not isinstance(raw_profiles, dict):
+        raise ConfigError("'profiles' skal være et mapping fra noegle til indstillinger")
+
+    profiles: list[Profile] = []
+    for key, spec in raw_profiles.items():
+        spec = spec or {}
+        if not isinstance(spec, dict):
+            raise ConfigError(f"profilen {key!r} skal være et mapping")
+
+        raw_categories = spec.get("categories")
+        if raw_categories is None:
+            categories: tuple[str, ...] | None = None
+        elif isinstance(raw_categories, str):
+            categories = (raw_categories,)
+        else:
+            categories = tuple(str(c) for c in raw_categories)
+
+        max_price = spec.get("max_price")
+        soft = spec.get("soft_over_budget_factor")
+        profiles.append(
+            Profile(
+                key=str(key),
+                label=str(spec.get("label", key)),
+                categories=categories,
+                exclude=_normalize_keywords(spec.get("exclude")),
+                max_price=int(max_price) if max_price is not None else None,
+                soft_over_budget_factor=float(soft) if soft is not None else None,
+                classifier_profile=str(spec.get("classifier_profile", "") or ""),
+                webhook_env=str(spec.get("webhook_env", "") or ""),
+                enabled=_env_bool(f"PROFILE_{str(key).upper()}_ENABLED", bool(spec.get("enabled", True))),
+            )
+        )
+    return tuple(profiles)
+
+
 def load_config(path: str | Path | None = None) -> Config:
     config_path = Path(path or os.environ.get("CONFIG_PATH") or DEFAULT_CONFIG_PATH)
     try:
@@ -288,6 +385,15 @@ def load_config(path: str | Path | None = None) -> Config:
             )
         )
 
+    profiles = _load_profiles(raw.get("profiles"))
+    known = {c.key for c in categories}
+    for profile in profiles:
+        unknown = [k for k in (profile.categories or ()) if k not in known]
+        if unknown:
+            raise ConfigError(
+                f"profilen {profile.key!r} peger på ukendte kategorier: {', '.join(unknown)}"
+            )
+
     return Config(
         source=source,
         categories=tuple(categories),
@@ -298,6 +404,7 @@ def load_config(path: str | Path | None = None) -> Config:
         opening_bid=_env_int("OPENING_BID", int(raw.get("opening_bid", DEFAULT_OPENING_BID))),
         classifier=_load_classifier(raw.get("classifier") or {}),
         details=_load_details(raw.get("details") or {}),
+        profiles=profiles,
     )
 
 
