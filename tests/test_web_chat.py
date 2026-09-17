@@ -559,3 +559,78 @@ class TestAIBudget:
         body = TestClient(app_mod.create_app()).get("/drift").text
         assert "AI-forbrug fra dashboardet" in body
         assert "42" in body
+
+
+# -- gemte vurderinger i skabelonen ----------------------------------------
+
+class TestGemtVurderingRenderes:
+    """/chat gav 500 saa snart en samtale indeholdt sammenlignelige salg.
+
+    Assistentens svar gemmes som JSON, saa objektet paa vej tilbage er en
+    almindelig dict. Feltet hed 'items', og Jinja finder dict.items foer
+    noeglen af samme navn, saa '{% for sale in comps.items %}' itererede over
+    en bundet metode.
+
+    Testene daekkede kun den levende vej, hvor comps er en Comparables med
+    .items som rigtigt attribut. Selve JSON-rundturen blev aldrig renderet, og
+    det er praecis der fejlen laa.
+    """
+
+    def _gem_samtale(self, db, comps_noegle="sales"):
+        from auction_hunter.web import chatstore
+
+        store = chatstore.ChatStore(chatstore.chat_db_path(db))
+        try:
+            cid = store.new_conversation(title="hvad er den vaerd")
+            store.append(cid, "user", "hvad er en HD650 vaerd?")
+            store.append(cid, "assistant", "Typisk omkring 900 kr.", {
+                "valuation": {
+                    "lot_id": "a1", "title": "Sennheiser HD650",
+                    "url": "http://x/1", "total": 900, "series": [500, 900],
+                    "comps": {
+                        "count": 1, "median": 900, "low": 700, "high": 1100,
+                        comps_noegle: [{
+                            "lot_id": "a6", "title": "Sennheiser HD650 sortering",
+                            "hammer": 700, "total": 900,
+                            "ended_at": "2026-01-02T00:00:00", "shared": ["hd650"],
+                        }],
+                    },
+                },
+            })
+            return cid
+        finally:
+            store.close()
+
+    def _client(self, sample_db, sample_config, monkeypatch):
+        from fastapi.testclient import TestClient
+
+        from auction_hunter.web.app import create_app
+
+        monkeypatch.setenv("DB_PATH", sample_db)
+        monkeypatch.setenv("CONFIG_PATH", sample_config)
+        monkeypatch.delenv("WEB_PASSWORD", raising=False)
+        monkeypatch.delenv("CLASSIFIER_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        return TestClient(create_app(), raise_server_exceptions=False)
+
+    def test_vurdering_med_sammenlignelige_salg_renderes(
+        self, sample_db, sample_config, monkeypatch
+    ):
+        cid = self._gem_samtale(sample_db)
+        svar = self._client(sample_db, sample_config, monkeypatch).get(f"/chat?c={cid}")
+
+        assert svar.status_code == 200
+        # Ikke bare 200: panelet skal faktisk indeholde salget. En tom
+        # gennemloebning ville ogsaa give 200 og skjule at listen er vaek.
+        assert "Hvad samme slags er gået for" in svar.text
+        assert "Sennheiser HD650 sortering" in svar.text
+
+    def test_samtaler_gemt_under_det_gamle_navn_virker_stadig(
+        self, sample_db, sample_config, monkeypatch
+    ):
+        """Feltet hed 'items' indtil kollisionen. De ligger der i 90 dage."""
+        cid = self._gem_samtale(sample_db, comps_noegle="items")
+        svar = self._client(sample_db, sample_config, monkeypatch).get(f"/chat?c={cid}")
+
+        assert svar.status_code == 200
+        assert "Sennheiser HD650 sortering" in svar.text

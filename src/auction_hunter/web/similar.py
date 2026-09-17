@@ -55,14 +55,20 @@ class Sale:
 
 @dataclass
 class Comparables:
-    items: list[Sale] = field(default_factory=list)
+    # Feltet hed 'items' indtil en skabelon faldt over det. Som dataklasse
+    # virkede det, men assistenten gemmer sine svar som JSON, og paa vej
+    # tilbage er objektet en almindelig dict. Der finder Jinja dict.items
+    # foer noeglen, saa '{% for sale in comps.items %}' itererede over en
+    # bundet metode og gav 500. Et navn der ikke skygger for en dict-metode
+    # fjerner hele klassen af fejl i stedet for det ene kaldssted.
+    sales: list[Sale] = field(default_factory=list)
     median: int | None = None
     low: int | None = None
     high: int | None = None
 
     @property
     def count(self) -> int:
-        return len(self.items)
+        return len(self.sales)
 
 
 def _keep(word: str) -> bool:
@@ -181,7 +187,7 @@ def find(
     # Medianen regnes over dem der vises, saa tallet passer til listen.
     totals = [s.total for s in top]
     return Comparables(
-        items=top,
+        sales=top,
         median=_median(totals),
         low=min(totals) if totals else None,
         high=max(totals) if totals else None,

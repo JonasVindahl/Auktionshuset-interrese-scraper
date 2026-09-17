@@ -901,3 +901,57 @@ def test_archive_auction_filter_survives_pagination_links(client):
         "/archive", params={"q": "e", "auction": "Auktion Køge", "page": 1}
     ).text
     assert "Auktion+K%C3%B8ge" in body or "auction=Auktion" in body
+
+
+# -- skabeloner maa ikke ramme dict-metoder ved et uheld --------------------
+
+# Jinja proever attributten foer noeglen, saa et opslag som 'x.items' rammer
+# dict.items og ikke noeglen "items", hvis x er en dict. Det er tavst: man
+# faar en bundet metode i stedet for en vaerdi, og fejlen dukker foerst op i
+# den loekke eller det filter der skal bruge den.
+DICT_METODER = frozenset({
+    "items", "keys", "values", "get", "pop", "popitem", "clear", "copy",
+    "update", "setdefault", "fromkeys",
+})
+
+
+def _kollisioner_i(tekst: str) -> list[tuple[int, str]]:
+    """(linjenummer, udtryk) for attribut-opslag der skygger for en dict-metode.
+
+    Et rigtigt metodekald som 'labels.get(x)' eller 'secrets.items()' er i
+    orden — der er parentesen med vilje. Det er opslaget uden parentes der er
+    tvetydigt.
+    """
+    import re
+
+    fundet = []
+    for n, linje in enumerate(tekst.splitlines(), 1):
+        if "{{" not in linje and "{%" not in linje:
+            continue
+        for objekt, attribut in re.findall(r"(\w+)\.(\w+)", linje):
+            if attribut in DICT_METODER and f"{objekt}.{attribut}(" not in linje:
+                fundet.append((n, f"{objekt}.{attribut}"))
+    return fundet
+
+
+def test_ingen_skabelon_slaar_op_paa_et_dict_metodenavn():
+    """En vagt mod den fejl der gav 500 paa /chat.
+
+    'comps.items' virkede paa Comparables-dataklassen og braekkede i samme
+    oejeblik det samme panel blev renderet fra en gemt samtale, hvor objektet
+    er en almindelig dict. Skriv 'x["items"]' hvis noeglen virkelig hedder
+    det, eller giv feltet et navn der ikke skygger for en dict-metode.
+    """
+    from pathlib import Path
+
+    from auction_hunter.web import app as app_mod
+
+    problemer = []
+    for fil in sorted((Path(app_mod.HERE) / "templates").glob("*.html")):
+        for linje, udtryk in _kollisioner_i(fil.read_text(encoding="utf-8")):
+            problemer.append(f"{fil.name}:{linje}  {udtryk}")
+
+    assert not problemer, (
+        "Skabeloner slår op på et navn der også er en dict-metode:\n  "
+        + "\n  ".join(problemer)
+    )
