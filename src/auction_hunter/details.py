@@ -4,18 +4,21 @@ Lot-listen indeholder kun en titel, og en titel kan ikke sige om varen er i
 stykker. Denne del henter lot-siden og leder efter de signaler der afgør om et
 lot er værd at byde på.
 
-Udtrækket er bevidst strukturuafhængigt. Vi kender ikke auktionshusets markup,
-og en CSS-selektor der gættes forkert fejler tavst den dag siden ændrer sig. I
-stedet tages sidens brødtekst — uden navigation, scripts og footere — og der
-ledes efter danske vendinger. Det giver et grovere men ærligt svar, og listen
-kan udvides når nogen har set den rigtige side.
+Udtrækket tager lot'ets egen beskrivelse, ikke hele siden. Beskrivelsen er den
+prosa-blok auktionshuset selv viser som varetekst. Auktionsbetingelserne ligger
+ogsaa i en prosa-blok, men i en dropdown, og de ord de bruger ("reparation",
+"afhentning", "momsfritagelse") siger intet om varen; scanner vi hele siden,
+faar hvert eneste lot de samme flag. Mangler den kendte markup, falder vi
+tilbage til den laengste sammenhaengende tekstblok.
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 from bs4 import BeautifulSoup
+from bs4.element import Tag
 
 # Vendinger der ændrer hvad et lot er værd. Rækkefølgen er også den rækkefølge
 # flagene rapporteres i, så det alvorligste står først.
@@ -67,21 +70,42 @@ class Details:
         return not self.text and not self.flags
 
 
+def _clean(text: str) -> str:
+    return " ".join(text.split())
+
+
+def _longest(nodes: Iterable[Tag]) -> str:
+    best = ""
+    for node in nodes:
+        text = _clean(node.get_text(" ", strip=True))
+        if len(text) > len(best):
+            best = text
+    return best
+
+
 def _text_of(html: str) -> str:
-    """Brødteksten fra sidens største indholdsblok."""
+    """Brødteksten fra lot'ets egen beskrivelse."""
     soup = BeautifulSoup(html, "lxml")
     for tag in soup.find_all(_STRIP):
         tag.decompose()
 
-    # Den længste sammenhængende tekstblok er næsten altid beskrivelsen. En
-    # menu er mange små stykker, en beskrivelse er ét.
-    best = ""
-    for node in soup.find_all(["div", "section", "article", "main", "p", "body"]):
-        text = " ".join(node.get_text(" ", strip=True).split())
-        if len(text) > len(best):
-            best = text
+    # Auktionsbetingelserne ligger i en dropdown og er ikke lot'ets stand. De
+    # ord de bruger ("reparation", "afhentning", "momsfritagelse"), giver
+    # ellers de samme falske flag på hvert eneste lot.
+    for tag in soup.select(".dropdown"):
+        tag.decompose()
+
+    # Lot'ets beskrivelse er den prosa-blok der ikke er en dropdown. Mangler
+    # den, er der ingen beskrivelse, og så skal vi ikke gætte ud fra hele siden.
+    beskrivelse = soup.select(".prosa")
+    if beskrivelse:
+        return _longest(beskrivelse)
+
+    # Ukendt markup: den længste sammenhængende tekstblok er næsten altid
+    # beskrivelsen. En menu er mange små stykker, en beskrivelse er ét.
+    best = _longest(soup.find_all(["div", "section", "article", "main", "p", "body"]))
     if len(best) < MIN_TEXT:
-        best = " ".join(soup.get_text(" ", strip=True).split())
+        best = _clean(soup.get_text(" ", strip=True))
     return best
 
 

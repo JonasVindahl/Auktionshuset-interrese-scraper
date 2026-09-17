@@ -108,6 +108,9 @@ def prepare(
         "flags": flags,
         "details": _get(row, "details") or "",
         "flags_label": ", ".join(FLAG_LABELS.get(f, f) for f in flags),
+        "serious_flags_label": ", ".join(
+            FLAG_LABELS.get(f, f) for f in flags if f in SERIOUS_FLAGS
+        ),
         "has_serious_flag": any(f in SERIOUS_FLAGS for f in flags),
         "bid": last_bid or 0,
         "bid_text": kr(last_bid) if last_bid else "–",
