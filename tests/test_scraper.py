@@ -157,3 +157,18 @@ def test_fetch_auctions_stops_without_new_cards():
 
     assert len(auctions) == 24
     assert calls["n"] <= 3, "måtte ikke blive ved med at hente den samme side"
+
+
+def test_user_agent_kan_saettes_uden_kodeaendring(monkeypatch):
+    """Standarden udgiver sig for Chrome, og det er ejerens valg at aendre.
+
+    Strengen skal derfor kunne saettes fra miljoeet, saa en aerlig
+    User-Agent med kontaktadresse ikke kraever en kodeaendring.
+    """
+    from auction_hunter.scraper import DEFAULT_USER_AGENT
+
+    monkeypatch.delenv("SCRAPER_USER_AGENT", raising=False)
+    assert _make_scraper().session.headers["User-Agent"] == DEFAULT_USER_AGENT
+
+    monkeypatch.setenv("SCRAPER_USER_AGENT", "hunter/1.1 (+mig@eksempel.dk)")
+    assert _make_scraper().session.headers["User-Agent"] == "hunter/1.1 (+mig@eksempel.dk)"

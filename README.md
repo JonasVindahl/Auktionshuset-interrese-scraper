@@ -205,9 +205,12 @@ Enhver OpenAI-kompatibel endpoint virker (`CLASSIFIER_BASE_URL`), fx OpenAI,
 Azure, OpenRouter, Ollama eller vLLM. Der er ingen ny afhængighed — kaldet går
 gennem `requests`.
 
-Svarene caches i SQLite på et hash af titel, kategori, model og
-`CLASSIFIER_VERSION`. Et ændret lot eller en ændret prompt giver derfor nye
-opslag, mens alt andet genbruges. Køen af `måske`-fund kan ses med:
+Svarene caches i SQLite på et hash af titel, kategori, model,
+`classifier.profile` og `CLASSIFIER_VERSION` (en konstant i `classifier.py`,
+ikke en miljøvariabel). Et ændret lot eller en rettet profil giver derfor nye
+opslag, mens alt andet genbruges. Profilen er med netop fordi den *er*
+prompten: uden den i nøglen ville en rettelse i `interests.yml` ikke slå
+igennem på det der allerede er vurderet. Køen af `måske`-fund kan ses med:
 
 ```bash
 python -m auction_hunter review
@@ -359,8 +362,8 @@ Udtrækket er strukturuafhængigt: det læser sidens brødtekst frem for at gå 
 bestemte CSS-klasser, som ville fejle tavst den dag siden ændrer sig.
 
 Det er **slået fra som standard**, fordi det er et ekstra kald til
-auktionshuset for hvert fund, og deres vilkår kun tillader ét katalog-scrape
-hvert 15. minut. Slår du det til, så hold max_per_run lav.
+auktionshuset for hvert fund, oven i dem en kørsel allerede laver. Slår du
+det til, så hold max_per_run lav.
 
 ### Lot'ets side
 
@@ -416,6 +419,13 @@ Siden sætter `noindex,nofollow` og er ikke tænkt til at ligge på internettet.
 At genudgive auktionshusets data offentligt er noget andet end at scrape til
 eget brug.
 
+En ærlighed værd at nævne det samme sted: agenten sender som standard en
+User-Agent der udgiver sig for Chrome, og den læser ikke `robots.txt`. Det
+klæder ikke afsnittet ovenfor. Strengen kan sættes med `SCRAPER_USER_AGENT`,
+fx `auktionshuset-hunter/1.1 (+din@mail.dk)`, men standarden er uændret,
+fordi en ærlig User-Agent også kan blive blokeret af en WAF. Det er en
+afvejning ejeren skal tage, ikke en fejl koden kan rette.
+
 ## Hemmeligheder
 
 Discord-webhooken læses af `src/auction_hunter/secrets.py` på tre måder. Den
@@ -465,8 +475,8 @@ Tilføj nye sager til facitlisten når du ser en fejl i praksis:
 nøgleord der udløser flest fund — nyttigt til at se om et ord er for bredt:
 
 ```bash
-.venv/bin/python -m auction_hunter export --out tests/fixtures/lots_sample.json
-.venv/bin/python tools/evaluate.py
+PYTHONPATH=src .venv/bin/python -m auction_hunter export --out tests/fixtures/lots_sample.json
+PYTHONPATH=src .venv/bin/python tools/evaluate.py
 ```
 
 Snapshottet er bevidst ikke i git, da det er et øjebliksbillede. Testene kører
@@ -539,8 +549,12 @@ images/               de cachede miniaturebilleder, hvis de findes
 Databaserne tages med SQLites `VACUUM INTO`, som giver et konsistent
 øjebliksbillede mens agenten skriver, og som giver rene filer uden
 WAL-søskende. Et snapshot der fejler integritetstjekket bliver ikke skrevet.
-Gendannelse kræver at `web` og `hunter` er stoppet, sikrer alle tre dele
-først, og skriver dem på plads i ét flyt. `config/interests.yml` er bevidst
+Gendannelse kræver at `web` og `hunter` er stoppet. Det håndhæves: agenten
+skriver et livstegn ved siden af databasen, og `restore` afviser mens det er
+friskt. Uden det ville agenten beholde den gamle fil-inode og skrive videre i
+en slettet fil, så hele gendannelsen forsvandt uden en fejl. Er livstegnet
+efterladt af en proces der døde, kan det tilsidesættes med `--force`.
+Gendannelsen sikrer alle tre dele først, og skriver dem på plads i ét flyt. `config/interests.yml` er bevidst
 ikke med: den ligger i git, og en gendannelse skal ikke kunne rulle
 profilændringer tilbage. Se `DEPLOYMENT.md` for detaljer.
 

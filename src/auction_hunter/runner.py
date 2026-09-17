@@ -732,7 +732,7 @@ def run_forever(
     if interval_seconds < MIN_SCRAPE_INTERVAL_SECONDS:
         raise ConfigError(
             f"Intervallet må ikke være under {MIN_SCRAPE_INTERVAL_SECONDS} sekunder (15 min) — "
-            "auktionshusets vilkår tillader højst ét scrape hvert 15. minut."
+            "kataloget må ikke hentes oftere end hvert 15. minut."
         )
 
     state = {"stop": False}

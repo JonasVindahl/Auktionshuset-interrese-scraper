@@ -12,6 +12,7 @@ Kataloger pagineres med ``limit`` (maks. 48 pr. side) og ``page`` (1-indekseret)
 from __future__ import annotations
 
 import logging
+import os
 import random
 import re
 import time
@@ -38,11 +39,25 @@ MAX_PAGES = 200
 # sikkerhedsventil, ikke en forventning.
 MAX_AUCTION_PAGES = 40
 
+# Standarden udgiver sig for en browser. Det staar daarligt til det oevrige
+# projekt, som bruger flere afsnit paa ikke at genudgive auktionshusets data og
+# paa at overholde deres interval. En aerlig User-Agent med en kontaktadresse
+# ville passe bedre til den holdning, men den kan ogsaa faa en WAF til at
+# blokere agenten, og den afvejning er ejerens.
+#
+# Derfor er standarden uaendret, og strengen kan saettes uden en kodeaendring:
+#   SCRAPER_USER_AGENT="auktionshuset-hunter/1.1 (+mail@eksempel.dk)"
+DEFAULT_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+)
+
+
+def user_agent() -> str:
+    return os.environ.get("SCRAPER_USER_AGENT", "").strip() or DEFAULT_USER_AGENT
+
+
 DEFAULT_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-    ),
     "Accept": "text/html,application/xhtml+xml",
     "Accept-Language": "da-DK,da;q=0.9,en;q=0.8",
 }
@@ -125,6 +140,8 @@ class Scraper:
         self.max_retries = max_retries
         self.session = session or requests.Session()
         self.session.headers.update(DEFAULT_HEADERS)
+        # Slaas op pr. scraper, saa en aendring virker uden genbygning.
+        self.session.headers["User-Agent"] = user_agent()
         # Taelles op under parsingen, saa et aendret data-ends-format kan
         # opdages i stedet for at fjerne alle deadlines i stilhed.
         self.lots_with_ends = 0
