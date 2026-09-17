@@ -9,7 +9,7 @@ RUFF := $(BIN)/ruff
 IMAGE_TAG ?= latest
 IMAGE_VERSION ?= 0.0.0
 
-.PHONY: help venv install test lint fmt run once scan check stats backup up down logs image clean
+.PHONY: help venv install test lint fmt run once scan check stats backup up down logs image ci-install clean
 
 help:
 	@echo "make venv      opret virtuel miljoe og installer afhaengigheder"
@@ -22,6 +22,7 @@ help:
 	@echo "make backup    konsistent backup af databasen til backups/"
 	@echo "make image     byg docker-imaget med version og revision"
 	@echo "make up/down   start eller stop compose"
+	@echo "make ci-install kopier ci/ci.yml ind i .github/workflows/"
 
 venv:
 	$(PY) -m venv $(VENV) 2>/dev/null || python3 -m venv $(VENV)
@@ -69,6 +70,12 @@ down:
 
 logs:
 	docker compose logs -f --tail=100
+
+ci-install:
+	@mkdir -p .github/workflows
+	cp ci/ci.yml .github/workflows/ci.yml
+	@echo "CI-workflow lagt i .github/workflows/ci.yml. Commit og push med et"
+	@echo "token der har workflow-scope (gh auth refresh -s workflow)."
 
 clean:
 	rm -rf .pytest_cache .ruff_cache

@@ -825,3 +825,49 @@ def test_uventet_fejl_giver_en_styled_500(sample_db, sample_config, monkeypatch)
     assert "500" in response.text
     assert "Tilbage til fund" in response.text
 
+
+# -- metrics ---------------------------------------------------------------
+
+def test_metrics_er_prometheus_tekst(client):
+    response = client.get("/metrics")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    body = response.text
+    assert "hunter_up 1" in body
+    assert 'hunter_build_info{version="' in body
+    assert "# TYPE hunter_table_rows gauge" in body
+
+
+def test_metrics_uden_token_naar_intet_er_sat(client):
+    assert client.get("/metrics").status_code == 200
+
+
+def test_metrics_kraever_token_naar_sat(sample_db, sample_config, monkeypatch):
+    from auction_hunter.web import app as appmod
+
+    monkeypatch.setenv("DB_PATH", sample_db)
+    monkeypatch.setenv("CONFIG_PATH", sample_config)
+    monkeypatch.setenv("METRICS_TOKEN", "hemmeligt-token")
+    monkeypatch.delenv("WEB_PASSWORD", raising=False)
+    guard = TestClient(appmod.create_app())
+
+    assert guard.get("/metrics").status_code == 401
+    assert guard.get("/metrics?token=forkert").status_code == 401
+
+    ok = guard.get("/metrics", headers={"Authorization": "Bearer hemmeligt-token"})
+    assert ok.status_code == 200
+    assert guard.get("/metrics?token=hemmeligt-token").status_code == 200
+
+
+def test_metrics_lækker_ikke_hemmeligheder(sample_db, sample_config, monkeypatch):
+    from auction_hunter.web import app as appmod
+
+    monkeypatch.setenv("DB_PATH", sample_db)
+    monkeypatch.setenv("CONFIG_PATH", sample_config)
+    monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://discord.com/api/webhooks/hemmelig")
+    monkeypatch.setenv("CLASSIFIER_API_KEY", "sk-hemmelig-noegle")
+    monkeypatch.delenv("WEB_PASSWORD", raising=False)
+    body = TestClient(appmod.create_app()).get("/metrics").text
+    assert "hemmelig" not in body
+    assert "sk-" not in body
+
