@@ -375,8 +375,9 @@ selve lot-siden for hvert **fund** og leder efter danske vendinger som
 "defekt", "reserverede", "ubrugt" og "afhentning". Resultatet står på lot'ets
 side og som et lille mærke på kortet, og Discord-beskeden får et Stand-felt.
 
-Udtrækket er strukturuafhængigt: det læser sidens brødtekst frem for at gå efter
-bestemte CSS-klasser, som ville fejle tavst den dag siden ændrer sig.
+Udtrækket læser lot'ets egen beskrivelse. Auktionsbetingelserne ligger i en
+dropdown og indeholder ord som "reparation" og "afhentning"; læste man hele
+siden, fik hvert eneste lot de samme flag.
 
 Det er **slået fra som standard**, fordi det er et ekstra kald til
 auktionshuset for hvert fund, oven i dem en kørsel allerede laver. Slår du
@@ -386,8 +387,11 @@ det til, så hold max_per_run lav.
 
 Klik på "historik" på et kort for at se lot'ets prisforløb gennem de
 observationer agenten har, og hvad **samme slags lot** er gået for tidligere.
-Sammenligningen vægter ord efter hvor sjældne de er i arkivet, så "Sennheiser
-HD 650" rangerer de andre HD 650'er øverst frem for alle Sennheiser-lots.
+Sammenligningen kræver mindst to fælles ord, eller ét modelnummer som "m720q".
+Et mærke ("lenovo") eller en kategori ("computer") alene er ikke nok, så en
+skærm eller en bunke reservedele ikke bliver sammenligningsgrundlag for en pc.
+Ordene vægtes efter hvor sjældne de er i arkivet, så "Sennheiser HD 650"
+rangerer de andre HD 650'er øverst frem for alle Sennheiser-lots.
 Beløbene er inkl. salær og moms, altså til at sammenligne med prisen på kortet.
 
 ### Markering til AI-træning
