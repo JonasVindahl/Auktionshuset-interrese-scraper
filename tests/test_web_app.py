@@ -732,3 +732,65 @@ def test_drift_viser_profiler_med_webhookstatus(profile_client):
     assert "DISCORD_WEBHOOK_LYD" in body
     assert "ikke sat" in body
 
+
+# -- prod-sikkerhed --------------------------------------------------------
+
+def test_post_fra_fremmed_oprindelse_afvises(client):
+    response = client.post("/logout", headers={"Origin": "https://ondsindet.example"})
+    assert response.status_code == 403
+
+
+def test_post_fra_samme_oprindelse_tillades(client):
+    response = client.post("/logout", headers={"Origin": "http://testserver"})
+    assert response.status_code != 403
+
+
+def test_post_uden_oprindelse_tillades(client):
+    """curl og testklienten sender ingen Origin; kun browsere kan lave CSRF."""
+    assert client.post("/logout").status_code != 403
+
+
+def test_cookie_secure_udledes_af_web_base_url(monkeypatch):
+    from auction_hunter.web import app as appmod
+
+    monkeypatch.delenv("WEB_COOKIE_SECURE", raising=False)
+    monkeypatch.setenv("WEB_BASE_URL", "https://hunter.example")
+    assert appmod.cookie_secure() is True
+
+    monkeypatch.setenv("WEB_BASE_URL", "http://192.168.1.10:8080")
+    assert appmod.cookie_secure() is False
+
+
+def test_cookie_secure_kan_tvinges(monkeypatch):
+    from auction_hunter.web import app as appmod
+
+    monkeypatch.setenv("WEB_BASE_URL", "https://hunter.example")
+    monkeypatch.setenv("WEB_COOKIE_SECURE", "0")
+    assert appmod.cookie_secure() is False
+
+    monkeypatch.setenv("WEB_COOKIE_SECURE", "1")
+    assert appmod.cookie_secure() is True
+
+
+def test_allowed_hosts_er_tom_uden_miljoevariabel(monkeypatch):
+    from auction_hunter.web import app as appmod
+
+    monkeypatch.delenv("ALLOWED_HOSTS", raising=False)
+    assert appmod.allowed_hosts() == []
+    monkeypatch.setenv("ALLOWED_HOSTS", "hunter.example, 10.0.0.5")
+    assert appmod.allowed_hosts() == ["hunter.example", "10.0.0.5"]
+
+
+def test_kun_tilladte_hosts_accepteres(sample_db, sample_config, monkeypatch):
+    monkeypatch.setenv("DB_PATH", sample_db)
+    monkeypatch.setenv("CONFIG_PATH", sample_config)
+    monkeypatch.setenv("ALLOWED_HOSTS", "testserver")
+    monkeypatch.delenv("WEB_PASSWORD", raising=False)
+    monkeypatch.delenv("WEB_PASSWORD_FILE", raising=False)
+    monkeypatch.delenv("WEB_PASSWORD_FROM_ENV", raising=False)
+    guarded = TestClient(create_app())
+
+    assert guarded.get("/healthz").status_code == 200
+    response = guarded.get("/healthz", headers={"Host": "ondsindet.example"})
+    assert response.status_code == 400
+

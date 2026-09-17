@@ -18,6 +18,7 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any
+from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import (
@@ -30,6 +31,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BeforeValidator
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.status import HTTP_303_SEE_OTHER
 
 from .. import __version__ as APP_VERSION
@@ -385,6 +387,57 @@ _CSP = (
 )
 
 
+def _env_flag(name: str, default: bool) -> bool:
+    raw = os.environ.get(name, "").strip().lower()
+    if not raw:
+        return default
+    return raw in ("1", "true", "ja", "yes", "on")
+
+
+def cookie_secure() -> bool:
+    """Om login-cookien kraever HTTPS.
+
+    Saettes med WEB_COOKIE_SECURE. Ellers udledes det af WEB_BASE_URL, saa et
+    https-setup ikke skal konfigureres to steder. Standard er False, fordi
+    dashboardet typisk koerer paa LAN uden TLS, og en Secure-cookie der ikke
+    kan sendes over http ville laase brugeren ude.
+    """
+    raw = os.environ.get("WEB_COOKIE_SECURE", "").strip()
+    if raw:
+        return _env_flag("WEB_COOKIE_SECURE", False)
+    return os.environ.get("WEB_BASE_URL", "").strip().lower().startswith("https://")
+
+
+def allowed_hosts() -> list[str]:
+    """Host-headere der accepteres, fra ALLOWED_HOSTS. Tom betyder ingen kontrol."""
+    return [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()]
+
+
+def forwarded_allow_ips() -> str:
+    """Hvilke proxyer der maa saette X-Forwarded-*. Kun lokalhost som standard."""
+    return os.environ.get("FORWARDED_ALLOW_IPS", "127.0.0.1").strip() or "127.0.0.1"
+
+
+def _same_origin(request: Request) -> bool:
+    """Kom den usikre anmodning fra samme vaert?
+
+    SameSite=Lax og CSP'ens form-action daekker formularer, men fetch() til
+    /feedback er ikke omfattet af form-action. Origin eller Referer er den
+    ekstra kontrol der ogsaa daekker den vej.
+
+    Mangler begge headere, slippes anmodningen igennem: en CSRF kan kun komme
+    fra en browser, og browsere sender Origin paa POST. Fravaeret rammer derfor
+    kun værktoejer som curl og testklienten.
+    """
+    host = request.headers.get("host", "")
+    if not host:
+        return True
+    for value in (request.headers.get("origin"), request.headers.get("referer")):
+        if value:
+            return urlsplit(value).netloc == host
+    return True
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Auktionshuset Hunter",
@@ -392,13 +445,31 @@ def create_app() -> FastAPI:
         redoc_url=None,
         openapi_url=None,   # ingen offentlig rute-enumeration
     )
+    hosts = allowed_hosts()
+    if hosts:
+        # Host-validering mod DNS-rebinding og fortaekte proxyer. Slået fra som
+        # standard, fordi dashboardet ogsaa naas paa en raa LAN-adresse.
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=hosts)
+
     app.add_middleware(
         SessionMiddleware,
         secret_key=auth.session_secret(),
         max_age=auth.SESSION_MAX_AGE,
         same_site="lax",
-        https_only=False,      # kører typisk på LAN uden TLS
+        https_only=cookie_secure(),
     )
+    @app.middleware("http")
+    async def csrf_oprindelse(request: Request, call_next: Callable) -> Response:
+        if request.method in ("POST", "PUT", "PATCH", "DELETE") and not _same_origin(request):
+            log.warning(
+                "Afviste %s fra fremmed oprindelse: %s",
+                request.url.path, request.headers.get("origin") or request.headers.get("referer"),
+            )
+            return Response(
+                "Afvist: anmodningen kom fra et andet websted.", status_code=403
+            )
+        return await call_next(request)
+
     @app.middleware("http")
     async def sikkerhedsheadere(request: Request, call_next: Callable) -> Response:
         response = await call_next(request)
@@ -1279,5 +1350,18 @@ def serve(
             "WEB_PASSWORD er ikke sat — dashboardet er åbent for alle på "
             "netværket, og det kan redigere interesseprofilen. Sæt WEB_PASSWORD."
         )
+    if cookie_secure():
+        log.info("Login-cookien kraever HTTPS (WEB_COOKIE_SECURE/WEB_BASE_URL)")
+    if allowed_hosts():
+        log.info("Accepterer kun Host: %s", ", ".join(allowed_hosts()))
     log.info("Dashboard paa http://%s:%d", host, port)
-    uvicorn.run(create_app(), host=host, port=port, log_level="warning")
+    uvicorn.run(
+        create_app(),
+        host=host,
+        port=port,
+        log_level="warning",
+        # Bag en reverse proxy giver X-Forwarded-Proto og -For ellers et
+        # forkert scheme og proxyens IP som klient.
+        proxy_headers=True,
+        forwarded_allow_ips=forwarded_allow_ips(),
+    )
