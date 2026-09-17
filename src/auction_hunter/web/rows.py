@@ -107,6 +107,10 @@ def prepare(
         "price_label": price_label,
         "flags": flags,
         "details": _get(row, "details") or "",
+        "region": _get(row, "region") or "",
+        "auction_type": _get(row, "auction_type") or "",
+        "address": _get(row, "address") or "",
+        "shipping": bool(_get(row, "shipping", 0)),
         "flags_label": ", ".join(FLAG_LABELS.get(f, f) for f in flags),
         "serious_flags_label": ", ".join(
             FLAG_LABELS.get(f, f) for f in flags if f in SERIOUS_FLAGS

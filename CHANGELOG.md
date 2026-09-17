@@ -5,6 +5,16 @@ versionerne er [semantiske](https://semver.org/lang/da/).
 
 ## [Unreleased]
 
+### Tilføjet
+
+- **Auktionsinfo på hvert lot: landsdel, auktionstype, adresse og "kan
+  sendes".** Auktionshuset viser det i auktionsinfo-panelet på katalogsiden,
+  som agenten allerede henter, så det koster ikke et ekstra kald. Kortet viser
+  landsdel og et grønt "kan sendes"-mærke, lot-siden viser hele panelet, og
+  arkivsøgningen kan filtrere på landsdel, auktionstype og levering. Landsdel
+  står ikke på auktionskortet, så auktionslisten hentes nu én gang pr. landdel
+  for at kunne mærke hver auktion. Se `docs/lot-felter-og-soegning.md`.
+
 ### Rettet
 
 - **"Lignende salg" var for venlig.** Et delt ord var nok når det var langt,

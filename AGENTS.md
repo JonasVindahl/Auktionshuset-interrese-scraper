@@ -257,11 +257,16 @@ mod den, aldrig mod et snapshot.
 - Scraperen henter **kun titler** fra listen. Beskrivelsen kan hentes fra
   lot-siden, men det er slået fra som standard og er et ekstra kald pr. lot.
 - Katalogget må ikke hentes oftere end hvert 15. minut. Bemærk at ét
-  *interval* ikke er ét *kald*: en kørsel henter auktionslistens sider plus
-  mindst ét katalogkald pr. auktion. Antallet står på `/drift` pr. kørsel og
-  i `runs.requests`, så det kan efterprøves i stedet for at blive anslået
+  *interval* ikke er ét *kald*: en kørsel henter auktionslistens sider (én gang
+  pr. landdel, fordi regionen ikke står på auktionskortet) plus mindst ét
+  katalogkald pr. auktion. Antallet står på `/drift` pr. kørsel og i
+  `runs.requests`, så det kan efterprøves i stedet for at blive anslået
   (`MIN_SCRAPE_INTERVAL_SECONDS`). Sænk den ikke, og undgå healthchecks der
   rammer netværket.
+- **Auktionsinfo hentes gratis fra kataloget.** Adresse, levering, eftersyn og
+  udlevering står i `dropdown-body`-panelet på katalogsiden, som allerede
+  hentes for at få lot'ene. `_parse_auction_info` læser det; landet, typen,
+  adressen og `shipping` gemmes pr. lot ligesom `auction_title`.
 - `Dockerfile` kopierer kun `src/` og `config/` — `tests/` og `tools/` er ikke
   i imaget.
 

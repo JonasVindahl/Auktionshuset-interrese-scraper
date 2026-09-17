@@ -325,3 +325,26 @@ def test_kortlivet_store_fjerner_ikke_agentens_livstegn(tmp_path):
     finally:
         agent.close()
     assert not agent.heartbeat_path().exists(), "agenten skal selv rydde op"
+
+
+def test_auktionsinfo_gemmes_med_lot(store):
+    """Landsdel, type, adresse og levering hoerer til auktionen, men gemmes
+    pr. lot ligesom auction_title, saa opslaget ikke skal joine."""
+    from dataclasses import replace
+
+    from tests.conftest import make_lot
+
+    lot = replace(
+        make_lot("L1", "Switch"),
+        region="Sjælland", auction_type="Konkursauktion",
+        address="Vej 1 DK-8361 Hasselager", shipping=True,
+    )
+    store.record_lot(lot, 150)
+
+    row = store.conn.execute(
+        "SELECT region, auction_type, address, shipping FROM lots WHERE lot_id='L1'"
+    ).fetchone()
+    assert row["region"] == "Sjælland"
+    assert row["auction_type"] == "Konkursauktion"
+    assert row["address"] == "Vej 1 DK-8361 Hasselager"
+    assert row["shipping"] == 1

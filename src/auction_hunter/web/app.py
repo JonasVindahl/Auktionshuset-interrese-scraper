@@ -273,6 +273,9 @@ def archive_url(query: search_mod.SearchQuery, **changes: Any) -> str:
         "matched": query.matched if query.matched != "alle" else "",
         "category": query.category,
         "auction": query.auction,
+        "region": query.region,
+        "auction_type": query.auction_type,
+        "shipping": "1" if query.shipping else "",
         "days_back": query.days_back,
         "sort": query.sort if query.sort != "relevans" else "",
     }
@@ -357,6 +360,21 @@ def filter_chips(query: search_mod.SearchQuery) -> list[dict[str, str]]:
         chips.append({
             "label": f"fra {query.auction}",
             "url": archive_url(query, auction=""),
+        })
+    if query.region:
+        chips.append({
+            "label": query.region,
+            "url": archive_url(query, region=""),
+        })
+    if query.auction_type:
+        chips.append({
+            "label": query.auction_type,
+            "url": archive_url(query, auction_type=""),
+        })
+    if query.shipping:
+        chips.append({
+            "label": "kan sendes",
+            "url": archive_url(query, shipping=""),
         })
     if query.days_back:
         unit = "dag" if query.days_back == 1 else "dage"
@@ -811,6 +829,9 @@ def create_app() -> FastAPI:
         matched: str = "alle",
         category: str = "",
         auction: str = Query("", max_length=160),
+        region: str = Query("", max_length=64),
+        auction_type: str = Query("", max_length=64),
+        shipping: str = Query("", max_length=3),
         days_back: OptionalInt = None,
         sort: str = "relevans",
         page_no: Annotated[
@@ -823,12 +844,16 @@ def create_app() -> FastAPI:
             result = search_mod.search(conn, search_mod.SearchQuery(
                 text=q, min_price=min_price, max_price=max_price,
                 status=status, matched=matched, category=category,
-                auction=auction, days_back=days_back, sort=sort,
+                auction=auction, region=region, auction_type=auction_type,
+                shipping=shipping not in ("", "0"),
+                days_back=days_back, sort=sort,
                 page=page_no or 1,
             ))
             stats = search_mod.archive_stats(conn)
             categories = search_mod.categories_seen(conn)
             auctions = queries.auctions_seen(conn)
+            regions = search_mod.regions_seen(conn)
+            auction_types = search_mod.auction_types_seen(conn)
         finally:
             conn.close()
 
@@ -841,7 +866,11 @@ def create_app() -> FastAPI:
                     "status": status if status != "alle" else None,
                     "matched": matched if matched != "alle" else None,
                     "category": category or None,
-                    "auction": auction or None, "days_back": days_back,
+                    "auction": auction or None,
+                    "region": region or None,
+                    "auction_type": auction_type or None,
+                    "shipping": "1" if shipping not in ("", "0") else None,
+                    "days_back": days_back,
                     "sort": sort if sort != "relevans" else None,
                     "page": target,
                 }.items() if v
@@ -856,6 +885,8 @@ def create_app() -> FastAPI:
             filters=filter_chips(result.query),
             status_tabs=status_tabs(result.query),
             auctions=auctions,
+            regions=regions,
+            auction_types=auction_types,
             match_choices=search_mod.MATCH_CHOICES,
             sort_choices=search_mod.SORT_CHOICES,
         )

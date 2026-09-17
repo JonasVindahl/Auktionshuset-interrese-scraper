@@ -18,7 +18,7 @@ from datetime import UTC, datetime, timedelta
 
 from ..textmatch import normalize, normalize_loose
 from .formatting import parse_dt
-from .queries import has_column, has_schema, has_table
+from .queries import auction_columns, has_column, has_schema, has_table
 
 PAGE_SIZE = 50
 
@@ -55,6 +55,11 @@ class SearchQuery:
     matched: str = "alle"
     category: str = ""
     auction: str = ""
+    # Auktionsinfo. Region og auktionstype er praecise vaerdier fra siden;
+    # shipping er "kan sendes", som er dét der goer et fjernt lot relevant.
+    region: str = ""
+    auction_type: str = ""
+    shipping: bool = False
     days_back: int | None = None
     sort: str = "relevans"
     page: int = 1
@@ -80,6 +85,9 @@ class SearchQuery:
             matched=matched,
             category=category,
             auction=self.auction.strip()[:160],
+            region=self.region.strip()[:64],
+            auction_type=self.auction_type.strip()[:64],
+            shipping=bool(self.shipping),
             days_back=_positive(self.days_back, MAX_DAYS_BACK),
             sort=self.sort if self.sort in SORT_CHOICES else "relevans",
             page=max(1, self.page),
@@ -91,7 +99,8 @@ class SearchQuery:
     def is_empty(self) -> bool:
         return not any((
             self.text, self.min_price, self.max_price, self.category,
-            self.auction, self.days_back, self.liste,
+            self.auction, self.region, self.auction_type, self.shipping,
+            self.days_back, self.liste,
             self.status != "alle", self.matched != "alle",
         ))
 
@@ -158,6 +167,7 @@ def search(conn: sqlite3.Connection, query: SearchQuery) -> SearchResult:
         if has_table(conn, "feedback") else ""
     )
     feedback_col = "COALESCE(f.action,'')" if feedback_join else "''"
+    auction = auction_columns(conn)
 
     joins = [
         "LEFT JOIN notifications n ON n.lot_id = l.lot_id",
@@ -191,6 +201,18 @@ def search(conn: sqlite3.Connection, query: SearchQuery) -> SearchResult:
         where.append("l.auction_title = ?")
         params.append(query.auction)
 
+    # Auktionsinfo-kolonnerne kom med en migration. Er de ikke der endnu, kan
+    # filteret ikke bruges, og et tomt resultat ville se ud som om arkivet var
+    # tomt — så filteret springes over i stedet.
+    if query.region and has_column(conn, "lots", "region"):
+        where.append("l.region = ?")
+        params.append(query.region)
+    if query.auction_type and has_column(conn, "lots", "auction_type"):
+        where.append("l.auction_type = ?")
+        params.append(query.auction_type)
+    if query.shipping and has_column(conn, "lots", "shipping"):
+        where.append("l.shipping = 1")
+
     if query.matched == "kun_fund":
         where.append("n.lot_id IS NOT NULL")
     elif query.matched == "kun_ikke_fund":
@@ -221,7 +243,7 @@ def search(conn: sqlite3.Connection, query: SearchQuery) -> SearchResult:
     select = f"""
         SELECT DISTINCT l.lot_id, l.title, l.url, l.auction_title, l.lot_number,
                l.first_seen, l.last_seen, l.ends_at,
-               l.first_bid, l.last_bid, l.last_total, {details_flags},
+               l.first_bid, l.last_bid, l.last_total, {details_flags}, {auction},
                {image} AS image_url,
                n.category_key, n.sent_at, n.cost,
                {feedback_col} AS feedback_action,
@@ -259,6 +281,28 @@ def search(conn: sqlite3.Connection, query: SearchQuery) -> SearchResult:
         query=query,
         truncated=truncated,
     )
+
+
+def regions_seen(conn: sqlite3.Connection) -> list[str]:
+    """De landsdele der faktisk står i arkivet, til filterets valgliste."""
+    if not has_table(conn, "lots") or not has_column(conn, "lots", "region"):
+        return []
+    return [
+        row[0] for row in conn.execute(
+            "SELECT DISTINCT region FROM lots WHERE region <> '' ORDER BY region"
+        )
+    ]
+
+
+def auction_types_seen(conn: sqlite3.Connection) -> list[str]:
+    if not has_table(conn, "lots") or not has_column(conn, "lots", "auction_type"):
+        return []
+    return [
+        row[0] for row in conn.execute(
+            "SELECT DISTINCT auction_type FROM lots "
+            "WHERE auction_type <> '' ORDER BY auction_type"
+        )
+    ]
 
 
 def archive_stats(conn: sqlite3.Connection) -> dict[str, int]:

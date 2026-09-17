@@ -55,7 +55,12 @@ CREATE TABLE IF NOT EXISTS lots (
     -- der, saa en gammel database faar dem.
     details       TEXT NOT NULL DEFAULT '',
     details_flags TEXT NOT NULL DEFAULT '',
-    details_at    TEXT NOT NULL DEFAULT ''
+    details_at    TEXT NOT NULL DEFAULT '',
+    -- Auktions-niveau, hentet fra auktionsinfo-panelet i kataloget.
+    region        TEXT NOT NULL DEFAULT '',
+    auction_type  TEXT NOT NULL DEFAULT '',
+    address       TEXT NOT NULL DEFAULT '',
+    shipping      INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS price_history (
@@ -187,6 +192,11 @@ MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     ("lots", "details", "ALTER TABLE lots ADD COLUMN details TEXT NOT NULL DEFAULT ''"),
     ("lots", "details_flags", "ALTER TABLE lots ADD COLUMN details_flags TEXT NOT NULL DEFAULT ''"),
     ("lots", "details_at", "ALTER TABLE lots ADD COLUMN details_at TEXT NOT NULL DEFAULT ''"),
+    # Auktionsinfo: landsdel, auktionstype, adresse og om der kan sendes.
+    ("lots", "region", "ALTER TABLE lots ADD COLUMN region TEXT NOT NULL DEFAULT ''"),
+    ("lots", "auction_type", "ALTER TABLE lots ADD COLUMN auction_type TEXT NOT NULL DEFAULT ''"),
+    ("lots", "address", "ALTER TABLE lots ADD COLUMN address TEXT NOT NULL DEFAULT ''"),
+    ("lots", "shipping", "ALTER TABLE lots ADD COLUMN shipping INTEGER NOT NULL DEFAULT 0"),
     ("runs", "requests", "ALTER TABLE runs ADD COLUMN requests INTEGER NOT NULL DEFAULT 0"),
 )
 
@@ -504,12 +514,13 @@ class Store:
             conn.execute(
                 """INSERT INTO lots (lot_id, auction_id, auction_title, title, url,
                    lot_number, first_seen, last_seen, first_bid, last_bid, last_total,
-                   ends_at, image_url)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   ends_at, image_url, region, auction_type, address, shipping)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     lot.lot_id, lot.auction_id, lot.auction_title, lot.title, lot.url,
                     lot.lot_number, now, now, lot.current_bid, lot.current_bid, total, ends,
-                    lot.image_url,
+                    lot.image_url, lot.region, lot.auction_type, lot.address,
+                    int(lot.shipping),
                 ),
             )
             price_changed = True
@@ -518,10 +529,15 @@ class Store:
             # forsvundet. Behold derfor det gamle, hvis det nye er tomt.
             conn.execute(
                 """UPDATE lots SET last_seen=?, last_bid=?, last_total=?, ends_at=?,
-                   title=?, url=?, image_url=COALESCE(NULLIF(?, ''), image_url)
+                   title=?, url=?, image_url=COALESCE(NULLIF(?, ''), image_url),
+                   region=COALESCE(NULLIF(?, ''), region),
+                   auction_type=COALESCE(NULLIF(?, ''), auction_type),
+                   address=COALESCE(NULLIF(?, ''), address),
+                   shipping=?
                    WHERE lot_id=?""",
                 (now, lot.current_bid, total, ends, lot.title, lot.url,
-                 lot.image_url, lot.lot_id),
+                 lot.image_url, lot.region, lot.auction_type, lot.address,
+                 int(lot.shipping), lot.lot_id),
             )
             # Kun en faktisk prisændring er ny information. Uden dette skrev
             # hver kørsel en række pr. lot pr. 15. minut, og historikken

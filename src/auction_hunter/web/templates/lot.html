@@ -101,6 +101,10 @@
         {% if row.auction %}<div><dt>Auktion</dt><dd>{{ row.auction }}</dd></div>{% endif %}
         {% if row.lot_number %}<div><dt>Lot</dt><dd>{{ row.lot_number }}</dd></div>{% endif %}
         {% if row.category %}<div><dt>Kategori</dt><dd>{{ category_labels.get(row.category, row.category) }}</dd></div>{% endif %}
+        {% if row.region %}<div><dt>Landsdel</dt><dd>{{ row.region }}</dd></div>{% endif %}
+        {% if row.auction_type %}<div><dt>Auktionstype</dt><dd>{{ row.auction_type }}</dd></div>{% endif %}
+        {% if row.address %}<div><dt>Auktionsadresse</dt><dd>{{ row.address }}</dd></div>{% endif %}
+        {% if row.address %}<div><dt>Levering</dt><dd>{{ 'Forsendelse tilgængelig' if row.shipping else 'Kun afhentning' }}</dd></div>{% endif %}
         {% if row.seen_rel %}<div><dt>Set</dt><dd>{{ row.seen_rel }}</dd></div>{% endif %}
         <div><dt>Kilde</dt><dd>{{ 'auktionshuset.dk' if row.url else 'ukendt' }}</dd></div>
       </dl>

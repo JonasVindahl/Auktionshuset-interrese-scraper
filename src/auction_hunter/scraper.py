@@ -17,7 +17,7 @@ import random
 import re
 import time
 import urllib.parse
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -76,6 +76,7 @@ class Auction:
     auction_type: str
     address_lines: tuple[str, ...]
     lot_count: int
+    region: str = ""
 
 
 @dataclass(frozen=True)
@@ -91,6 +92,12 @@ class Lot:
     ends_at: datetime | None
     image_url: str
     has_bids: bool
+    # Auktions-niveau, gentages pr. lot ligesom auction_title. Hentes fra
+    # auktionsinfo-panelet i kataloget, som allerede er hentet for at få lot'ene.
+    region: str = ""
+    auction_type: str = ""
+    address: str = ""
+    shipping: bool = False
 
 
 def parse_danish_int(text: str | None) -> int | None:
@@ -185,10 +192,13 @@ class Scraper:
         if self.delay_seconds > 0:
             time.sleep(self.delay_seconds + random.uniform(0, self.delay_seconds / 2))
 
-    def auction_list_url(self, page: int = 1) -> str:
-        params: list[tuple[str, str]] = [("search", ""), ("auctionStatus", str(self.source.auction_status))]
-        for region_id in self.source.region_ids:
-            params.append(("regions[]", region_id))
+    def auction_list_url(self, page: int = 1, region_id: str | None = None) -> str:
+        params: list[tuple[str, str]] = [
+            ("search", ""), ("auctionStatus", str(self.source.auction_status)),
+        ]
+        region_ids = (region_id,) if region_id else self.source.region_ids
+        for rid in region_ids:
+            params.append(("regions[]", rid))
         if page > 1:
             params.append(("page", str(page)))
         return f"{self.source.base_url}/auktioner/?{urllib.parse.urlencode(params)}"
@@ -201,6 +211,38 @@ class Scraper:
     def _auction_type(soup: BeautifulSoup) -> str:
         badge = soup.select_one("p.bg-white.text-gray-401")
         return badge.get_text(strip=True) if badge else ""
+
+    @staticmethod
+    def _parse_auction_info(html: str) -> dict[str, object]:
+        """Auktionsinfo-panelet: adresse og leveringsmuligheder.
+
+        Panelet er auktions-niveau og staar paa katalogsiden, som allerede
+        hentes for at faa lot'ene. Derfor koster de felter intet ekstra kald.
+        Kun det der faktisk blev fundet returneres, saa en aendret side giver
+        tomme felter i stedet for forkerte.
+        """
+        soup = BeautifulSoup(html, "lxml")
+        panel = None
+        for body in soup.select(".dropdown-body"):
+            if "Auktionsadresse" in body.get_text(" ", strip=True):
+                panel = body
+                break
+        if panel is None:
+            return {}
+
+        info: dict[str, object] = {}
+        for label_el in panel.select("p.opacity-75"):
+            label = label_el.get_text(strip=True)
+            value_el = label_el.find_next_sibling("p")
+            if label == "Auktionsadresse" and value_el is not None:
+                info["address"] = " ".join(value_el.get_text(" ", strip=True).split())
+
+        text = " ".join(panel.get_text(" ", strip=True).split())
+        if "Forsendelse ikke tilgængelig" in text:
+            info["shipping"] = False
+        elif "Forsendelse tilgængelig" in text:
+            info["shipping"] = True
+        return info
 
     def fetch_details(self, lot: Lot) -> object:
         """Hent lot-siden og find stand-signalerne i den.
@@ -230,28 +272,36 @@ class Scraper:
         """
         auctions: list[Auction] = []
         seen: set[str] = set()
+        pages = 0
 
-        for page in range(1, MAX_AUCTION_PAGES + 1):
-            html = self._get(self.auction_list_url(page))
-            self.auction_pages = page
-            found = self._parse_auctions(html)
-            new = [a for a in found if a.auction_id not in seen]
-            if not new:
-                break
-            auctions.extend(new)
-            seen.update(a.auction_id for a in new)
-            if page < MAX_AUCTION_PAGES:
-                self._polite_pause()
-        else:
-            log.warning(
-                "Naaede loftet paa %d sider i auktionslisten — der kan mangle "
-                "auktioner. Tjek om pagineringen er aendret.", MAX_AUCTION_PAGES,
-            )
+        # Siden viser ikke landsdelen på det enkelte kort, saa den kan kun
+        # laeses af det kald der gav auktionen. Derfor hentes listen én gang pr.
+        # landdel i stedet for én gang med alle som filter.
+        for region_id in self.source.region_ids:
+            region = self.source.region_names.get(region_id, region_id)
+            for page in range(1, MAX_AUCTION_PAGES + 1):
+                html = self._get(self.auction_list_url(page, region_id))
+                pages += 1
+                self.auction_pages = pages
+                found = self._parse_auctions(html, region)
+                new = [a for a in found if a.auction_id not in seen]
+                if not new:
+                    break
+                auctions.extend(new)
+                seen.update(a.auction_id for a in new)
+                if page < MAX_AUCTION_PAGES:
+                    self._polite_pause()
+            else:
+                log.warning(
+                    "Naaede loftet paa %d sider for %s — der kan mangle "
+                    "auktioner. Tjek om pagineringen er aendret.",
+                    MAX_AUCTION_PAGES, region,
+                )
 
         log.info("Fandt %d aktive auktioner (%s)", len(auctions), self.source.region_label)
         return auctions
 
-    def _parse_auctions(self, html: str) -> list[Auction]:
+    def _parse_auctions(self, html: str, region: str = "") -> list[Auction]:
         """Auktionskortene paa én side af listen."""
         soup = BeautifulSoup(html, "lxml")
         auctions: list[Auction] = []
@@ -289,6 +339,7 @@ class Scraper:
                     auction_type=self._auction_type(card),
                     address_lines=addresses,
                     lot_count=lot_count,
+                    region=region,
                 )
             )
 
@@ -298,9 +349,12 @@ class Scraper:
         """Hent samtlige lots for én auktion ved at følge pagineringen."""
         lots: list[Lot] = []
         seen: set[str] = set()
+        info: dict[str, object] = {}
 
         for page in range(1, MAX_PAGES + 1):
             html = self._get(self.catalog_url(auction.url, page))
+            if not info:
+                info = self._parse_auction_info(html)
             page_lots = self._parse_lots(html, auction)
             new = [lot for lot in page_lots if lot.lot_id not in seen]
             if not new:
@@ -311,6 +365,9 @@ class Scraper:
             if len(page_lots) < PAGE_SIZE:
                 break
             self._polite_pause()
+
+        if info:
+            lots = [replace(lot, **info) for lot in lots]
 
         log.info("  %s: %d lots", auction.title[:50] or auction.url, len(lots))
         return lots
@@ -406,6 +463,8 @@ class Scraper:
                     ends_at=ends_at,
                     image_url=image_url,
                     has_bids="item-bid" in classes,
+                    region=auction.region,
+                    auction_type=auction.auction_type,
                 )
             )
 

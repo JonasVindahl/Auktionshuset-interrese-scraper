@@ -955,3 +955,48 @@ def test_ingen_skabelon_slaar_op_paa_et_dict_metodenavn():
         "Skabeloner slår op på et navn der også er en dict-metode:\n  "
         + "\n  ".join(problemer)
     )
+
+
+# -- auktionsinfo i arkivet ------------------------------------------------
+
+def _arkiv_client(tmp_path, sample_config, monkeypatch, lots):
+    from dataclasses import replace
+
+    from tests.conftest import make_lot
+
+    from auction_hunter.storage import Store
+
+    db = tmp_path / "arkiv.db"
+    with Store(db) as store:
+        store.record_lots(
+            [replace(make_lot(lid, title), **felt) for lid, title, felt in lots],
+            {lid: 150 for lid, _, _ in lots},
+        )
+        store.conn.commit()
+
+    monkeypatch.setenv("DB_PATH", str(db))
+    monkeypatch.setenv("CONFIG_PATH", sample_config)
+    monkeypatch.delenv("WEB_PASSWORD", raising=False)
+    monkeypatch.delenv("WEB_PASSWORD_FILE", raising=False)
+    monkeypatch.delenv("WEB_PASSWORD_FROM_ENV", raising=False)
+    return TestClient(create_app())
+
+
+def test_arkiv_viser_og_filtrerer_levering(tmp_path, sample_config, monkeypatch):
+    client = _arkiv_client(tmp_path, sample_config, monkeypatch, [
+        ("ship", "Switch der kan sendes",
+         {"region": "Fyn", "auction_type": "Konkursauktion", "shipping": True}),
+        ("pick", "Switch der kun afhentes", {"region": "Sjælland", "shipping": False}),
+    ])
+
+    alle = client.get("/archive").text
+    assert "kan sendes" in alle
+    assert "Switch der kan sendes" in alle
+
+    kun_forsendelse = client.get("/archive?shipping=1").text
+    assert "Switch der kan sendes" in kun_forsendelse
+    assert "Switch der kun afhentes" not in kun_forsendelse
+
+    fyn = client.get("/archive?region=Fyn").text
+    assert "Switch der kan sendes" in fyn
+    assert "Switch der kun afhentes" not in fyn
