@@ -1,10 +1,9 @@
 {% from "_icons.html" import icon %}
-{#- En tom tilstand skal forklare hvor man er, og hvad man goer nu. -#}
-{% macro empty_state(title, body, name='info', cta_href='', cta_label='') -%}
+{% macro empty_state(title, body='', name='info', cta_href='', cta_label='') -%}
 <div class="empty-state">
   <span class="empty-glyph" aria-hidden="true">{{ icon(name, 28) }}</span>
   <h2>{{ title }}</h2>
-  <p>{{ body }}</p>
+  {% if body %}<p>{{ body }}</p>{% endif %}
   {% if cta_href %}<a class="btn is-primary" href="{{ cta_href }}">{{ cta_label }}</a>{% endif %}
 </div>
 {%- endmacro %}

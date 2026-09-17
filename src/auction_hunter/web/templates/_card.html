@@ -15,6 +15,8 @@
      data-bid="{{ 1 if row.bid else 0 }}"
      data-feedback="{{ row.feedback }}">
 
+  <span class="lot-no">{{ row.lot_number or '' }}</span>
+
   <div class="card-media">
     <div class="thumb">
       <span class="thumb-fallback">{{ icon('image', 34) }}</span>
@@ -60,7 +62,6 @@
       {%- if row.category %}<span class="tag-cat" data-cat="{{ row.category }}" title="{{ row.category }}">{{ category_labels.get(row.category, row.category) }}</span>{% endif %}
       {%- if is_vat_exempt(row.auction) %}<span class="tag-vat" title="Momsfri auktion: salæret er momsbelagt, hammerprisen ikke">momsfri</span>{% endif %}
       {%- if row.has_serious_flag %}<span class="tag-flag" title="Fra lot-siden: {{ row.flags_label }}">stand: {{ row.flags_label|lower }}</span>{% endif %}
-      {%- if row.lot_number %}<span class="meta-item">Lot {{ row.lot_number }}</span>{% endif %}
       {%- if show_seen and row.seen_rel %}<span class="meta-item" title="{{ row.seen_full }}">set {{ row.seen_rel }}</span>{% endif %}
       {%- if row.was_match is defined and not row.was_match %}<span class="meta-item tag-miss">ikke et fund</span>{% endif %}
       <a class="meta-link" href="/lot/{{ row.lot_id }}"
