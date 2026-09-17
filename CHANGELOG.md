@@ -7,6 +7,12 @@ versionerne er [semantiske](https://semver.org/lang/da/).
 
 ### Rettet
 
+- **"Lignende salg" var for venlig.** Et delt ord var nok når det var langt,
+  så en skærm og en bunke reservedele blev sammenlignet med en stationær pc,
+  fordi de delte "lenovo" eller "computer". Orddelingen matchede desuden som
+  substring, så "computer" ramte "computerudstyr". Nu kræves to fælles ord,
+  eller ét modelnummer som "m720q", og ordene matches som hele ord med dansk
+  bøjning. Kandidaterne rangeres efter BM25, så de sjældne ord kommer først.
 - **Gamle stand-flag kom fra hele lot-siden.** Den forrige parser læste
   auktionsbetingelserne med, og de indeholder ord som "reparation",
   "afhentning" og "momsfritagelse". Derfor fik hvert eneste lot de samme

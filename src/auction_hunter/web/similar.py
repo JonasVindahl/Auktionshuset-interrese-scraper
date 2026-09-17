@@ -5,10 +5,11 @@ interesseprofilen. Det er derfor den eneste kilde til hvad en vare faktisk går
 for, og den står ubrugt hen hvis man kun ser på det lot man overvejer nu.
 
 Metoden er bevidst enkel og forklarlig: titlen deles i betydningsbærende ord,
-FTS5 finder kandidater der deler mindst ét ord, og Python kræver at der deles
-mindst to — eller ét langt og sjældent nok til at være sig selv, som
-"pladespiller" eller "synology". Det sidste er det der gør at et mærke alene
-kan bære et match uden at hvert "div."-lot gør det samme.
+FTS5 finder kandidater der deler mindst ét ord (de sjældneste først), og Python
+kræver at der deles mindst to — eller ét modelnummer som "m720q" eller "ds1817".
+Et mærke alene ("lenovo") eller en kategori ("computer") er ikke nok: en skærm
+og en bunke reservedele er ikke sammenlignelige med en stationær pc, selvom de
+deler et ord.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ import sqlite3
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from ..textmatch import normalize
+from ..textmatch import distinct_forms, normalize
 from .formatting import parse_dt
 from .queries import has_schema
 
@@ -35,8 +36,6 @@ MAX_TERMS = 8
 # Hvor mange kandidater FTS5 må give, før der scores. Nok til at de rigtige
 # ligger i bunken, lille nok til at et sideskald forbliver hurtigt.
 MAX_CANDIDATES = 80
-# Et ord fra denne længde og op bærer et match alene.
-STRONG_TERM_LENGTH = 6
 
 
 @dataclass(frozen=True)
@@ -94,6 +93,29 @@ def terms(title: str) -> list[str]:
     return out[:MAX_TERMS]
 
 
+def _tokens(title: str) -> tuple[str, ...]:
+    return tuple(normalize(title).split())
+
+
+def _is_model_number(word: str) -> bool:
+    """Et modelnummer skiller '650' fra '600', saa det baerer et match alene.
+
+    Et rent tal eller et rent ord gør ikke: 'computer' er en kategori og
+    'lenovo' et maerke, og ingen af dem siger at to ting er samme slags.
+    """
+    return any(c.isdigit() for c in word) and any(c.isalpha() for c in word)
+
+
+def _shared_terms(words: list[str], title: str) -> tuple[str, ...]:
+    """Ord der staar som selvstaendigt ord (eller boejning) i kandidattitlen.
+
+    Ikke substring: 'computer' maa ikke ramme 'computerudstyr', for det er
+    netop den slags halve match der trak skaerme og reservedelsbunker ind.
+    """
+    stems = distinct_forms(_tokens(title))
+    return tuple(w for w in words if distinct_forms((w,)) & stems)
+
+
 def _idf(conn: sqlite3.Connection, term: str) -> float:
     """Hvor sjældent et ord er i arkivet. Sjældne ord vejer tungere.
 
@@ -149,6 +171,7 @@ def find(
         FROM lots l
         JOIN lots_fts fts ON fts.lot_id = l.lot_id
         WHERE lots_fts MATCH ?
+        ORDER BY bm25(lots_fts)
         LIMIT ?
         """,
         (match, MAX_CANDIDATES),
@@ -167,11 +190,10 @@ def find(
         if hammer <= 0:
             continue
         total = row["last_total"] or hammer
-        normalized = normalize(row["title"] or "")
-        shared = tuple(w for w in words if w in normalized)
-        if len(shared) < 2 and not any(
-            len(w) >= STRONG_TERM_LENGTH for w in shared
-        ):
+        shared = _shared_terms(words, row["title"] or "")
+        # To fælles ord, eller ét modelnummer. Et mærke eller en kategori alene
+        # er for lidt: en skærm deler gerne blot "lenovo" med en stationær pc.
+        if len(shared) < 2 and not any(_is_model_number(w) for w in shared):
             continue
         sales.append(Sale(
             lot_id=row["lot_id"], title=row["title"] or "", url=row["url"] or "",
