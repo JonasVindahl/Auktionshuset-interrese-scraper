@@ -223,7 +223,6 @@ Versionen ligger ét sted (`auction_hunter.__version__`) og vises i `/healthz`,
 ## 10. Kendte mangler
 
 - Ingen `LICENSE` i repoet. Det er en beslutning, ikke en forglemmelse.
-- `DESIGN.md` og `README.md` beskriver et ældre udtryk end koden.
 - CI er ikke aktiveret endnu; se afsnit 9.
 - Billederne i `data/images` er ikke med i `auction_hunter backup`; de skal
   sikres separat.

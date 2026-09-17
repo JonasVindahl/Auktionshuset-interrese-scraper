@@ -1,7 +1,8 @@
 # Auktionshuset Hunter
 
 Overvåger aktive auktioner på [auktionshuset.dk](https://auktionshuset.dk) for
-Sjælland, matcher dem mod en interesseprofil og sender fund til Discord.
+de landsdele du vælger, matcher dem mod en eller flere interesseprofiler og
+sender fund til Discord.
 Agenten husker hvilke lots den har set, så du kun får besked om noget nyt
 eller prisændringer — ikke de samme varer hver 15. minut.
 
@@ -9,7 +10,7 @@ eller prisændringer — ikke de samme varer hver 15. minut.
 
 Hvert 15. minut (auktionshusets vilkår tillader ikke hurtigere):
 
-1. Henter lot-listen for Sjælland, filtreret til aktive auktioner
+1. Henter lot-listen for de valgte landsdele, filtreret til aktive auktioner
 2. Oversætter titler til normaliseret tekst — `Højttaler` og `hoejttaler` er
    samme ord
 3. Matcher mod interesseprofilen i `config/interests.yml`
@@ -124,8 +125,47 @@ Prisloftet er blødt: fund over grænsen rapporteres stadig, men markeres
 
 ### Regioner
 
-Region-id'er står i `config/interests.yml`. Sjælland er `lyr0boj4d8`. Skift
-`source.region_ids` for at dække flere landsdele.
+Landsdelene og deres id'er står i `regions` i `config/interests.yml`. Standard
+er `region_ids: all`, som følger alle fem:
+
+```yaml
+source:
+  region_ids: all          # alle landsdele fra mappingen
+  # region_ids:            # eller enkelte:
+  #   - lyr0boj4d8         # Sjælland
+  #   - epV0wO0K7l         # Fyn
+```
+
+Etiketten i beskederne udledes automatisk ("Hele Danmark" for alle) og kan
+overstyres med `REGION_LABEL` eller `region_label`. Uden det ville varslerne
+påstå "Sjælland" mens agenten fulgte hele landet. `REGION_IDS` i miljøet vinder
+over YAML-filen.
+
+### Profiler
+
+En profil er et navngivet interessesæt med sine egne kategorier, sit eget
+prisloft, sine egne udelukkelser og sin egen Discord-webhook:
+
+```yaml
+profiles:
+  hifi:
+    label: HiFi og lyd
+    categories: [audio_hifi]
+    max_price: 2500
+    webhook_env: DISCORD_WEBHOOK_HIFI
+  vaerktoj:
+    label: Værktøj og maker
+    categories: [maker_electronics, it_tech]
+    max_price: 800
+    exclude: [bil, trailer]
+```
+
+Uden `profiles` er der én implicit standardprofil, og alt kører som før.
+`categories: null` betyder alle kategorier, `[]` betyder ingen. Globale
+`exclude`-ord gælder altid. En profil slås fra med `enabled: false` eller
+`PROFILE_<NØGLE>_ENABLED=0`. Dedup er pr. (lot, kategori, profil), så det samme
+lot kan give én besked pr. profil, men aldrig to til den samme. Fund-siden kan
+filtreres på profil, og `/drift` viser hver profil med webhook-status.
 
 ## AI-trin (valgfrit)
 
@@ -193,7 +233,7 @@ PYTHONPATH=src python -m auction_hunter web --port 8080
 | **Interesser** | Redigér profilen og test en titel mod reglerne |
 | **Assistent** | Spørg om arkivet i almindeligt sprog |
 | **Statistik** | Antal, støjandel og hvad fundene reelt koster |
-| **Drift** | Kørsler, databasens og billedcachens størrelse, og om hemmelighederne er sat |
+| **Drift** | Kørsler, databasens og billedcachens størrelse, version, profiler og om hemmelighederne er sat |
 
 Listen kan vises som katalog med billeder eller som kompakt liste, og
 vælges med knappen i værktøjslinjen. Der er tastaturgenveje: `j` og `k` flytter
@@ -201,6 +241,11 @@ markeringen, `Enter` åbner lot'et, `x`, `b` og `c` markerer, og `?` viser
 listen. Principperne bag udseendet, farverne og bevægelsen står i DESIGN.md. Alle
 beløb i dashboardet og i Discord er den reelle pris inkl. salær og moms. Et
 lot uden bud viser hvad første bud vil koste i stedet for 0 kr.
+
+Til overvågning findes `/healthz` (liveness), `/readyz` (klarhed, kræver også
+læsbar `interests.yml`) og `/metrics` i Prometheus-format med aggregerede tal.
+`/metrics` er åbent som standard, så Prometheus kan skrape uden en
+login-session; sæt `METRICS_TOKEN` for at kræve et bearer-token.
 
 ### Arkivet
 
@@ -353,6 +398,18 @@ Uden `WEB_PASSWORD` kører siden åbent, og det logges som en advarsel ved
 opstart. Adgangskoden kan også læses fra en fil eller en anden variabel,
 som de øvrige hemmeligheder.
 
+Bag en reverse proxy eller på et domæne er der fire variabler mere:
+
+| Variabel | Gør |
+|---|---|
+| `WEB_BASE_URL` | Sætter login-cookien til `Secure` når den er `https://` |
+| `ALLOWED_HOSTS` | Afviser andre `Host`-headere (DNS-rebinding) |
+| `FORWARDED_ALLOW_IPS` | Hvilke proxyer der må sætte `X-Forwarded-*` |
+| `METRICS_TOKEN` | Kræver bearer-token på `/metrics` |
+
+Usikre metoder afvises desuden, hvis `Origin`/`Referer` peger på en anden vært,
+så `fetch`-kaldet til `/feedback` også er dækket.
+
 Siden sætter `noindex,nofollow` og er ikke tænkt til at ligge på internettet.
 At genudgive auktionshusets data offentligt er noget andet end at scrape til
 eget brug.
@@ -461,6 +518,20 @@ har været noget i ugevis. Agenten sammenligner derfor antallet af lots med sin
 seneste normale kørsel og sender en Discord-besked, hvis det styrter sammen —
 eller hvis der slet ikke findes aktive auktioner længere. Advarslen sendes
 højst én gang i døgnet, så den ikke selv bliver spam.
+
+## Backup og gendannelse
+
+```bash
+.venv/bin/python -m auction_hunter backup --out backups
+.venv/bin/python -m auction_hunter restore backups/hunter-<tidsstempel>.db --yes
+```
+
+Backup bruger SQLites `VACUUM INTO`, som tager et konsistent øjebliksbillede
+mens agenten kører, og giver én ren fil uden WAL-søskende. Et backup der fejler
+integritetstjekket bliver slettet igen. Gendannelse kræver at `web` og
+`hunter` er stoppet, sikrer den gamle database først, og skriver den nye på
+plads i ét flyt. Billederne i `data/images` er ikke med og skal sikres separat.
+Se `DEPLOYMENT.md` for detaljer.
 
 ## Licens
 
