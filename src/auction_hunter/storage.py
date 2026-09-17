@@ -327,7 +327,10 @@ class Store:
         self.conn.executescript(SCHEMA)
         _migrate(self.conn)
         self.conn.commit()
-        self.touch_heartbeat()
+        # Livstegnet skrives foerst naar der startes en koersel, ikke bare
+        # fordi filen aabnes: 'auction_hunter stats' og 'export' aabner ogsaa
+        # en Store, og de siger intet om at en agent er i gang.
+        self._heartbeat_mark: str | None = None
 
     # -- livstegn ----------------------------------------------------------
 
@@ -345,16 +348,20 @@ class Store:
         Et PID-tjek duer ikke: agenten og gendannelsen koerer typisk i hver sin
         container med hver sit PID-rum. Filens alder er det signal der faktisk
         krydser den graense, og den opdateres ved hver koersel.
+
+        Kaldes fra start_run, ikke fra __init__: at aabne databasen for at se
+        statistik betyder ikke at en agent skriver i den.
         """
         if str(self.path) == ":memory:":
             return
+        mark = f"{os.getpid()} {utcnow_precise()}\n"
         try:
-            self.heartbeat_path().write_text(
-                f"{os.getpid()} {utcnow()}\n", encoding="utf-8"
-            )
+            self.heartbeat_path().write_text(mark, encoding="utf-8")
         except OSError:
             # Et manglende livstegn maa aldrig vaelte en koersel.
             log.debug("Kunne ikke skrive livstegn ved siden af %s", self.path)
+            return
+        self._heartbeat_mark = mark
 
     @contextmanager
     def _tx(self) -> Iterator[sqlite3.Connection]:
@@ -367,9 +374,26 @@ class Store:
 
     def close(self) -> None:
         self.conn.close()
-        if str(self.path) != ":memory:":
-            with contextlib.suppress(OSError):
-                self.heartbeat_path().unlink(missing_ok=True)
+        self._release_heartbeat()
+
+    def _release_heartbeat(self) -> None:
+        """Fjern livstegnet, men kun hvis det stadig er vores eget.
+
+        Der slettes kun praecis det vi selv skrev. En Store der aldrig har
+        startet en koersel har intet maerke og roerer derfor ingenting, saa et
+        kortlivet 'stats'-opslag ikke kan fjerne den koerende agents livstegn
+        og faa restore til at tro at databasen er ledig.
+        """
+        if str(self.path) == ":memory:" or self._heartbeat_mark is None:
+            return
+        beat = self.heartbeat_path()
+        try:
+            if beat.read_text(encoding="utf-8") != self._heartbeat_mark:
+                return
+        except OSError:
+            return
+        with contextlib.suppress(OSError):
+            beat.unlink(missing_ok=True)
 
     def __enter__(self) -> Store:
         return self
