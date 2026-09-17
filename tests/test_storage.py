@@ -228,6 +228,52 @@ class TestMeta:
         assert store.get_meta("findes_ikke", "fallback") == "fallback"
 
 
+class TestDetailsParserCleanup:
+    """Data fra en aeldre lot-side-parser skal ryddes én gang, ikke hver gang."""
+
+    def _lot_with_old_details(self, store, lot_id="L1"):
+        add_lot(store, lot_id)
+        store.record_details(lot_id, "Hele siden inkl. vilkaarene", ("defekt", "momsfri"))
+        # Simulér en database fra før parser-fixet: version-markøren findes ikke.
+        store.conn.execute("DELETE FROM meta WHERE key='details_parser_version'")
+        store.conn.commit()
+
+    def _row(self, store, lot_id="L1"):
+        return store.conn.execute(
+            "SELECT details, details_flags, details_at FROM lots WHERE lot_id=?",
+            (lot_id,),
+        ).fetchone()
+
+    def test_old_details_are_cleared(self, tmp_path):
+        db = str(tmp_path / "hunter.db")
+        store = Store(db)
+        self._lot_with_old_details(store)
+        store.close()
+
+        reopened = Store(db)
+        row = self._row(reopened)
+        assert row["details"] == ""
+        assert row["details_flags"] == ""
+        assert row["details_at"] == ""
+        reopened.close()
+
+    def test_cleanup_does_not_run_again(self, tmp_path):
+        db = str(tmp_path / "hunter.db")
+        store = Store(db)
+        self._lot_with_old_details(store)
+        store.close()
+
+        Store(db).close()  # rydder de gamle data og sætter version-markøren
+
+        store = Store(db)
+        store.record_details("L1", "Tonearmen er defekt", ("defekt",))
+        store.close()
+
+        reopened = Store(db)
+        assert self._row(reopened)["details_flags"] == "defekt"
+        reopened.close()
+
+
 class TestBlindnessBaseline:
     """Baseline for blindhedstjek skal overleve både fejl og oprydning."""
 

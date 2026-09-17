@@ -7,6 +7,12 @@ versionerne er [semantiske](https://semver.org/lang/da/).
 
 ### Rettet
 
+- **Gamle stand-flag kom fra hele lot-siden.** Den forrige parser læste
+  auktionsbetingelserne med, og de indeholder ord som "reparation",
+  "afhentning" og "momsfritagelse". Derfor fik hvert eneste lot de samme
+  falske flag. Parser'en læser nu kun lot'ets egen beskrivelse, og de allerede
+  gemte rækker ryddes én gang ved næste opstart, så de ikke står tilbage med
+  data fra den forrige parser.
 - **`Profile.classifier_profile` blev aldrig brugt.** Feltet blev læst fra
   YAML ind i dataklassen, men alle profilers fund blev bedømt med den globale
   prompt. Alle profilens øvrige felter blev respekteret, så det her var det

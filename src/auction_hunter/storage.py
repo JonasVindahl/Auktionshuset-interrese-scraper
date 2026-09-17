@@ -190,6 +190,11 @@ MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     ("runs", "requests", "ALTER TABLE runs ADD COLUMN requests INTEGER NOT NULL DEFAULT 0"),
 )
 
+# Parser-version for lot-siderne. Bump naar udtraekket aendrer sig. Flagene er
+# afledt data, og en gammel parser efterlader dem forkerte for evigt, med
+# mindre vi rydder dem en gang.
+DETAILS_PARSER_VERSION = "2"
+
 
 def _migrate(conn: sqlite3.Connection) -> None:
     """Tilføj manglende kolonner til en eksisterende database.
@@ -204,7 +209,40 @@ def _migrate(conn: sqlite3.Connection) -> None:
             conn.execute(statement)
 
     _migrate_notification_profiles(conn)
+    _migrate_details_parser(conn)
     _backfill_search_index(conn)
+
+
+def _migrate_details_parser(conn: sqlite3.Connection) -> None:
+    """Ryd lot-side-data der blev udtrukket af en aeldre parser.
+
+    Stand-flagene og beskrivelsen er afledt data: de kan hentes igen, men en
+    forkert parser efterlader dem forkerte for evigt. Vi rydder dem én gang pr.
+    parser-version, saa baade kortets flag og lot-sidens tekst forsvinder i
+    stedet for at staa tilbage med noget der ikke passer.
+    """
+    row = conn.execute(
+        "SELECT value FROM meta WHERE key='details_parser_version'"
+    ).fetchone()
+    if row is not None and row[0] == DETAILS_PARSER_VERSION:
+        return
+
+    cleared = conn.execute(
+        """SELECT COUNT(*) FROM lots
+           WHERE details != '' OR details_flags != '' OR details_at != ''"""
+    ).fetchone()[0]
+    if cleared:
+        log.info(
+            "Rydder lot-side-data fra %d lots (parser %s)",
+            cleared,
+            DETAILS_PARSER_VERSION,
+        )
+        conn.execute("UPDATE lots SET details='', details_flags='', details_at=''")
+    conn.execute(
+        "INSERT OR REPLACE INTO meta (key, value)"
+        " VALUES ('details_parser_version', ?)",
+        (DETAILS_PARSER_VERSION,),
+    )
 
 
 def _migrate_notification_profiles(conn: sqlite3.Connection) -> None:
