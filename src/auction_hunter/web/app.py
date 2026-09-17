@@ -572,6 +572,44 @@ def create_app() -> FastAPI:
             status_code=503,
         )
 
+    def _error_page(request: Request, code: int, message: str) -> HTMLResponse:
+        """En fejlside der ligner resten af dashboardet.
+
+        Konfigurationen læses forsigtigt: en fejlside må ikke selv fejle, fordi
+        det var konfigurationen der var problemet.
+        """
+        try:
+            profile_list = profile_context()
+        except Exception:
+            profile_list = []
+        return templates.TemplateResponse(
+            request,
+            "error.html",
+            {
+                "code": code,
+                "message": message,
+                "nav": NAV,
+                "path": request.url.path,
+                "category_labels": {},
+                "profiles": profile_list,
+                "profile_labels": {p["key"]: p["label"] for p in profile_list},
+                "counts": {},
+                "pulse": "",
+                "stale": False,
+            },
+            status_code=code,
+        )
+
+    @app.exception_handler(404)
+    async def not_found(request: Request, _exc: Exception) -> HTMLResponse:
+        return _error_page(request, 404, "Siden findes ikke.")
+
+    @app.exception_handler(Exception)
+    async def uventet(request: Request, exc: Exception) -> HTMLResponse:
+        """Sidste skanse: en ulogget fejl skal stadig give en brugbar side."""
+        log.exception("Uventet fejl på %s", request.url.path)
+        return _error_page(request, 500, "Noget gik i stykker. Prøv igen.")
+
     @app.get("/login", response_class=HTMLResponse)
     def login_form(request: Request, next: str = "/") -> Any:
         if not auth.auth_required() or request.session.get(auth.SESSION_KEY):

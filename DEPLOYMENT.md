@@ -96,13 +96,27 @@ usat, lad `ALLOWED_HOSTS` være tom, og bind porten til `127.0.0.1` i stedet.
 Det der skal reddes: `data/auction_hunter.db`, `data/conversations.db` og
 `data/images/`. `config/interests.yml` ligger i git.
 
-SQLite kører med WAL, så en rå filkopi kan være ufuldstændig. Tag backup med
-SQLite selv, eller stop `web` og `hunter` først:
+Backup tages med agentens egen kommando, som bruger SQLites `VACUUM INTO` til at
+tage et konsistent øjebliksbillede mens agenten kører. En rå filkopi af en
+database i WAL-tilstand kan mangle de sidste transaktioner, så den er ikke nok.
+
+    .venv/bin/python -m auction_hunter backup --out backups
+    # eller inde i containeren:
+    docker compose exec hunter python -m auction_hunter backup --out /app/reports/backups
+
+Kommandoen skriver én ren fil med tidsstempel, tjekker integriteten, og sletter
+filen igen hvis tjekket fejler. Et ugyldigt backup der bliver liggende er værre
+end intet backup, fordi det ser ud som om man er dækket ind.
+
+Gendannelse kræver at `web` og `hunter` er stoppet:
 
     docker compose stop web hunter
-    sqlite3 data/auction_hunter.db ".backup 'backup/auction_hunter.db'"
-    sqlite3 data/auction_hunter.db "PRAGMA integrity_check;"
+    .venv/bin/python -m auction_hunter restore backups/hunter-<tidsstempel>.db --yes
     docker compose start
+
+Den gamle database gemmes automatisk som `...foer-gendannelse-<tidsstempel>`, så
+en gendannelse kan rulles tilbage. Billederne i `data/images` og
+`config/interests.yml` er ikke med i backup'en og skal sikres separat.
 
 Backup-stien i homelabben er Proxmox Backup Server og TrueNAS NFS.
 
@@ -182,8 +196,12 @@ OCI-labels og digest-pinning af base-imaget.
 
 ## 9. Test, lint og release
 
-    python -m pytest        # hele suiten
-    ruff check src tests
+    make test               # hele suiten
+    make lint               # ruff paa src og tests
+    make backup             # konsistent backup til backups/
+
+Alt kan ogsaa kaldes direkte med `.venv/bin/python -m pytest` og
+`.venv/bin/ruff check src tests`. `make help` viser resten.
 
 CI kører tests på Python 3.11 og 3.13, ruff og et Docker-build ved hvert push.
 Versionen ligger ét sted (`auction_hunter.__version__`) og vises i `/healthz`,

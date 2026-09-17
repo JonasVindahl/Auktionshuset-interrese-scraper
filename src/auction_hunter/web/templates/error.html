@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+
+{% block title %}{{ code }} · Auktionshuset Hunter{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <p class="overline">{{ icon('alert', 13) }} Fejl</p>
+  <h1>{{ code }}</h1>
+  <p class="page-meta">{{ message }}</p>
+</header>
+
+<p><a class="btn is-primary" href="/">Tilbage til fund</a></p>
+{% endblock %}

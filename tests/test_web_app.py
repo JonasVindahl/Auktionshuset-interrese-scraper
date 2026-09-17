@@ -794,3 +794,34 @@ def test_kun_tilladte_hosts_accepteres(sample_db, sample_config, monkeypatch):
     response = guarded.get("/healthz", headers={"Host": "ondsindet.example"})
     assert response.status_code == 400
 
+
+# -- fejl-sider ------------------------------------------------------------
+
+def test_ukendt_side_giver_en_styled_404(client):
+    response = client.get("/findes-ikke")
+    assert response.status_code == 404
+    assert "404" in response.text
+    assert "Tilbage til fund" in response.text
+
+
+def test_uventet_fejl_giver_en_styled_500(sample_db, sample_config, monkeypatch):
+    from auction_hunter.web import app as appmod
+
+    monkeypatch.setenv("DB_PATH", sample_db)
+    monkeypatch.setenv("CONFIG_PATH", sample_config)
+    monkeypatch.delenv("WEB_PASSWORD", raising=False)
+    monkeypatch.delenv("WEB_PASSWORD_FILE", raising=False)
+    app = appmod.create_app()
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("planlagt fejl i testen")
+
+    monkeypatch.setattr(appmod.queries, "notifications", boom)
+    # raise_server_exceptions=False, saa vi ser den side brugeren ville faa.
+    client = TestClient(app, raise_server_exceptions=False)
+
+    response = client.get("/")
+    assert response.status_code == 500
+    assert "500" in response.text
+    assert "Tilbage til fund" in response.text
+
