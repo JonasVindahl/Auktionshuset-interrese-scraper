@@ -182,3 +182,19 @@ def test_manglende_database_giver_tomme_sider(tmp_path, sample_config, monkeypat
 
     # Healthz skal stadig melde fra, så overvågningen kan se forskel.
     assert empty.get("/healthz").status_code == 503
+
+
+def test_metrics_token_med_ikke_ascii_giver_401_ikke_500(sample_db, monkeypatch):
+    """Et forkert token skal afvises, ogsaa naar det ikke er ASCII.
+
+    hmac.compare_digest afviser str med ikke-ASCII, saa ?token=æøå kastede en
+    TypeError og blev til en 500 paa et endpunkt der er aabent som standard.
+    """
+    monkeypatch.setenv("DB_PATH", sample_db)
+    monkeypatch.setenv("METRICS_TOKEN", "hemmeligt-token")
+    monkeypatch.delenv("WEB_PASSWORD", raising=False)
+    client = TestClient(create_app(), raise_server_exceptions=False)
+
+    assert client.get("/metrics", params={"token": "æøå"}).status_code == 401
+    assert client.get("/metrics", params={"token": "forkert"}).status_code == 401
+    assert client.get("/metrics", params={"token": "hemmeligt-token"}).status_code == 200

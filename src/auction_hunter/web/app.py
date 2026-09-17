@@ -1385,7 +1385,10 @@ def create_app() -> FastAPI:
             header = request.headers.get("authorization", "")
             supplied = header[7:].strip() if header.lower().startswith("bearer ") else ""
             supplied = supplied or request.query_params.get("token", "")
-            if not hmac.compare_digest(supplied, token):
+            # Sammenlign bytes. compare_digest afviser str med ikke-ASCII, saa
+            # ?token=ae gav en TypeError og dermed en 500 paa et aabent
+            # endpunkt i stedet for et paent 401.
+            if not hmac.compare_digest(supplied.encode("utf-8"), token.encode("utf-8")):
                 # Bevidst et direkte svar og ikke HTTPException(401): den
                 # globale 401-handler sender videre til /login, og /login
                 # sender tilbage igen, saa det endte i en redirect-loekke.

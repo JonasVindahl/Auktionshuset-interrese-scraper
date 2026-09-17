@@ -16,8 +16,10 @@ WAL-tilstand bruges, så læsning ikke blokeres af skrivning.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
+import os
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -46,7 +48,14 @@ CREATE TABLE IF NOT EXISTS lots (
     last_bid      INTEGER,
     last_total    INTEGER,
     ends_at       TEXT,
-    image_url     TEXT NOT NULL DEFAULT ''
+    image_url     TEXT NOT NULL DEFAULT '',
+    -- Kolonnerne herunder kom til senere og staar ogsaa i MIGRATIONS, som er
+    -- vejen ind i en database der allerede findes. De skal staa begge steder:
+    -- her, saa en ny database ikke oprettes for straks at blive ALTER'et, og
+    -- der, saa en gammel database faar dem.
+    details       TEXT NOT NULL DEFAULT '',
+    details_flags TEXT NOT NULL DEFAULT '',
+    details_at    TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS price_history (
@@ -266,6 +275,9 @@ def _backfill_search_index(conn: sqlite3.Connection) -> None:
 # — uden den ville pris-historikken alene blive flere GB om året.
 DEFAULT_RETENTION_DAYS = 180
 
+# Filen der siger at en agent bruger denne database. Se Store.touch_heartbeat.
+HEARTBEAT_SUFFIX = ".live"
+
 
 def utcnow() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
@@ -310,6 +322,34 @@ class Store:
         self.conn.executescript(SCHEMA)
         _migrate(self.conn)
         self.conn.commit()
+        self.touch_heartbeat()
+
+    # -- livstegn ----------------------------------------------------------
+
+    def heartbeat_path(self) -> Path:
+        return Path(str(self.path) + HEARTBEAT_SUFFIX)
+
+    def touch_heartbeat(self) -> None:
+        """Skriv at en agent er i live paa denne database.
+
+        Gendannelse bytter databasefilen ud under en aaben forbindelse. Goer
+        man det mens agenten koerer, beholder den den gamle inode og skriver
+        videre i en slettet fil, saa gendannelsen forsvinder uden en lyd.
+        --yes var indtil nu den eneste kontrol, og den er en afkrydsning.
+
+        Et PID-tjek duer ikke: agenten og gendannelsen koerer typisk i hver sin
+        container med hver sit PID-rum. Filens alder er det signal der faktisk
+        krydser den graense, og den opdateres ved hver koersel.
+        """
+        if str(self.path) == ":memory:":
+            return
+        try:
+            self.heartbeat_path().write_text(
+                f"{os.getpid()} {utcnow()}\n", encoding="utf-8"
+            )
+        except OSError:
+            # Et manglende livstegn maa aldrig vaelte en koersel.
+            log.debug("Kunne ikke skrive livstegn ved siden af %s", self.path)
 
     @contextmanager
     def _tx(self) -> Iterator[sqlite3.Connection]:
@@ -322,6 +362,9 @@ class Store:
 
     def close(self) -> None:
         self.conn.close()
+        if str(self.path) != ":memory:":
+            with contextlib.suppress(OSError):
+                self.heartbeat_path().unlink(missing_ok=True)
 
     def __enter__(self) -> Store:
         return self
@@ -332,6 +375,7 @@ class Store:
     # -- kørsler -----------------------------------------------------------
 
     def start_run(self) -> int:
+        self.touch_heartbeat()
         with self._tx() as conn:
             cursor = conn.execute("INSERT INTO runs (started_at) VALUES (?)", (utcnow(),))
             return int(cursor.lastrowid)

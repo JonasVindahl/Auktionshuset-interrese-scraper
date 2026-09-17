@@ -23,13 +23,19 @@ import shutil
 import sqlite3
 import tarfile
 import tempfile
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .storage import HEARTBEAT_SUFFIX
 from .web.chatstore import chat_db_path
 
 log = logging.getLogger(__name__)
+
+# Hvor gammelt et livstegn skal vaere foer databasen regnes for ledig.
+# To scrape-intervaller: en agent der koerer, roerer filen hvert 15. minut.
+HEARTBEAT_STALE_SECONDS = 30 * 60
 
 ARCHIVE_SUFFIX = ".tar.gz"
 DB_MEMBER = "db/main.db"
@@ -165,11 +171,51 @@ def backup(
     return BackupResult(target, have_conversations, image_count)
 
 
+def agent_heartbeat_age(target: str | Path) -> float | None:
+    """Sekunder siden en agent sidst roerte databasen, eller None.
+
+    Store skriver et livstegn ved siden af databasen ved opstart og ved hver
+    koersel. Filens alder er det signal der virker paa tvaers af containere,
+    hvor et PID-tjek ikke goer: agenten og gendannelsen har hver sit PID-rum,
+    men deler mappen.
+    """
+    beat = Path(str(target) + HEARTBEAT_SUFFIX)
+    try:
+        return max(0.0, time.time() - beat.stat().st_mtime)
+    except OSError:
+        return None
+
+
+def _refuse_if_agent_is_live(target: Path, *, force: bool) -> None:
+    """Afvis en gendannelse mens agenten aabenbart koerer.
+
+    Gendannelse bytter filen ud under en aaben forbindelse. Goer man det mens
+    agenten koerer, beholder den den gamle inode og skriver videre i en
+    slettet fil, saa hele gendannelsen forsvinder uden en fejl.
+
+    Signalet er ikke perfekt: et livstegn kan vaere efterladt af en proces der
+    er doed uden at rydde op, og en agent der har vaeret stoppet i over en halv
+    time ser ledig ud. Derfor kan det tilsidesaettes, men bevidst.
+    """
+    age = agent_heartbeat_age(target)
+    if age is None or age > HEARTBEAT_STALE_SECONDS or force:
+        if age is not None and age <= HEARTBEAT_STALE_SECONDS and force:
+            log.warning("Gendanner selvom agenten ser ud til at koere (--force)")
+        return
+    raise BackupError(
+        f"agenten ser ud til at koere: {target}{HEARTBEAT_SUFFIX} blev roert "
+        f"for {int(age)} sekunder siden. Stop 'hunter' og 'web' foerst, ellers "
+        f"skriver den videre i den gamle fil og gendannelsen gaar tabt. "
+        f"Brug --force hvis du ved at livstegnet er efterladt."
+    )
+
+
 def restore(
     source: str | Path,
     target: str | Path,
     *,
     stamp: str | None = None,
+    force: bool = False,
 ) -> RestoreResult:
     """Gendan target fra et backup.
 
@@ -180,6 +226,7 @@ def restore(
     target = Path(target)
     if not source.exists():
         raise BackupError(f"backupfilen findes ikke: {source}")
+    _refuse_if_agent_is_live(target, force=force)
 
     stamp = _stamp(stamp)
     if tarfile.is_tarfile(source):
