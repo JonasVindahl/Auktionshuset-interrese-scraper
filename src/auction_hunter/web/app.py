@@ -36,7 +36,7 @@ from .. import __version__ as APP_VERSION
 from .. import evaluate as evaluate_mod
 from .. import images as images_mod
 from ..classifier import OpenAICompatibleClient
-from ..config import DEFAULT_CONFIG_PATH, ConfigError, load_config
+from ..config import DEFAULT_CONFIG_PATH, ConfigError, Profile, load_config
 from ..details import FLAG_LABELS
 from ..fees import DEFAULT_OPENING_BID, is_vat_exempt
 from ..formatting import MONTHS_DA
@@ -150,11 +150,11 @@ def llm_client() -> OpenAICompatibleClient | None:
 # Konfigurationen ændrer sig kun når filen gør, og den slås op ved hvert
 # sidekald. Derfor caches de få værdier webben skal bruge, på mtime og størrelse.
 _config_cache: dict[str, Any] = {
-    "key": None, "labels": {}, "opening_bid": DEFAULT_OPENING_BID,
+    "key": None, "labels": {}, "opening_bid": DEFAULT_OPENING_BID, "profiles": (),
 }
 
 
-def _config_values() -> tuple[dict[str, str], int]:
+def _config_values() -> tuple[dict[str, str], int, tuple[Profile, ...]]:
     path = config_path()
     try:
         stat = os.stat(path or DEFAULT_CONFIG_PATH)
@@ -163,19 +163,26 @@ def _config_values() -> tuple[dict[str, str], int]:
         key = (str(path), None, None)
 
     if _config_cache["key"] == key:
-        return dict(_config_cache["labels"]), int(_config_cache["opening_bid"])
+        return (
+            dict(_config_cache["labels"]),
+            int(_config_cache["opening_bid"]),
+            tuple(_config_cache["profiles"]),
+        )
 
     try:
         config = load_config(path)
         labels = {category.key: category.label for category in config.categories}
         opening = config.opening_bid
+        profiles = config.profiles
     except ConfigError:
         # Et tomt kort er et gyldigt svar: siden skal kunne vises, selvom filen
         # mangler eller er i stykker.
-        labels, opening = {}, DEFAULT_OPENING_BID
+        labels, opening, profiles = {}, DEFAULT_OPENING_BID, ()
 
-    _config_cache.update(key=key, labels=labels, opening_bid=opening)
-    return labels, opening
+    _config_cache.update(
+        key=key, labels=labels, opening_bid=opening, profiles=profiles
+    )
+    return labels, opening, profiles
 
 
 def category_labels() -> dict[str, str]:
@@ -186,6 +193,37 @@ def category_labels() -> dict[str, str]:
 def opening_bid() -> int:
     """Første bud-grænsen, brugt til at vise hvad et lot uden bud koster."""
     return _config_values()[1]
+
+
+def profile_context() -> list[dict[str, Any]]:
+    """Profilerne til visning: navn, kategorier, loft og webhook.
+
+    Tom naar konfigurationen ikke definerer nogen, for så er der kun den
+    implicitte standardprofil, og den skal ikke fylde i brugerfladen.
+    """
+    labels = category_labels()
+    profiles = _config_values()[2]
+    return [
+        {
+            "key": p.key,
+            "label": p.label,
+            "categories": [labels.get(k, k) for k in (p.categories or ())],
+            "all_categories": p.categories is None,
+            "max_price": p.max_price,
+            "webhook_env": p.webhook_env,
+            "webhook": secret_status(p.webhook_env) if p.webhook_env else "",
+            "enabled": p.enabled,
+        }
+        for p in profiles
+    ]
+
+
+def _row_profile(row: Any) -> str:
+    """Profil-noeglen paa en database-raekke, med et sikkert standardfald."""
+    keys = row.keys() if hasattr(row, "keys") else ()
+    if "profile_key" not in keys:
+        return "standard"
+    return str(row["profile_key"] or "standard")
 
 
 def archive_url(query: search_mod.SearchQuery, **changes: Any) -> str:
@@ -407,10 +445,13 @@ def create_app() -> FastAPI:
             counts = queries.counts(conn)
         finally:
             conn.close()
+        profile_list = profile_context()
         return templates.TemplateResponse(
             request, name,
             {"pulse": pulse, "stale": stale, "counts": counts,
              "category_labels": category_labels(),
+             "profiles": profile_list,
+             "profile_labels": {p["key"]: p["label"] for p in profile_list},
              "path": request.url.path, **context},
         )
 
@@ -498,7 +539,11 @@ def create_app() -> FastAPI:
     # -- fund --------------------------------------------------------------
 
     @app.get("/", response_class=HTMLResponse)
-    def finds(request: Request, _: None = Depends(require_login)) -> HTMLResponse:
+    def finds(
+        request: Request,
+        profile: str = "",
+        _: None = Depends(require_login),
+    ) -> HTMLResponse:
         conn = ro_conn(db_path())
         try:
             rows = queries.notifications(conn)
@@ -506,31 +551,41 @@ def create_app() -> FastAPI:
             reviews = queries.pending_reviews(conn)
         finally:
             conn.close()
+        if profile:
+            active = [r for r in active if _row_profile(r) == profile]
         categories = sorted({r["category_key"] for r in active if r["category_key"]})
         prepared = with_series(rows_mod.prepare_all(active, db_path=db_path(), opening_bid=opening_bid()))
         return page(
             request, "finds.html",
             rows=prepared, groups=rows_mod.group_by_date(prepared),
             reviews=reviews, categories=categories,
+            active_profile=profile,
             heading="Aktive fund",
             empty="Ingen aktive fund lige nu.",
             show_ending=True, show_period=True,
         )
 
     @app.get("/expired", response_class=HTMLResponse)
-    def expired(request: Request, _: None = Depends(require_login)) -> HTMLResponse:
+    def expired(
+        request: Request,
+        profile: str = "",
+        _: None = Depends(require_login),
+    ) -> HTMLResponse:
         conn = ro_conn(db_path())
         try:
             rows = queries.notifications(conn)
             _active, gone = queries.split_by_end(rows)
         finally:
             conn.close()
+        if profile:
+            gone = [r for r in gone if _row_profile(r) == profile]
         categories = sorted({r["category_key"] for r in gone if r["category_key"]})
         prepared = with_series(rows_mod.prepare_all(gone, db_path=db_path(), opening_bid=opening_bid()))
         return page(
             request, "finds.html",
             rows=prepared, groups=rows_mod.group_by_date(prepared),
             reviews=[], categories=categories,
+            active_profile=profile,
             heading=f"Sluttet inden for {queries.EXPIRED_WINDOW_HOURS} timer",
             empty=f"Ingen lots er sluttet inden for de seneste "
                   f"{queries.EXPIRED_WINDOW_HOURS} timer.",

@@ -27,6 +27,16 @@
 </header>
 
 {% if rows %}
+{% if profiles %}
+<div class="chip-row profile-row" role="group" aria-label="Filtrér på profil">
+  <span class="chip-label">Profil</span>
+  <a class="chip{% if not active_profile %} is-on{% endif %}" href="{{ path }}">Alle</a>
+  {% for p in profiles %}
+  <a class="chip{% if active_profile == p.key %} is-on{% endif %}" href="{{ path }}?profile={{ p.key }}"
+     title="{{ p.label }}{% if not p.enabled %} (slukket){% endif %}">{{ p.label }}</a>
+  {% endfor %}
+</div>
+{% endif %}
 <div class="toolbar">
   <div class="chip-row" role="group" aria-label="Filtrér på kategori">
     {% for cat in categories %}

@@ -129,11 +129,16 @@ Sæt Uptime Kuma til at ramme `/readyz` frem for `/`.
 På plads: ikke-root (UID 10001), read-only rootfs, `cap_drop: ALL`,
 `no-new-privileges`, CSP, `X-Frame-Options`, `Referrer-Policy`, `no-store` på
 HTML, adgangskode sammenlignet i konstant tid, fail-closed hvis adgangskoden
-ikke kan læses, hemmeligheder via fil/miljø.
+ikke kan læses, hemmeligheder via fil/miljø, og login-throttling (5 forsøg pr.
+15 minutter pr. klient-IP).
 
-Mangler: login-throttling, CSRF-token på POST-formularer, host-validering,
-`Secure`-cookie, proxy-headers, og begrænsning af hvilken adresse porten
-binder til.
+Bemærk at throttlingen tæller på `request.client.host`. Bag en reverse proxy
+er det proxyens adresse, så grænsen bliver global i stedet for per klient. Det
+er acceptabelt for et enkeltbruger-dashboard, men forsvinder først når
+proxy-headers er på plads.
+
+Mangler: CSRF-token på POST-formularer, host-validering, `Secure`-cookie,
+proxy-headers, og begrænsning af hvilken adresse porten binder til.
 
 ## 9. Test, lint og release
 
