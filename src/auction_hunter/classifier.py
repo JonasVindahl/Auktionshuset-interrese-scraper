@@ -296,14 +296,32 @@ class Classifier:
         self.settings = settings
         self.store = store
 
+    def profile_for(self, match) -> str:
+        """Den smagsbeskrivelse dette fund skal vurderes efter.
+
+        En interesseprofil kan have sin egen ``classifier_profile``. Feltet
+        fandtes allerede i dataklassen og blev laest fra YAML, men blev aldrig
+        brugt: alle profilers fund blev bedoemt med den globale prompt. Alle
+        profilens oevrige felter respekteres — kategorier, prisloft,
+        udelukkelser, webhook — saa det her var det eneste der ikke virkede,
+        og det gjorde det tavst.
+        """
+        own = getattr(match.profile, "classifier_profile", "") or ""
+        return own.strip() or self.settings.profile
+
     def _key(self, match) -> str:
-        """Cache-nøglen for et fund. Ét sted, så profilen ikke kan glemmes."""
+        """Cache-nøglen for et fund. Ét sted, så profilen ikke kan glemmes.
+
+        Den effektive smagsbeskrivelse indgaar, saa to interesseprofiler med
+        hver sin ``classifier_profile`` faar hver sit svar paa samme lot i
+        stedet for at dele det foerstes.
+        """
         return input_hash(
             title=match.lot.title,
             category_key=match.category.key,
             version=self.settings.version,
             model=self.settings.model,
-            profile=self.settings.profile,
+            profile=self.profile_for(match),
         )
 
     def cached(self, match) -> Classification | None:
@@ -349,7 +367,7 @@ class Classifier:
             title=match.lot.title,
             category_label=match.category.label,
             keywords=match.keywords,
-            profile=self.settings.profile,
+            profile=self.profile_for(match),
         )
         try:
             raw = self.client.complete(system=SYSTEM_PROMPT, user=prompt)

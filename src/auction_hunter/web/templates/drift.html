@@ -36,6 +36,28 @@
 </section>
 
 <section class="section">
+  <h2 class="section-title">AI-forbrug fra dashboardet</h2>
+  <dl class="metrics">
+    <div class="metric"><dt>Brugt</dt><dd>{{ ai_budget.used }}</dd></div>
+    <div class="metric"><dt>Loft</dt><dd>{{ ai_budget.limit }}</dd></div>
+    <div class="metric"><dt>Tilbage</dt><dd>{{ ai_budget.remaining }}</dd></div>
+  </dl>
+  <p class="hint">
+    {% if ai_budget.limit == 0 %}
+      Dashboardets AI er slået fra (<code>WEB_AI_MAX_PER_HOUR=0</code>). Chatten
+      søger stadig på nøgleord.
+    {% elif ai_budget.exhausted %}
+      Loftet er brugt. Siderne kører videre uden AI, og det frigives af sig selv
+      inden for {{ ai_budget.window_minutes }} minutter.
+    {% else %}
+      Højst {{ ai_budget.limit }} kald pr. {{ ai_budget.window_minutes }} minutter.
+      Agenten har sit eget loft i <code>classifier.max_per_run</code>; dette
+      gælder kun chatten og forslagsknappen. Tælleren nulstilles ved genstart.
+    {% endif %}
+  </p>
+</section>
+
+<section class="section">
   <h2 class="section-title">Billedcachen</h2>
   <dl class="metrics">
     <div class="metric"><dt>Billeder</dt><dd>{{ image_count }}</dd></div>

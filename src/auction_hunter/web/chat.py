@@ -445,6 +445,7 @@ def ask(
     question: str,
     *,
     show_all: bool = False,
+    unavailable: str = "",
     categories: list[str] | None = None,
     history: list[dict] | None = None,
     previous: dict | None = None,
@@ -541,12 +542,15 @@ def ask(
     }
 
     if client is None:
+        # Der er to grunde til at modellen mangler, og de kraever hver sit
+        # svar: en manglende noegle er en opsaetning, et brugt loft gaar over
+        # af sig selv. Det stod foer som noeglen i begge tilfaelde.
+        grund = unavailable or (
+            "AI-svar kræver at CLASSIFIER_API_KEY er sat — indtil da viser "
+            "jeg resultaterne direkte."
+        )
         return finish(ChatAnswer(
-            text=(
-                f"Fandt {result.total} lots. "
-                "AI-svar kræver at CLASSIFIER_API_KEY er sat — indtil da viser "
-                "jeg resultaterne direkte."
-            ),
+            text=f"Fandt {result.total} lots. {grund}",
             rows=candidates,
             filter_used=filter_used,
             degraded=True,

@@ -45,6 +45,7 @@ from ..fees import DEFAULT_OPENING_BID, is_vat_exempt
 from ..formatting import MONTHS_DA
 from ..secrets import SecretError, get_secret
 from . import (
+    aibudget,
     auth,
     chatstore,
     queries,
@@ -130,12 +131,36 @@ def config_path() -> str | None:
     return os.environ.get("CONFIG_PATH")
 
 
+def _ai_unavailable_reason() -> str:
+    """Hvorfor der ikke kom et AI-svar. Tom naar modellen var til raadighed."""
+    if not aibudget.BUDGET.allow():
+        minutter = aibudget.window_seconds() // 60
+        return (
+            f"Loftet for AI-kald fra dashboardet er brugt "
+            f"({aibudget.limit()} pr. {minutter} minutter), så jeg viser "
+            f"resultaterne direkte. Det frigives af sig selv."
+        )
+    return ""
+
+
 def llm_client() -> OpenAICompatibleClient | None:
-    """Klient til chat-assistenten, eller None hvis ingen nøgle er sat.
+    """Klient til chat-assistenten, eller None hvis den ikke må bruges.
 
     Nøglen slås op ved hvert kald, så en roteret hemmelighed virker uden
     genstart — samme princip som i agenten.
+
+    None betyder enten "ingen nøgle" eller "loftet er brugt op". Siderne
+    behandler begge dele ens og falder tilbage til en almindelig søgning, så
+    et brugt budget ikke er en ny måde at vælte en side på.
     """
+    if not aibudget.BUDGET.allow():
+        log.warning(
+            "Loftet for dashboardets AI-kald er brugt (%d pr. %d minutter). "
+            "Siderne kører videre uden AI. Sæt WEB_AI_MAX_PER_HOUR hvis det er "
+            "for stramt.",
+            aibudget.limit(), aibudget.window_seconds() // 60,
+        )
+        return None
     try:
         api_key = get_secret("CLASSIFIER_API_KEY") or get_secret("OPENAI_API_KEY")
     except SecretError as exc:
@@ -148,7 +173,7 @@ def llm_client() -> OpenAICompatibleClient | None:
         base_url, model = settings.base_url, settings.model
     except ConfigError:
         base_url, model = "https://api.openai.com/v1", "gpt-4o-mini"
-    return OpenAICompatibleClient(
+    return aibudget.BudgetedClient(
         base_url=base_url, api_key=api_key, model=model, timeout=60
     )
 
@@ -1105,6 +1130,7 @@ def create_app() -> FastAPI:
                 keys = [cat.key for cat in config.categories] if config else None
                 answer = chat_mod.ask(
                     conn, client, question,
+                    unavailable=_ai_unavailable_reason(),
                     categories=keys, history=history, previous=previous,
                     labels=category_labels(),
                 )
@@ -1238,13 +1264,14 @@ def create_app() -> FastAPI:
         ai_key = secret_status("CLASSIFIER_API_KEY")
         if ai_key == "ikke sat":
             ai_key = secret_status("OPENAI_API_KEY")
+        ai_budget = aibudget.status()
 
         return page(
             request, "drift.html",
             pulse=pulse, stale=stale, tables=tables, span=span, runs=runs,
             blind_at=blind_at, normal_lots=normal_lots, reviews=reviews,
             db_bytes=db_bytes, image_count=image_count, image_bytes=image_bytes,
-            settings=settings,
+            settings=settings, ai_budget=ai_budget,
             secrets={
                 "Discord-webhook": secret_status("DISCORD_WEBHOOK_URL"),
                 "AI-noegle": ai_key,

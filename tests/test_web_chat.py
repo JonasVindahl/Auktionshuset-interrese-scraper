@@ -486,3 +486,76 @@ def test_sammenlign_giver_en_vurdering(conn):
     assert answer.valuation is not None
     assert answer.valuation.title
     assert answer.valuation.lot_id == answer.rows[0]["lot_id"]
+
+
+# -- loft over dashboardets AI-forbrug --------------------------------------
+
+class TestAIBudget:
+    """Agenten har altid haft max_per_run. Dashboardet havde intet loft."""
+
+    @pytest.fixture(autouse=True)
+    def _frisk_taeller(self):
+        from auction_hunter.web import aibudget
+
+        aibudget.BUDGET.reset()
+        yield
+        aibudget.BUDGET.reset()
+
+    def test_kald_taelles_ned(self, monkeypatch):
+        from auction_hunter.web import aibudget
+
+        monkeypatch.setenv("WEB_AI_MAX_PER_HOUR", "3")
+        klient = aibudget.BudgetedClient(
+            base_url="http://x", api_key="k", model="m",
+            transport=lambda **kw: (200, {"choices": [{"message": {"content": "hej"}}]}),
+        )
+        assert aibudget.BUDGET.remaining() == 3
+        klient.complete(system="s", user="u")
+        klient.complete(system="s", user="u")
+        assert aibudget.BUDGET.remaining() == 1
+        assert aibudget.BUDGET.allow()
+        klient.complete(system="s", user="u")
+        assert not aibudget.BUDGET.allow()
+
+    def test_loft_paa_nul_slaar_ai_helt_fra(self, monkeypatch):
+        from auction_hunter.web import aibudget
+
+        monkeypatch.setenv("WEB_AI_MAX_PER_HOUR", "0")
+        assert not aibudget.BUDGET.allow()
+        assert aibudget.status()["exhausted"] is True
+
+    def test_brugt_loft_giver_ingen_klient_og_vaelter_ikke_siden(
+        self, sample_db, sample_config, monkeypatch
+    ):
+        """Et brugt loft skal opfoere sig som en manglende noegle, ikke som en fejl."""
+        from fastapi.testclient import TestClient
+
+        from auction_hunter.web import aibudget
+        from auction_hunter.web import app as app_mod
+
+        monkeypatch.setenv("DB_PATH", sample_db)
+        monkeypatch.setenv("CONFIG_PATH", sample_config)
+        monkeypatch.setenv("CLASSIFIER_API_KEY", "sk-test")
+        monkeypatch.setenv("WEB_AI_MAX_PER_HOUR", "1")
+        monkeypatch.delenv("WEB_PASSWORD", raising=False)
+
+        assert app_mod.llm_client() is not None
+        aibudget.BUDGET.record()
+        assert app_mod.llm_client() is None, "loftet skulle have lukket for klienten"
+
+        client = TestClient(app_mod.create_app())
+        assert client.get("/chat").status_code == 200
+        assert client.get("/interests", params={"ai": "1"}).status_code == 200
+
+    def test_drift_viser_forbruget(self, sample_db, sample_config, monkeypatch):
+        from fastapi.testclient import TestClient
+
+        from auction_hunter.web import app as app_mod
+
+        monkeypatch.setenv("DB_PATH", sample_db)
+        monkeypatch.setenv("CONFIG_PATH", sample_config)
+        monkeypatch.setenv("WEB_AI_MAX_PER_HOUR", "42")
+        monkeypatch.delenv("WEB_PASSWORD", raising=False)
+        body = TestClient(app_mod.create_app()).get("/drift").text
+        assert "AI-forbrug fra dashboardet" in body
+        assert "42" in body

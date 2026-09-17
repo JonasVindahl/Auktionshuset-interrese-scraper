@@ -7,6 +7,19 @@ versionerne er [semantiske](https://semver.org/lang/da/).
 
 ### Rettet
 
+- **`Profile.classifier_profile` blev aldrig brugt.** Feltet blev læst fra
+  YAML ind i dataklassen, men alle profilers fund blev bedømt med den globale
+  prompt. Alle profilens øvrige felter blev respekteret, så det her var det
+  eneste der ikke virkede, og det gjorde det tavst. Den effektive prompt
+  indgår nu også i cache-nøglen, så to profiler med hver sin smag får hver
+  sit svar på samme lot.
+- **Dashboardets AI-forbrug var ikke loftet**, selvom agentens har været det
+  hele tiden via `classifier.max_per_run`. Ét chat-spørgsmål er to kald og
+  forslagsknappen er ét kald pr. klik, så en genindlæsning brugte nøglen uden
+  grænse. Loftet er 60 kald pr. time, sat med `WEB_AI_MAX_PER_HOUR`, og
+  forbruget står på `/drift`. Rammes det, opfører siderne sig som uden en
+  nøgle i stedet for at fejle.
+
 - **Auktionslisten blev ikke pagineret.** `fetch_auctions` hentede kun side 1,
   så agenten så de første ~24 auktioner og meldte alligevel succes. Fejlen var
   latent så længe standarden var Sjælland alene, og blev aktiv med

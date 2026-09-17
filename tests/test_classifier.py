@@ -383,3 +383,51 @@ class TestSettingsGuard:
         assert not ClassifierSettings(enabled=True, api_key="k", profile="").usable
         assert not ClassifierSettings(enabled=False, api_key="k", profile=PROFILE).usable
         assert ClassifierSettings(enabled=True, api_key="k", profile=PROFILE).usable
+
+
+class TestProfilensEgenSmag:
+    """Profile.classifier_profile blev laest fra YAML og aldrig brugt."""
+
+    def _match(self, title, profil):
+        config = load_config("config/interests.yml")
+        return match_lot(make_lot(title), config, profile=profil)[0]
+
+    def test_profilens_egen_prompt_bruges(self, store, settings):
+        from auction_hunter.config import Profile
+
+        set_ned = Profile(key="hifi", label="HiFi", classifier_profile="Kun roerforstaerkere.")
+        match = self._match("Forstærker ROTEL", set_ned)
+
+        classifier = Classifier(
+            OpenAICompatibleClient(base_url="http://x", api_key="k", model="m",
+                                   transport=reply('{"verdict":"ja"}')),
+            settings, store,
+        )
+        assert classifier.profile_for(match) == "Kun roerforstaerkere."
+
+    def test_uden_egen_prompt_bruges_den_globale(self, store, settings):
+        from auction_hunter.config import Profile
+
+        uden = Profile(key="alt", label="Alt")
+        match = self._match("Forstærker ROTEL", uden)
+        classifier = Classifier(
+            OpenAICompatibleClient(base_url="http://x", api_key="k", model="m",
+                                   transport=reply('{"verdict":"ja"}')),
+            settings, store,
+        )
+        assert classifier.profile_for(match) == PROFILE
+
+    def test_to_profiler_deler_ikke_cache(self, store, settings):
+        """Samme lot, to profiler med hver sin smag, skal give to opslag."""
+        from auction_hunter.config import Profile
+
+        en = self._match("Forstærker ROTEL", Profile(key="a", label="A",
+                                                     classifier_profile="Smag A"))
+        to = self._match("Forstærker ROTEL", Profile(key="b", label="B",
+                                                     classifier_profile="Smag B"))
+        classifier = Classifier(
+            OpenAICompatibleClient(base_url="http://x", api_key="k", model="m",
+                                   transport=reply('{"verdict":"ja"}')),
+            settings, store,
+        )
+        assert classifier._key(en) != classifier._key(to)
