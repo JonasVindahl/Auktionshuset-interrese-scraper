@@ -78,10 +78,18 @@ Pangolin/Traefik tage trafikken:
     ports:
       - "127.0.0.1:8080:8080"
 
-To ting mangler i appen for et rigtigt proxy-setup og er næste skridt:
-uvidst hvilket scheme og klient-IP serveren ser (mangler proxy-headers), og
-login-cookien kan ikke sættes til `Secure` (er hardkodet til `https_only=False`).
-Indtil det er på plads bør proxien tvinge HTTPS og sætte `X-Forwarded-Proto`.
+Appen læser nu proxy-headere, så den ser `https` og den rigtige klient-IP når
+den står bag Pangolin/Traefik. Sæt `FORWARDED_ALLOW_IPS` til proxyens adresse,
+ellers ignoreres headerne.
+
+Tre variabler styrer resten:
+
+    WEB_BASE_URL=https://hunter.jonasvindahl.dk   # => login-cookien kraever HTTPS
+    ALLOWED_HOSTS=hunter.jonasvindahl.dk          # afvis andre Host-headere
+    FORWARDED_ALLOW_IPS=172.16.0.1                # trafik fra proxyen
+
+Kører du uden TLS på LAN, så lad `WEB_BASE_URL` og `WEB_COOKIE_SECURE` være
+usat, lad `ALLOWED_HOSTS` være tom, og bind porten til `127.0.0.1` i stedet.
 
 ## 5. Backup og gendannelse
 
@@ -137,8 +145,14 @@ er det proxyens adresse, så grænsen bliver global i stedet for per klient. Det
 er acceptabelt for et enkeltbruger-dashboard, men forsvinder først når
 proxy-headers er på plads.
 
-Mangler: CSRF-token på POST-formularer, host-validering, `Secure`-cookie,
-proxy-headers, og begrænsning af hvilken adresse porten binder til.
+CSRF er dækket i to lag uden tokens: sessionen er `SameSite=Lax`, CSP'en har
+`form-action 'self'`, og usikre metoder afvises hvis `Origin`/`Referer` peger på
+en anden vaert. `SameSite=Lax` alene blokerer cross-site POST, `form-action`
+dækker formularer, og oprindelsestjekket dækker også `fetch()`-kaldet til
+`/feedback`, som `form-action` ikke omfatter.
+
+Mangler: begrænsning af hvilken adresse porten binder til i compose, og
+OCI-labels og digest-pinning af base-imaget.
 
 ## 9. Test, lint og release
 
