@@ -38,6 +38,7 @@ def _write(tmp_path: Path, extra: str) -> Path:
 def _rene_regionmiljoer(monkeypatch):
     monkeypatch.delenv("REGION_IDS", raising=False)
     monkeypatch.delenv("REGION_LABEL", raising=False)
+    monkeypatch.delenv("LOCAL_REGION_IDS", raising=False)
 
 
 def test_all_udvides_til_alle_landsdele(tmp_path):
@@ -80,6 +81,40 @@ def test_env_region_label_vinner(tmp_path, monkeypatch):
     monkeypatch.setenv("REGION_LABEL", "Fra miljoeet")
     config = load_config(_write(tmp_path, "  region_ids: all"))
     assert config.source.region_label == "Fra miljoeet"
+
+
+# -- hjemlandsdele: andre regioner kraever forsendelse ----------------------
+
+def test_uden_local_region_ids_er_alle_valgte_lokale(tmp_path):
+    """En gammel konfiguration skal ikke pludselig frafiltrere regioner."""
+    config = load_config(_write(tmp_path, "  region_ids: all"))
+    assert config.source.local_region_ids == ("nord", "midt", "sjae")
+    assert config.source.is_local_region("Midtjylland")
+
+
+def test_local_region_ids_kan_skrives_som_navn(tmp_path):
+    config = load_config(
+        _write(tmp_path, "  region_ids: all\n  local_region_ids: Sjaelland")
+    )
+    assert config.source.local_region_ids == ("sjae",)
+    assert config.source.is_local_region("Sjaelland")
+    assert not config.source.is_local_region("Midtjylland")
+    assert config.source.is_local_region(""), "ukendt region maa ikke koste fund"
+
+
+def test_local_region_ids_all_betyder_alt(tmp_path):
+    config = load_config(
+        _write(tmp_path, "  region_ids: all\n  local_region_ids: all")
+    )
+    assert config.source.local_region_ids == ("nord", "midt", "sjae")
+
+
+def test_env_local_region_ids_vinner_over_yaml(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOCAL_REGION_IDS", "nord")
+    config = load_config(
+        _write(tmp_path, "  region_ids: all\n  local_region_ids: Sjaelland")
+    )
+    assert config.source.local_region_ids == ("nord",)
 
 
 def test_all_uden_mapping_giver_configfejl(tmp_path):

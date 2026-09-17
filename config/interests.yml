@@ -8,6 +8,10 @@ source:
   # 'all' følger alle landsdele fra regions-mappingen nedenfor, så agenten ikke
   # kun ser Sjælland. Skriv enkelte id'er for at indsnævre.
   region_ids: all
+  # De landsdele du selv kan køre til. Auktioner uden for dem bliver kun fund
+  # hvis de kan sende (Forsendelse tilgængelig). Skriv navne eller id'er, eller
+  # 'all'. Uden feltet er alle valgte regioner lokale.
+  local_region_ids: Sjælland
   # region_label udledes automatisk ("Hele Danmark" for alle). Sæt den kun hvis
   # du vil have dit eget navn i beskederne.
   # region_label: Sjælland

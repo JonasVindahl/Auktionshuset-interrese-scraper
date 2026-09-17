@@ -111,6 +111,23 @@ class Source:
     # viser den ikke på kortet; den findes kun som filter på auktionslisten,
     # så navnet kommer fra det kald der gav auktionen.
     region_names: dict[str, str] = field(default_factory=dict)
+    # De landsdele man selv kan koere til. Er de tomme, regnes alle som lokale
+    # (uændret adfaerd). Er de sat, maa et lot uden for dem kun blive et fund
+    # hvis auktionen kan sende — se matcher.
+    local_region_ids: tuple[str, ...] = ()
+
+    def is_local_region(self, region: str) -> bool:
+        """Om en landsdel er en man selv kan koere til.
+
+        Ukendt region (tom eller ukendt navn) regnes som lokal, saa et aendret
+        HTML-udtraek eller en manglende migration ikke koster fund.
+        """
+        if not region or not self.local_region_ids:
+            return True
+        local = set(self.local_region_ids) | {
+            self.region_names.get(rid, rid) for rid in self.local_region_ids
+        }
+        return region in local
 
 
 @dataclass(frozen=True)
@@ -273,6 +290,38 @@ def _resolve_region_ids(
     return tuple(str(v).strip() for v in values if str(v).strip())
 
 
+def _resolve_local_region_ids(
+    env_value: tuple[str, ...] | None,
+    source_raw: dict[str, Any],
+    regions_map: dict[str, str],
+    region_ids: tuple[str, ...],
+) -> tuple[str, ...]:
+    """De landsdele man selv kan koere til.
+
+    Uden en vaerdi er alle de valgte regioner lokale, saa en gammel
+    konfiguration er uændret. Baade navne ('Sjælland') og id'er accepteres, og
+    'all' betyder alle. Er svaret tomt, regner Source alle som lokale.
+    """
+    if env_value is not None:
+        values: tuple[str, ...] = env_value
+    else:
+        yaml_value = source_raw.get("local_region_ids")
+        if yaml_value is None:
+            return region_ids
+        values = (
+            (yaml_value,)
+            if isinstance(yaml_value, str)
+            else tuple(str(v) for v in yaml_value)
+        )
+
+    if any(str(v).strip().lower() in _ALL_REGION_ALIASES for v in values):
+        return tuple(regions_map.values())
+    return tuple(
+        regions_map.get(str(v).strip(), str(v).strip())
+        for v in values if str(v).strip()
+    )
+
+
 def _region_label(
     source_raw: dict[str, Any],
     regions_map: dict[str, str],
@@ -364,6 +413,9 @@ def load_config(path: str | Path | None = None) -> Config:
         region_label=_region_label(source_raw, regions_map, region_ids),
         auction_status=_env_int("AUCTION_STATUS", int(source_raw.get("auction_status", 1))),
         region_names={value: name for name, value in regions_map.items()},
+        local_region_ids=_resolve_local_region_ids(
+            _env_list("LOCAL_REGION_IDS"), source_raw, regions_map, region_ids
+        ),
     )
 
     budget_raw = raw.get("budget") or {}

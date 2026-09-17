@@ -274,3 +274,50 @@ class TestStore:
             risers = store.price_risers()
         assert len(risers) == 1
         assert risers[0]["last_bid"] > risers[0]["first_bid"]
+
+
+# -- hjemlandsdele: fjerne lots kraever forsendelse --------------------------
+
+@pytest.fixture()
+def sjaelland_config(config):
+    """Konfiguration hvor kun Sjaelland er hjemme, som i drift."""
+    from dataclasses import replace
+
+    return replace(
+        config,
+        source=replace(
+            config.source,
+            region_ids=("sjae", "midt"),
+            local_region_ids=("sjae",),
+            region_names={"sjae": "Sjælland", "midt": "Midtjylland"},
+        ),
+    )
+
+
+def test_fjernt_lot_uden_forsendelse_er_ikke_et_fund(sjaelland_config):
+    from dataclasses import replace
+
+    remote = replace(make_lot("Proxmark3 RDV4 med antenne"), region="Midtjylland")
+    assert match_lot(remote, sjaelland_config) == []
+
+
+def test_fjernt_lot_med_forsendelse_er_et_fund(sjaelland_config):
+    from dataclasses import replace
+
+    remote = replace(
+        make_lot("Proxmark3 RDV4 med antenne"),
+        region="Midtjylland", shipping=True,
+    )
+    assert match_lot(remote, sjaelland_config)
+
+
+def test_lokalt_lot_kraever_ikke_forsendelse(sjaelland_config):
+    from dataclasses import replace
+
+    local = replace(make_lot("Proxmark3 RDV4 med antenne"), region="Sjælland")
+    assert match_lot(local, sjaelland_config)
+
+
+def test_ukendt_region_slippes_igennem(sjaelland_config):
+    """Et aendret HTML-udtraek eller en gammel database maa ikke koste fund."""
+    assert match_lot(make_lot("Proxmark3 RDV4 med antenne"), sjaelland_config)

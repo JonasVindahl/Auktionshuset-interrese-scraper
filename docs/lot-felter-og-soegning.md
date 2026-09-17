@@ -68,6 +68,10 @@ sortering.
    auktionstypen kan filtreres.
 3. **Landsdel.** Hentes ved at kalde auktionslisten én gang pr. landdel og
    mærke hver auktion med det kald. Vises på kort og lot-side og kan filtreres.
+4. **Hjemlandsdele og levering.** `local_region_ids` holder de landsdele man
+   selv kan køre til. `region_ids` kan derfor stå på `all`, mens `match_lot`
+   kun lader et fjernt lot blive et fund hvis `shipping` er sand. Uden feltet er
+   alle valgte regioner lokale, og reglen er inaktiv.
 
 ## Tilbage
 
