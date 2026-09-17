@@ -28,7 +28,7 @@ venv:
 	$(PY) -m venv $(VENV) 2>/dev/null || python3 -m venv $(VENV)
 
 install: venv
-	$(PIP) install -r requirements.txt pytest ruff
+	$(PIP) install -r requirements.txt pytest ruff "httpx2>=2.13"
 
 test:
 	$(PY) -m pytest

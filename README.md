@@ -434,7 +434,7 @@ AI-nøglen følger samme mønster: `CLASSIFIER_API_KEY`,
 ## Test
 
 ```bash
-.venv/bin/pip install pytest    # ikke i requirements.txt, kun til udvikling
+.venv/bin/pip install pytest "httpx2>=2.13"   # kun til udvikling
 .venv/bin/python -m pytest
 ```
 
