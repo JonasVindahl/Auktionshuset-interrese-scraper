@@ -118,6 +118,32 @@ Migrationer kører ved opstart af `Store`, så en ny kolonne tilføjes automatis
 Rollback: byg det forrige commit, og gendan databasen fra backup hvis skemaet
 blev ændret.
 
+### Versionerede images
+
+`docker-compose.yml` tager imod `IMAGE_TAG`, `IMAGE_VERSION` og
+`IMAGE_REVISION` fra miljøet, så et image kan spores til et commit:
+
+    IMAGE_TAG=1.1.0 IMAGE_VERSION=1.1.0 IMAGE_REVISION=$(git rev-parse --short HEAD) \
+      docker compose build
+    IMAGE_TAG=1.1.0 docker compose up -d
+
+Imaget får OCI-labels (`org.opencontainers.image.*`) med de samme værdier, så
+`docker inspect` kan svare på hvad der kører. Uden dem hedder imaget
+`auction-hunter:latest`.
+
+### Base-imaget er pinnet
+
+`Dockerfile` peger på `python:3.13-slim@sha256:...`, så to builds af samme
+commit giver samme fundament. Prisen er at sikkerhedsrettelser i base-imaget
+ikke kommer af sig selv. Opdater digestet med jævne mellemrum:
+
+    curl -s https://hub.docker.com/v2/repositories/library/python/tags/3.13-slim \
+      | python3 -c "import sys,json; print(json.load(sys.stdin)['digest'])"
+
+Sæt det nye digest ind i `ARG BASE_IMAGE`, opdater datoen i kommentaren, byg, og
+kør testene. Vil man hellere følge taget løbende, kan man bygge med
+`--build-arg BASE_IMAGE=python:3.13-slim` og dermed springe pinden over.
+
 ## 7. Overvågning
 
 - `/healthz` — liveness. Svarer hvis processen og databasen virker. Rammer ikke
