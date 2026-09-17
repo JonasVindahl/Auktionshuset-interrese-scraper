@@ -546,7 +546,8 @@
   /* ---- arkiv: vælg et filter og slippe for et ekstra klik ---------------- */
 
   function initArchiveForm() {
-    $$('form[data-autosubmit] select, form[data-autosubmit] input[type=number]')
+    $$('form[data-autosubmit] select, form[data-autosubmit] input[type=number],' +
+       ' form[data-autosubmit] input[type=checkbox]')
       .forEach(field => {
         // Samme model for alle filtre: rører man en kontrol, slår den igennem.
         // Fritekstfeltet kræver stadig Enter eller knappen.
