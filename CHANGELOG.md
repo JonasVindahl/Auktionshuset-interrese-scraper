@@ -22,6 +22,9 @@ versionerne er [semantiske](https://semver.org/lang/da/).
 
 ### Rettet
 
+- **Afkrydsningsfeltet "Kan sendes" indsendte ikke selv.** Arkiverets
+  autosubmit lyttede kun på `select` og `input[type=number]`, så et flueben
+  krævede et klik på "Anvend filtre". Det lytter nu også på `input[type=checkbox]`.
 - **"Lignende salg" var for venlig.** Et delt ord var nok når det var langt,
   så en skærm og en bunke reservedele blev sammenlignet med en stationær pc,
   fordi de delte "lenovo" eller "computer". Orddelingen matchede desuden som
