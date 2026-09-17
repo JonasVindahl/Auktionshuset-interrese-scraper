@@ -12,6 +12,7 @@ Kataloger pagineres med ``limit`` (maks. 48 pr. side) og ``page`` (1-indekseret)
 from __future__ import annotations
 
 import logging
+import os
 import random
 import re
 import time
@@ -33,11 +34,30 @@ COPENHAGEN = ZoneInfo("Europe/Copenhagen")
 PAGE_SIZE = 48
 MAX_PAGES = 200
 
+# Auktionslisten pagineres ogsaa, men uden en limit vi kan saette: serveren
+# bestemmer selv sidestoerrelsen (24 i praksis). Loftet er derfor en
+# sikkerhedsventil, ikke en forventning.
+MAX_AUCTION_PAGES = 40
+
+# Standarden udgiver sig for en browser. Det staar daarligt til det oevrige
+# projekt, som bruger flere afsnit paa ikke at genudgive auktionshusets data og
+# paa at overholde deres interval. En aerlig User-Agent med en kontaktadresse
+# ville passe bedre til den holdning, men den kan ogsaa faa en WAF til at
+# blokere agenten, og den afvejning er ejerens.
+#
+# Derfor er standarden uaendret, og strengen kan saettes uden en kodeaendring:
+#   SCRAPER_USER_AGENT="auktionshuset-hunter/1.1 (+mail@eksempel.dk)"
+DEFAULT_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+)
+
+
+def user_agent() -> str:
+    return os.environ.get("SCRAPER_USER_AGENT", "").strip() or DEFAULT_USER_AGENT
+
+
 DEFAULT_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-    ),
     "Accept": "text/html,application/xhtml+xml",
     "Accept-Language": "da-DK,da;q=0.9,en;q=0.8",
 }
@@ -120,12 +140,21 @@ class Scraper:
         self.max_retries = max_retries
         self.session = session or requests.Session()
         self.session.headers.update(DEFAULT_HEADERS)
+        # Slaas op pr. scraper, saa en aendring virker uden genbygning.
+        self.session.headers["User-Agent"] = user_agent()
         # Taelles op under parsingen, saa et aendret data-ends-format kan
         # opdages i stedet for at fjerne alle deadlines i stilhed.
         self.lots_with_ends = 0
         self.ends_parse_failures = 0
+        # Hvor mange HTTP-kald en koersel faktisk koster. Projektet har
+        # beskrevet sig selv som "ét scrape hvert 15. minut", men en koersel
+        # henter auktionslistens sider plus mindst ét katalogkald pr. auktion.
+        # Tallet maales derfor i stedet for at blive paastaaet.
+        self.requests = 0
+        self.auction_pages = 0
 
     def _get(self, url: str) -> str:
+        self.requests += 1
         last_error: Exception | None = None
         for attempt in range(1, self.max_retries + 1):
             try:
@@ -192,8 +221,38 @@ class Scraper:
         return details_mod.parse(html)
 
     def fetch_auctions(self) -> list[Auction]:
-        """Hent alle aktive auktioner for de valgte regioner."""
-        html = self._get(self.auction_list_url())
+        """Hent alle aktive auktioner for de valgte regioner.
+
+        Listen pagineres. Hentes kun foerste side, ser agenten de foerste ~24
+        auktioner og melder alligevel succes, fordi lot-antallet stadig er
+        stort nok til at blindheds-tjekket tier. Derfor foelges siderne indtil
+        en side ikke laengere giver nye auktions-id'er.
+        """
+        auctions: list[Auction] = []
+        seen: set[str] = set()
+
+        for page in range(1, MAX_AUCTION_PAGES + 1):
+            html = self._get(self.auction_list_url(page))
+            self.auction_pages = page
+            found = self._parse_auctions(html)
+            new = [a for a in found if a.auction_id not in seen]
+            if not new:
+                break
+            auctions.extend(new)
+            seen.update(a.auction_id for a in new)
+            if page < MAX_AUCTION_PAGES:
+                self._polite_pause()
+        else:
+            log.warning(
+                "Naaede loftet paa %d sider i auktionslisten — der kan mangle "
+                "auktioner. Tjek om pagineringen er aendret.", MAX_AUCTION_PAGES,
+            )
+
+        log.info("Fandt %d aktive auktioner (%s)", len(auctions), self.source.region_label)
+        return auctions
+
+    def _parse_auctions(self, html: str) -> list[Auction]:
+        """Auktionskortene paa én side af listen."""
         soup = BeautifulSoup(html, "lxml")
         auctions: list[Auction] = []
 
@@ -233,7 +292,6 @@ class Scraper:
                 )
             )
 
-        log.info("Fandt %d aktive auktioner (%s)", len(auctions), self.source.region_label)
         return auctions
 
     def fetch_lots(self, auction: Auction) -> list[Lot]:

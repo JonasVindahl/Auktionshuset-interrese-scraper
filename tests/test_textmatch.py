@@ -174,3 +174,51 @@ class TestDistinctForms:
         """Korte ord må ikke stemmes til noget meningsløst."""
         assert distinct_forms(("ur",)) == {"ur"}
         assert distinct_forms(("pc",)) == {"pc"}
+
+
+# -- forled i sammensatte ord ----------------------------------------------
+
+@pytest.mark.parametrize(
+    "keyword,title",
+    [
+        ("netværk", "Netværksswitch Cisco"),
+        ("netværk", "Netværksudstyr UBIQUITI"),
+        ("armbånd", "Armbåndsur SEIKO"),
+        ("espresso", "Espressomaskine De Longhi"),
+        ("højttaler", "Højttalerstativer 2 stk"),
+        ("højttaler", "Højttalerkabinet DYNAUDIO"),
+        ("pladespiller", "Pladespillerarm ORTOFON"),
+    ],
+)
+def test_noegleord_matcher_som_forled(keyword, title):
+    """Dansk saetter sammen begge veje: forled saavel som efterled.
+
+    Modulet lovede baade 'starten eller enden af et ord', men kunne kun enden.
+    Konfigurationen kompenserede ved at liste sammensaetningerne i haanden.
+    """
+    assert find_keywords(title, (keyword,)) == (keyword,)
+
+
+@pytest.mark.parametrize(
+    "keyword,title",
+    [
+        # Graensen paa 8 tegn er sat af netop disse to.
+        ("server", "Div. kaffeservering til 100 personer"),
+        ("batteri", "Batteridrevet boremaskine MAKITA"),
+        # Korte ord skal fortsat kraeve et helt ord.
+        ("ur", "Taburetter 6 stk"),
+        ("rel", "Varelager diverse"),
+        ("sdr", "Overtræksdragter str. L"),
+    ],
+)
+def test_for_korte_noegleord_matcher_ikke_som_forled(keyword, title):
+    assert find_keywords(title, (keyword,)) == ()
+
+
+def test_forled_kraever_mindst_et_bogstav_efter():
+    """Forleds-grenen maa ikke overlappe med det selvstaendige ord.
+
+    Ellers ville 'netværk' i 'netværk.' blive rapporteret to gange, og
+    find_keywords ville give duplikater.
+    """
+    assert find_keywords("Netværk og kabler", ("netværk",)) == ("netværk",)

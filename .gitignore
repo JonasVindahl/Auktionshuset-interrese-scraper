@@ -12,3 +12,6 @@ reports/
 .mypy_cache/
 .ruff_cache/
 tests/fixtures/*.json
+# 'make backup' skriver en tar.gz med hele arkivet herind.
+backups/
+*.tar.gz

@@ -17,7 +17,9 @@ from .textmatch import distinct_forms, find_keywords
 
 DEFAULT_CONFIG_PATH = Path("config/interests.yml")
 
-# Deres auktionsvilkår tillader højst ét scrape hvert 15. minut.
+# Kataloget maa ikke hentes oftere end hvert 15. minut. Grænsen gælder
+# intervallet mellem koersler, ikke antallet af kald i én koersel: en koersel
+# henter listens sider plus mindst ét katalogkald pr. auktion. Se runs.requests.
 # Værdien er bevidst ikke konfigurerbar — se MIN_SCRAPE_INTERVAL_SECONDS.
 MIN_SCRAPE_INTERVAL_SECONDS = 900
 
@@ -134,7 +136,7 @@ class DetailsConfig:
     """Om lot-siderne skal hentes.
 
     Slået fra som standard: det er et ekstra kald til auktionshuset pr. lot, og
-    vilkårene tillader kun ét katalog-scrape hvert 15. minut. Den der slår det
+    det laegger et kald oven i dem en koersel allerede laver. Den der slår det
     til, bør have læst vilkårene og holde loftet lavt.
     """
 

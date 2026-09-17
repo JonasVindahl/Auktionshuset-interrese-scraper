@@ -103,7 +103,7 @@ kun om en hemmelighed er sat, aldrig værdien.
 
 **Lot-siderne er et ekstra kald og er slået fra.** details.py henter lot-siden
 for hvert fund og leder efter danske signaler om stand. Det er slået fra i
-interests.yml, fordi vilkårene kun tillader ét katalog-scrape hvert 15. minut.
+interests.yml, fordi det lægger et kald oven i dem en kørsel allerede laver.
 Kolonnerne details, details_flags og details_at kom med en migration, så webben
 skal læse dem gennem has_column — containeren kan starte før agenten har
 migreret, og en manglende kolonne må ikke give en 500.
@@ -256,7 +256,10 @@ mod den, aldrig mod et snapshot.
   `ImportError` med en brugbar besked.
 - Scraperen henter **kun titler** fra listen. Beskrivelsen kan hentes fra
   lot-siden, men det er slået fra som standard og er et ekstra kald pr. lot.
-- Auktionshusets vilkår tillader kun ét scrape hvert 15. minut
+- Katalogget må ikke hentes oftere end hvert 15. minut. Bemærk at ét
+  *interval* ikke er ét *kald*: en kørsel henter auktionslistens sider plus
+  mindst ét katalogkald pr. auktion. Antallet står på `/drift` pr. kørsel og
+  i `runs.requests`, så det kan efterprøves i stedet for at blive anslået
   (`MIN_SCRAPE_INTERVAL_SECONDS`). Sænk den ikke, og undgå healthchecks der
   rammer netværket.
 - `Dockerfile` kopierer kun `src/` og `config/` — `tests/` og `tools/` er ikke

@@ -22,6 +22,7 @@ Indrykningen i filen er fast (se AGENTS.md):
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -127,6 +128,19 @@ class InterestsFile:
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
         self.lines = self.path.read_text(encoding="utf-8").splitlines()
+        # Hele filen laeses her og skrives tilbage i save(). To samtidige
+        # POSTs ville derfor tabe den ene aendring, og uvicorn koerer sync-ruter
+        # i en threadpool, saa det er ikke teoretisk. Vi husker filens tilstand
+        # og naegter at skrive oven i en anden aendring.
+        self._read_stamp = self._stamp()
+
+    def _stamp(self) -> tuple[int, int] | None:
+        """Filens (mtime, stoerrelse). None hvis den ikke findes."""
+        try:
+            stat = self.path.stat()
+        except OSError:
+            return None
+        return (stat.st_mtime_ns, stat.st_size)
 
     # -- læsning -----------------------------------------------------------
 
@@ -258,12 +272,27 @@ class InterestsFile:
         Agenten genlæser filen ved hver kørsel. Bliver den skrevet i to tempi,
         kan en kørsel nå at se en halv fil — derfor skrives der til en nabofil
         der omdøbes på plads.
+
+        Er filen ændret siden den blev læst, afvises skrivningen. Alternativet
+        er en tavs overskrivning af en anden ændring, og en fejl brugeren kan
+        se er bedre end et nøgleord der forsvinder uden spor.
         """
+        if self._stamp() != self._read_stamp:
+            raise EditError(
+                "Filen er ændret siden den blev læst — sandsynligvis fra en "
+                "anden fane eller i en editor. Genindlæs siden og prøv igen, "
+                "så en anden rettelse ikke overskrives."
+            )
         self.validate()
         text = "\n".join(self.lines) + "\n"
         temp = self.path.with_suffix(self.path.suffix + ".tmp")
         temp.write_text(text, encoding="utf-8")
+        # fsync foer omdoebningen: rename er atomisk over for laesere, men uden
+        # dette kan et stroemsvigt lige efter efterlade en tom fil paa plads.
+        with open(temp, "r+b") as handle:
+            os.fsync(handle.fileno())
         temp.replace(self.path)
+        self._read_stamp = self._stamp()
 
     # -- internt -----------------------------------------------------------
 

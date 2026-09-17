@@ -19,7 +19,7 @@ LABEL org.opencontainers.image.title="Auktionshuset Hunter" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${REVISION}" \
       org.opencontainers.image.created="${CREATED}" \
-      org.opencontainers.image.licenses="proprietary"
+      org.opencontainers.image.licenses="MIT"
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

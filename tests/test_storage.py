@@ -253,3 +253,29 @@ class TestBlindnessBaseline:
         store.prune()
         # Rækken er væk, så der er ingen baseline — men det må ikke kaste.
         store.last_successful_lot_count()
+
+
+def test_kortlivet_store_fjerner_ikke_agentens_livstegn(tmp_path):
+    """'auction_hunter stats' aabner ogsaa en Store.
+
+    Slettede den blindt livstegnet ved close(), ville et kortlivet opslag faa
+    restore til at tro at databasen var ledig, mens agenten skrev videre i den.
+    Det er den farlige retning at fejle i.
+    """
+    db = tmp_path / "hunter.db"
+    agent = Store(db)
+    try:
+        beat = agent.heartbeat_path()
+        assert not beat.exists(), "at aabne filen er ikke at koere"
+        agent.start_run()
+        assert beat.exists()
+
+        # Et kortlivet opslag oven i den koerende agent.
+        opslag = Store(db)
+        opslag.counts()
+        opslag.close()
+
+        assert beat.exists(), "agentens livstegn maatte ikke forsvinde"
+    finally:
+        agent.close()
+    assert not agent.heartbeat_path().exists(), "agenten skal selv rydde op"

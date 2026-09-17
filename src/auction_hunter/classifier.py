@@ -130,15 +130,29 @@ def parse_verdict(raw: str) -> tuple[Verdict, str] | None:
     return verdict, reason[:_MAX_REASON_LENGTH]
 
 
-def input_hash(*, title: str, category_key: str, version: str, model: str) -> str:
+def input_hash(
+    *, title: str, category_key: str, version: str, model: str, profile: str = ""
+) -> str:
     """Stabil nøgle for et klassificeringssvar.
 
     Titlen normaliseres let, så forskelle i mellemrum og store/små bogstaver
     ikke giver to opslag for samme vare. Ændres titlen derimod reelt — fx fordi
     auktionshuset retter den — giver det et nyt opslag, hvilket er hensigten.
+
+    ``profile`` er med, fordi den *er* prompten. Den står i interests.yml,
+    README kalder den "den egentlige smag", og brugeren opfordres til at
+    redigere den. Uden den i nøglen genbrugte cachen gamle domme i op til 180
+    dage efter en rettelse, og den eneste vej til at ugyldiggøre dem var at
+    hæve en konstant i kildekoden. Teksten hashes for sig, så nøglen har
+    samme længde uanset hvor lang profilen er.
     """
     collapsed = " ".join(title.lower().split())
-    material = "\x1f".join((collapsed, category_key, version, model))
+    profile_digest = hashlib.sha256(
+        " ".join(profile.split()).encode("utf-8")
+    ).hexdigest()[:16]
+    material = "\x1f".join(
+        (collapsed, category_key, version, model, profile_digest)
+    )
     return hashlib.sha256(material.encode("utf-8")).hexdigest()[:32]
 
 
@@ -282,14 +296,36 @@ class Classifier:
         self.settings = settings
         self.store = store
 
-    def classify_one(self, match) -> Classification:
-        """Klassificér ét fund, med cache-opslag først."""
-        key = input_hash(
+    def _key(self, match) -> str:
+        """Cache-nøglen for et fund. Ét sted, så profilen ikke kan glemmes."""
+        return input_hash(
             title=match.lot.title,
             category_key=match.category.key,
             version=self.settings.version,
             model=self.settings.model,
+            profile=self.settings.profile,
         )
+
+    def cached(self, match) -> Classification | None:
+        """Et tidligere svar, hvis der er et. Koster intet kald.
+
+        Skilt ud fra ``classify_one``, så loftet pr. kørsel kan skelne mellem
+        et cache-opslag og et rigtigt kald til modellen.
+        """
+        row = self.store.cached_classification(self._key(match))
+        if row is None:
+            return None
+        try:
+            verdict = Verdict(row["verdict"])
+        except ValueError:
+            log.warning("Ukendt verdict i cachen for %s: %r",
+                        match.lot.lot_id, row["verdict"])
+            return None
+        return Classification(verdict, row["reason"], row["model"], "cache")
+
+    def classify_one(self, match) -> Classification:
+        """Klassificér ét fund, med cache-opslag først."""
+        key = self._key(match)
 
         cached = self.store.cached_classification(key)
         if cached is not None:
@@ -352,26 +388,29 @@ class Classifier:
         Rækkefølgen er matcherens (billigst først), så et loft på antallet
         rammer de dyreste fund først. Fund ud over loftet udskydes i stedet for
         at blive sendt uklassificeret — de prøves igen ved næste kørsel.
+
+        Loftet tæller kald til modellen, ikke fund. Et cache-opslag koster
+        ingenting, og før talte det alligevel med: 25 cachede fund kunne bruge
+        hele budgettet uden at der blev ringet én gang, så det 26. blev udskudt
+        uden grund.
         """
         result = ClassifyResult()
         budget = self.settings.max_per_run
+        calls = 0
 
-        for index, match in enumerate(matches):
-            if index >= budget:
-                result.deferred.append(match)
-                continue
-
-            classification = self.classify_one(match)
+        for match in matches:
+            classification = self.cached(match)
+            if classification is None:
+                if calls >= budget:
+                    result.deferred.append(match)
+                    continue
+                calls += 1
+                classification = self.classify_one(match)
 
             # Grænsetilfælde sendes ikke nu, men lægges i kø til digest.
             if classification.verdict is Verdict.MAYBE:
                 self.store.enqueue_review(
-                    input_hash(
-                        title=match.lot.title,
-                        category_key=match.category.key,
-                        version=self.settings.version,
-                        model=self.settings.model,
-                    ),
+                    self._key(match),
                     lot_id=match.lot.lot_id,
                     category_key=match.category.key,
                     title=match.lot.title,

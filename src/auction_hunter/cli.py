@@ -216,7 +216,7 @@ def cmd_restore(args: argparse.Namespace) -> int:
         )
         return 2
     try:
-        result = restore(args.fil, args.db)
+        result = restore(args.fil, args.db, force=args.force)
     except BackupError as exc:
         print(f"Gendannelse fejlede: {exc}", file=sys.stderr)
         return 2
@@ -305,12 +305,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--yes", action="store_true",
         help="bekraeft at web og hunter er stoppet",
     )
+    p_restore.add_argument(
+        "--force", action="store_true",
+        help="gendan selvom agentens livstegn er friskt (efterladt livstegn)",
+    )
     p_restore.set_defaults(func=cmd_restore)
 
     sub.add_parser("check", help="vis konfiguration og test Discord").set_defaults(func=cmd_check)
     sub.add_parser("dump-config", help="vis fuld effektiv konfiguration").set_defaults(func=cmd_config)
 
-    p_web = sub.add_parser("web", help="start read-only webdashboard")
+    p_web = sub.add_parser("web", help="start webdashboardet (kan redigere interests.yml)")
     p_web.add_argument("--host", default=os.environ.get("WEB_HOST", "0.0.0.0"))
     p_web.add_argument("--port", type=int, default=int(os.environ.get("WEB_PORT", "8080")))
     p_web.set_defaults(func=cmd_web)

@@ -871,3 +871,33 @@ def test_metrics_lækker_ikke_hemmeligheder(sample_db, sample_config, monkeypatc
     assert "hemmelig" not in body
     assert "sk-" not in body
 
+
+
+# -- arkivets auktionsfilter -----------------------------------------------
+
+def test_archive_auction_filter_narrows_result(client):
+    """Filtret skal skære de andre auktioner væk, ikke bare svare 200.
+
+    SearchQuery, search(), filter_chips og <select name="auction"> havde alle
+    feltet, men ruten læste det aldrig, og FastAPI ignorerer ukendte
+    query-parametre i stilhed. Testen asserterer derfor at to auktioner bliver
+    til én, ikke at siden kan vises.
+    """
+    # Uden filter er begge auktioner med i resultatet.
+    alle = client.get("/archive").text
+    assert "PowerEdge" in alle and "Synology" in alle
+
+    # Med filter maa kun lots fra Koege staa tilbage. Auktionsnavnet i sig selv
+    # duer ikke som assertion: det staar ogsaa i filterets egen <option>-liste.
+    kun = client.get("/archive", params={"auction": "Auktion Køge"}).text
+    assert "PowerEdge" in kun, "lot'et fra den valgte auktion mangler"
+    assert "Synology" not in kun, "lots fra andre auktioner skulle vaere filtreret fra"
+    assert "Sennheiser" not in kun
+
+
+def test_archive_auction_filter_survives_pagination_links(client):
+    """Sidelinks skal bære filtret videre, ellers falder det af på side 2."""
+    body = client.get(
+        "/archive", params={"q": "e", "auction": "Auktion Køge", "page": 1}
+    ).text
+    assert "Auktion+K%C3%B8ge" in body or "auction=Auktion" in body

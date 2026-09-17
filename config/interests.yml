@@ -84,7 +84,7 @@ classifier:
 # danske vendinger som "defekt", "reserverede" og "afhentning".
 #
 # Slået FRA som standard: det er et ekstra kald til auktionshuset for hvert
-# fund, og deres vilkår tillader kun ét katalog-scrape hvert 15. minut. Har du
+# fund, oven i dem en koersel allerede laver. Har du
 # læst vilkårene og vil have det, så hold loftet lavt.
 details:
   enabled: false

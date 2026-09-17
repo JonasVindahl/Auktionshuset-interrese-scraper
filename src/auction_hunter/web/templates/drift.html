@@ -127,6 +127,7 @@
             <th scope="col" class="num">Auktioner</th>
             <th scope="col" class="num">Lots</th>
             <th scope="col" class="num">Fund</th>
+            <th scope="col" class="num">HTTP-kald</th>
             <th scope="col">Status</th>
           </tr>
         </thead>
@@ -138,6 +139,7 @@
             <td class="num" data-label="Auktioner">{{ run.auctions }}</td>
             <td class="num" data-label="Lots">{{ run.lots }}</td>
             <td class="num" data-label="Fund">{{ run.matches }}</td>
+            <td class="num" data-label="HTTP-kald" title="Kald til auktionshuset i den kørsel">{{ run.requests or '–' }}</td>
             <td data-label="Status">
               {% if run.error %}<span class="status is-err" title="{{ run.error }}">{{ icon('alert', 13) }} fejl</span>
               {% elif run.lots == 0 %}<span class="status is-warn">{{ icon('alert', 13) }} ingen lots</span>
@@ -145,10 +147,10 @@
             </td>
           </tr>
           {% if run.error %}
-          <tr class="run-error"><td colspan="5">{{ run.error }}</td></tr>
+          <tr class="run-error"><td colspan="6">{{ run.error }}</td></tr>
           {% endif %}
           {% else %}
-          <tr><td colspan="5" class="empty">Ingen kørsler registreret endnu.</td></tr>
+          <tr><td colspan="6" class="empty">Ingen kørsler registreret endnu.</td></tr>
           {% endfor %}
         </tbody>
       </table>

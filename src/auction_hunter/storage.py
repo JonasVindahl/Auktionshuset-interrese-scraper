@@ -16,8 +16,10 @@ WAL-tilstand bruges, så læsning ikke blokeres af skrivning.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
+import os
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -46,7 +48,14 @@ CREATE TABLE IF NOT EXISTS lots (
     last_bid      INTEGER,
     last_total    INTEGER,
     ends_at       TEXT,
-    image_url     TEXT NOT NULL DEFAULT ''
+    image_url     TEXT NOT NULL DEFAULT '',
+    -- Kolonnerne herunder kom til senere og staar ogsaa i MIGRATIONS, som er
+    -- vejen ind i en database der allerede findes. De skal staa begge steder:
+    -- her, saa en ny database ikke oprettes for straks at blive ALTER'et, og
+    -- der, saa en gammel database faar dem.
+    details       TEXT NOT NULL DEFAULT '',
+    details_flags TEXT NOT NULL DEFAULT '',
+    details_at    TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS price_history (
@@ -74,6 +83,10 @@ CREATE TABLE IF NOT EXISTS runs (
     lots          INTEGER NOT NULL DEFAULT 0,
     matches       INTEGER NOT NULL DEFAULT 0,
     new_matches   INTEGER NOT NULL DEFAULT 0,
+    -- Hvor mange HTTP-kald koerslen kostede. Projektet beskrev sig selv som
+    -- "ét scrape hvert 15. minut"; i praksis er det listens sider plus mindst
+    -- ét katalogkald pr. auktion. Tallet maales, saa paastanden kan efterproeves.
+    requests      INTEGER NOT NULL DEFAULT 0,
     error         TEXT
 );
 
@@ -174,6 +187,7 @@ MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     ("lots", "details", "ALTER TABLE lots ADD COLUMN details TEXT NOT NULL DEFAULT ''"),
     ("lots", "details_flags", "ALTER TABLE lots ADD COLUMN details_flags TEXT NOT NULL DEFAULT ''"),
     ("lots", "details_at", "ALTER TABLE lots ADD COLUMN details_at TEXT NOT NULL DEFAULT ''"),
+    ("runs", "requests", "ALTER TABLE runs ADD COLUMN requests INTEGER NOT NULL DEFAULT 0"),
 )
 
 
@@ -266,6 +280,9 @@ def _backfill_search_index(conn: sqlite3.Connection) -> None:
 # — uden den ville pris-historikken alene blive flere GB om året.
 DEFAULT_RETENTION_DAYS = 180
 
+# Filen der siger at en agent bruger denne database. Se Store.touch_heartbeat.
+HEARTBEAT_SUFFIX = ".live"
+
 
 def utcnow() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
@@ -310,6 +327,41 @@ class Store:
         self.conn.executescript(SCHEMA)
         _migrate(self.conn)
         self.conn.commit()
+        # Livstegnet skrives foerst naar der startes en koersel, ikke bare
+        # fordi filen aabnes: 'auction_hunter stats' og 'export' aabner ogsaa
+        # en Store, og de siger intet om at en agent er i gang.
+        self._heartbeat_mark: str | None = None
+
+    # -- livstegn ----------------------------------------------------------
+
+    def heartbeat_path(self) -> Path:
+        return Path(str(self.path) + HEARTBEAT_SUFFIX)
+
+    def touch_heartbeat(self) -> None:
+        """Skriv at en agent er i live paa denne database.
+
+        Gendannelse bytter databasefilen ud under en aaben forbindelse. Goer
+        man det mens agenten koerer, beholder den den gamle inode og skriver
+        videre i en slettet fil, saa gendannelsen forsvinder uden en lyd.
+        --yes var indtil nu den eneste kontrol, og den er en afkrydsning.
+
+        Et PID-tjek duer ikke: agenten og gendannelsen koerer typisk i hver sin
+        container med hver sit PID-rum. Filens alder er det signal der faktisk
+        krydser den graense, og den opdateres ved hver koersel.
+
+        Kaldes fra start_run, ikke fra __init__: at aabne databasen for at se
+        statistik betyder ikke at en agent skriver i den.
+        """
+        if str(self.path) == ":memory:":
+            return
+        mark = f"{os.getpid()} {utcnow_precise()}\n"
+        try:
+            self.heartbeat_path().write_text(mark, encoding="utf-8")
+        except OSError:
+            # Et manglende livstegn maa aldrig vaelte en koersel.
+            log.debug("Kunne ikke skrive livstegn ved siden af %s", self.path)
+            return
+        self._heartbeat_mark = mark
 
     @contextmanager
     def _tx(self) -> Iterator[sqlite3.Connection]:
@@ -322,6 +374,26 @@ class Store:
 
     def close(self) -> None:
         self.conn.close()
+        self._release_heartbeat()
+
+    def _release_heartbeat(self) -> None:
+        """Fjern livstegnet, men kun hvis det stadig er vores eget.
+
+        Der slettes kun praecis det vi selv skrev. En Store der aldrig har
+        startet en koersel har intet maerke og roerer derfor ingenting, saa et
+        kortlivet 'stats'-opslag ikke kan fjerne den koerende agents livstegn
+        og faa restore til at tro at databasen er ledig.
+        """
+        if str(self.path) == ":memory:" or self._heartbeat_mark is None:
+            return
+        beat = self.heartbeat_path()
+        try:
+            if beat.read_text(encoding="utf-8") != self._heartbeat_mark:
+                return
+        except OSError:
+            return
+        with contextlib.suppress(OSError):
+            beat.unlink(missing_ok=True)
 
     def __enter__(self) -> Store:
         return self
@@ -332,6 +404,7 @@ class Store:
     # -- kørsler -----------------------------------------------------------
 
     def start_run(self) -> int:
+        self.touch_heartbeat()
         with self._tx() as conn:
             cursor = conn.execute("INSERT INTO runs (started_at) VALUES (?)", (utcnow(),))
             return int(cursor.lastrowid)
@@ -344,13 +417,15 @@ class Store:
         lots: int = 0,
         matches: int = 0,
         new_matches: int = 0,
+        requests: int = 0,
         error: str | None = None,
     ) -> None:
         with self._tx() as conn:
             conn.execute(
                 """UPDATE runs SET finished_at=?, auctions=?, lots=?, matches=?,
-                   new_matches=?, error=? WHERE run_id=?""",
-                (utcnow(), auctions, lots, matches, new_matches, error, run_id),
+                   new_matches=?, requests=?, error=? WHERE run_id=?""",
+                (utcnow(), auctions, lots, matches, new_matches, requests,
+                 error, run_id),
             )
 
     # -- lots --------------------------------------------------------------

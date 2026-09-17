@@ -269,3 +269,38 @@ def test_find_block_ignorerer_kommentarer_i_afsnittet():
 
 def test_find_block_paa_ukendt_noegle():
     assert find_block(["a:", "  b: 1"], "findes_ikke", indent=0) is None
+
+
+def test_save_naegter_at_overskrive_en_anden_aendring(sample_config):
+    """To samtidige redigeringer maa ikke tabe den ene i stilhed.
+
+    Hele filen laeses i __init__ og skrives tilbage i save(). Uden et tjek
+    ville den sidste skrivning vinde og den foerstes noegleord forsvinde uden
+    spor. uvicorn koerer sync-ruter i en threadpool, saa to faner er nok.
+    """
+    en = InterestsFile(sample_config)
+    to = InterestsFile(sample_config)
+
+    en.add_keyword("it_tech", "strong", "foerste-ord")
+    en.save()
+
+    to.add_keyword("it_tech", "strong", "andet-ord")
+    with pytest.raises(EditError, match="ændret siden"):
+        to.save()
+
+    # Den foerste aendring skal stadig staa der.
+    assert "foerste-ord" in InterestsFile(sample_config).keywords("it_tech", "strong")
+
+
+def test_save_kan_koere_igen_efter_genindlaesning(sample_config):
+    """Efter en genindlaesning skal skrivningen kunne gennemfoeres."""
+    en = InterestsFile(sample_config)
+    en.add_keyword("it_tech", "strong", "foerste-ord")
+    en.save()
+
+    frisk = InterestsFile(sample_config)
+    frisk.add_keyword("it_tech", "strong", "andet-ord")
+    frisk.save()
+
+    ord = InterestsFile(sample_config).keywords("it_tech", "strong")
+    assert "foerste-ord" in ord and "andet-ord" in ord

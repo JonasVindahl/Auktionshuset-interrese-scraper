@@ -110,14 +110,6 @@ SUGGEST_SYSTEM = (
 )
 
 
-SUGGEST_SYSTEM = (
-    "Du hjælper med at forbedre en dansk auktionsagents nøgleordsprofil. "
-    "Du får titler som brugeren selv har budt på eller købt, men som agenten "
-    "ikke fangede. Foreslå ét nøgleord pr. titel der ville have fanget den. "
-    "Svar KUN med JSON og intet andet."
-)
-
-
 EXPLAIN_SYSTEM = (
     "Du hjælper med at finjustere en dansk auktionsagents nøgleordsprofil. "
     "Du får en lot-titel og en analyse af hvorfor den matchede eller ikke "
@@ -396,6 +388,8 @@ def archive_url(query: SearchQuery) -> str:
         params["matched"] = query.matched
     if query.category:
         params["category"] = query.category
+    if query.auction:
+        params["auction"] = query.auction
     if query.days_back:
         params["days_back"] = query.days_back
     if query.sort != "relevans":

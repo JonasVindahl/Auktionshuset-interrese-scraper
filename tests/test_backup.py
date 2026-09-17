@@ -15,6 +15,7 @@ from auction_hunter.backup import (
     integrity_check,
     restore,
 )
+from auction_hunter.storage import Store
 
 
 @pytest.fixture(autouse=True)
@@ -183,3 +184,35 @@ def test_integritetstjek_paa_skrald_giver_tekst(tmp_path):
     check = integrity_check(bogus)
     assert check != "ok"
     assert "ikke en SQLite-database" in check
+
+
+def test_restore_afviser_mens_agenten_koerer(tmp_path):
+    """Gendannelse under en aaben agent taber hele gendannelsen i stilhed.
+
+    Agenten beholder den gamle inode og skriver videre i en slettet fil.
+    --yes var indtil nu den eneste kontrol, og den er en afkrydsning.
+    """
+    db = tmp_path / "hunter.db"
+    with Store(db) as store:
+        store.start_run()
+        arkiv = backup(db, tmp_path / "ud").path
+        # Store har et friskt livstegn saa laenge den er aaben.
+        with pytest.raises(BackupError, match="ser ud til at koere"):
+            restore(arkiv, db)
+
+    # Efter close() er livstegnet vaek, og gendannelsen kan gennemfoeres.
+    restore(arkiv, db)
+
+
+def test_restore_kan_tvinges_forbi_et_efterladt_livstegn(tmp_path):
+    """Et livstegn fra en proces der doede maa kunne tilsidesaettes bevidst."""
+    db = tmp_path / "hunter.db"
+    with Store(db) as store:
+        store.start_run()
+        arkiv = backup(db, tmp_path / "ud").path
+
+    # Efterlad et friskt livstegn som en doed proces ville have gjort.
+    Path(str(db) + ".live").write_text("999999 nu\n", encoding="utf-8")
+    with pytest.raises(BackupError, match="ser ud til at koere"):
+        restore(arkiv, db)
+    restore(arkiv, db, force=True)

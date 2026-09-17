@@ -6,9 +6,17 @@ teksten og matches med ordgrænser i stedet.
 
 Dansk er samtidig et sammensat sprog — 'netværksswitch', 'armbåndsur',
 'espressomaskine' — så et nøgleord skal kunne stå i *starten* eller *enden* af
-et ord, ikke kun som selvstændigt ord. Et nøgleord begravet i midten af et ord
-afvises dog, og korte nøgleord (< RELAXED_MIN_LENGTH) kræver eksakt match, så
-'ur' ikke udløses af 'natur' eller 'kultur'.
+et ord, ikke kun som selvstændigt ord. Korte nøgleord (< RELAXED_MIN_LENGTH)
+kræver eksakt match, så 'ur' ikke udløses af 'natur' eller 'kultur'.
+
+Forled og efterled har hver sin længdegrænse, fordi de fejler forskelligt.
+Et efterled er selvbegrænsende: ordet skal slutte lige efter nøgleordet, så
+'switch' i 'netværksswitch' rammer uden at 'switch' kan gemme sig i noget
+andet. Et forled har ingen sådan bagkant — alt kan følge efter — så det
+kræver et længere ord (PREFIX_MIN_LENGTH). Grænsen er sat af to konkrete
+tilfælde: 'server' (6 tegn) ville ellers fange 'kaffeservering', og 'batteri'
+(7) ville udelukke 'batteridrevet boremaskine'. 'netværk', 'armbånd' og
+'espresso' er alle 8 tegn efter foldning og slipper igennem.
 
 Normaliseringen folder æøå og accenter, så 'højttaler' og 'hojtaler' behandles
 ens. Tal betragtes ikke som bogstaver, så 'proxmark' matcher 'Proxmark3'.
@@ -23,6 +31,11 @@ from functools import lru_cache
 # er for risikable at matche løst. Længere ord tåler derfor at matche som led i
 # sammensatte ord og med bøjningsendelser.
 RELAXED_MIN_LENGTH = 5
+
+# Et nøgleord må kun stå som forled i et sammensat ord når det er så langt, at
+# det ikke ved et uheld er starten på et andet dansk ord. Se modulets docstring
+# for de to tilfælde der satte grænsen.
+PREFIX_MIN_LENGTH = 8
 
 # Bøjningsendelser der må følge efter et nøgleord, så 'switch' også fanger
 # 'switches' og 'forstærker' fanger 'forstærkeren'.
@@ -86,11 +99,21 @@ def keyword_pattern(keyword: str) -> re.Pattern[str] | None:
     if len(normalized) < RELAXED_MIN_LENGTH:
         return re.compile(as_word)
 
-    # Selvstændigt ord med bøjning ('switches'), eller som led i et sammensat
-    # dansk ord ('netværksswitch', 'armbåndsur').
+    # Selvstændigt ord med bøjning ('switches'), eller som efterled i et
+    # sammensat dansk ord ('netværksswitch').
     standalone = rf"(?<![a-z0-9]){phrase}{_INFLECTIONS}(?![a-z])"
     compound = rf"{phrase}{_INFLECTIONS}(?![a-z])"
-    return re.compile(rf"(?:{standalone}|{compound})")
+    branches = [standalone, compound]
+
+    if len(normalized) >= PREFIX_MIN_LENGTH:
+        # Som forled: nøgleordet starter ordet, og resten af det sammensatte
+        # ord følger efter. Det valgfrie 's' er dansk bindebogstav
+        # ('netværk' + s + 'switch'). Der kræves mindst ét bogstav efter, så
+        # denne gren ikke overlapper med de to ovenfor.
+        prefix = rf"(?<![a-z0-9]){phrase}s?(?=[a-z])"
+        branches.append(prefix)
+
+    return re.compile("(?:" + "|".join(branches) + ")")
 
 
 @lru_cache(maxsize=8192)
