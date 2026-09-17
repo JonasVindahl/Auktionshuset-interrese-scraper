@@ -81,6 +81,11 @@ class RunStats:
     details_fetched: int = 0
     lots_with_ends: int = 0
     ends_parse_failures: int = 0
+    # Hvad koerslen faktisk kostede i HTTP-kald, og hvor mange sider
+    # auktionslisten havde. Falder sidetallet til 1 uden at auktionerne bliver
+    # faerre, er pagineringen sandsynligvis brudt igen.
+    requests: int = 0
+    auction_pages: int = 0
     price_alerts: int = 0
     last_chance: int = 0
     errors: list[str] = field(default_factory=list)
@@ -568,6 +573,8 @@ def run_once(
         # det fjerner et aendret format alle deadlines uden en lyd.
         stats.lots_with_ends = int(getattr(scraper, "lots_with_ends", 0))
         stats.ends_parse_failures = int(getattr(scraper, "ends_parse_failures", 0))
+        stats.requests = int(getattr(scraper, "requests", 0))
+        stats.auction_pages = int(getattr(scraper, "auction_pages", 0))
 
         matches = sort_matches(_match_profiles(all_lots, config))
         stats.matches = len(matches)
@@ -648,6 +655,7 @@ def run_once(
             lots=stats.lots,
             matches=stats.matches,
             new_matches=stats.new_matches,
+            requests=stats.requests,
             error="; ".join(stats.errors) or None,
         )
 
@@ -740,8 +748,10 @@ def run_forever(
                 notifier = resolve_notifier(dry_run=dry_run)
                 stats = run_once(config, store, notifier)
                 log.info(
-                    "Kørsel færdig: %d auktioner, %d lots, %d fund (%d nye), %d sendt",
-                    stats.auctions, stats.lots, stats.matches, stats.new_matches, stats.notified,
+                    "Kørsel færdig: %d auktioner (%d sider), %d lots, %d fund "
+                    "(%d nye), %d sendt, %d HTTP-kald",
+                    stats.auctions, stats.auction_pages, stats.lots, stats.matches,
+                    stats.new_matches, stats.notified, stats.requests,
                 )
             except (ConfigError, ScrapeError) as exc:
                 log.error("Kørsel fejlede: %s", exc)

@@ -217,10 +217,14 @@ def category_breakdown(conn: sqlite3.Connection) -> list[dict[str, Any]]:
 def run_history(conn: sqlite3.Connection, limit: int = 40) -> list[sqlite3.Row]:
     if not has_table(conn, "runs"):
         return []
+    # Kolonnen kom til senere; web-containeren kan starte foer agenten har
+    # migreret, saa den maa ikke vaelte siden.
+    requests = ("requests" if has_column(conn, "runs", "requests")
+                else "0 AS requests")
     return conn.execute(
-        """
+        f"""
         SELECT run_id, started_at, finished_at, auctions, lots,
-               matches, new_matches, error
+               matches, new_matches, {requests}, error
         FROM runs
         WHERE finished_at IS NOT NULL
         ORDER BY run_id DESC

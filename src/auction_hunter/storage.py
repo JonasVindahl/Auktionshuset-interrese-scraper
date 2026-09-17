@@ -83,6 +83,10 @@ CREATE TABLE IF NOT EXISTS runs (
     lots          INTEGER NOT NULL DEFAULT 0,
     matches       INTEGER NOT NULL DEFAULT 0,
     new_matches   INTEGER NOT NULL DEFAULT 0,
+    -- Hvor mange HTTP-kald koerslen kostede. Projektet beskrev sig selv som
+    -- "ét scrape hvert 15. minut"; i praksis er det listens sider plus mindst
+    -- ét katalogkald pr. auktion. Tallet maales, saa paastanden kan efterproeves.
+    requests      INTEGER NOT NULL DEFAULT 0,
     error         TEXT
 );
 
@@ -183,6 +187,7 @@ MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     ("lots", "details", "ALTER TABLE lots ADD COLUMN details TEXT NOT NULL DEFAULT ''"),
     ("lots", "details_flags", "ALTER TABLE lots ADD COLUMN details_flags TEXT NOT NULL DEFAULT ''"),
     ("lots", "details_at", "ALTER TABLE lots ADD COLUMN details_at TEXT NOT NULL DEFAULT ''"),
+    ("runs", "requests", "ALTER TABLE runs ADD COLUMN requests INTEGER NOT NULL DEFAULT 0"),
 )
 
 
@@ -388,13 +393,15 @@ class Store:
         lots: int = 0,
         matches: int = 0,
         new_matches: int = 0,
+        requests: int = 0,
         error: str | None = None,
     ) -> None:
         with self._tx() as conn:
             conn.execute(
                 """UPDATE runs SET finished_at=?, auctions=?, lots=?, matches=?,
-                   new_matches=?, error=? WHERE run_id=?""",
-                (utcnow(), auctions, lots, matches, new_matches, error, run_id),
+                   new_matches=?, requests=?, error=? WHERE run_id=?""",
+                (utcnow(), auctions, lots, matches, new_matches, requests,
+                 error, run_id),
             )
 
     # -- lots --------------------------------------------------------------

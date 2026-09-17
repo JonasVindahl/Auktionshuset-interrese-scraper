@@ -20,27 +20,44 @@ from auction_hunter.scraper import Lot  # noqa: E402
 FIXTURE = Path("tests/fixtures/lots_sample.json")
 
 
+def _to_lot(row: dict) -> Lot:
+    """Byg et Lot ud af en raekke, uanset om den kommer fra 'export' eller ej.
+
+    ``auction_hunter export`` dumper hukommelsen, og dens 'lots'-tabel hedder
+    noget andet end scraperens felter: den har last_bid og last_total, ikke
+    current_bid og total_price, og slet ingen has_bids. Begge navne accepteres,
+    saa den dokumenterede vej faktisk virker.
+    """
+    bid = row.get("current_bid", row.get("last_bid"))
+    total = row.get("total_price", row.get("last_total"))
+    return Lot(
+        lot_id=row["lot_id"], title=row.get("title", ""), url=row.get("url", ""),
+        lot_number=row.get("lot_number", ""), auction_id=row.get("auction_id", ""),
+        auction_title=row.get("auction_title", ""),
+        current_bid=bid, total_price=total, ends_at=None, image_url="",
+        has_bids=row.get("has_bids", bool(bid)),
+    )
+
+
 def load_lots() -> list[Lot]:
     if not FIXTURE.exists():
         raise SystemExit(
             f"Fandt ikke {FIXTURE}.\n\n"
             "Filen er et snapshot af rigtige lots og er bevidst ikke i git, fordi\n"
             "auktionerne ændrer sig. Lav dit eget snapshot med:\n\n"
-            "    .venv/bin/python -m auction_hunter.cli scan --limit 2000\n\n"
-            "og gem resultatet som JSON i den sti. Testene i tests/test_corpus.py\n"
-            "kører uden snapshottet, da de bruger fastlagte titler."
+            f"    PYTHONPATH=src .venv/bin/python -m auction_hunter export --out {FIXTURE}\n\n"
+            "Testene i tests/test_corpus.py kører uden snapshottet, da de bruger\n"
+            "fastlagte titler."
         )
-    rows = json.loads(FIXTURE.read_text(encoding="utf-8"))
-    return [
-        Lot(
-            lot_id=r["lot_id"], title=r["title"], url=r["url"],
-            lot_number=r["lot_number"], auction_id=r["auction_id"],
-            auction_title=r["auction_title"], current_bid=r["current_bid"],
-            total_price=r["total_price"], ends_at=None, image_url="",
-            has_bids=r["has_bids"],
+    data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    # 'export' skriver et objekt med én noegle pr. tabel; en raa liste af lots
+    # accepteres ogsaa, saa et haandlavet snapshot stadig virker.
+    rows = data.get("lots", []) if isinstance(data, dict) else data
+    if not rows:
+        raise SystemExit(
+            f"{FIXTURE} indeholder ingen lots. Har agenten koert mindst én gang?"
         )
-        for r in rows
-    ]
+    return [_to_lot(r) for r in rows]
 
 
 def main() -> int:

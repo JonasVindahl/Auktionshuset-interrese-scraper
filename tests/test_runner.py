@@ -648,3 +648,30 @@ def test_maybe_last_chance_sender_en_gang(tmp_path):
         maybe_last_chance(store, notifier2, [_match("L1", 200, ends_in_hours=0.5)], stats2)
         assert stats2.last_chance == 0 and notifier2.payloads == []
 
+
+
+def test_koersel_taeller_sine_http_kald(tmp_path):
+    """Antallet af kald skal maales, ikke paastaas.
+
+    Projektet har beskrevet sig selv som "ét scrape hvert 15. minut", men en
+    koersel henter auktionslistens sider plus mindst ét katalogkald pr.
+    auktion. Tallet gemmes pr. koersel, saa /drift kan vise det.
+    """
+    from auction_hunter.config import load_config
+    from auction_hunter.storage import Store
+
+    class TaellendeScraper(FakeScraper):
+        def __init__(self):
+            super().__init__()
+            self.requests = 7
+            self.auction_pages = 2
+
+    config = load_config("config/interests.yml")
+    with Store(tmp_path / "t.db") as store:
+        stats = run_once(config, store, None, scraper_factory=lambda source: TaellendeScraper())
+        assert stats.requests == 7
+        assert stats.auction_pages == 2
+        row = store.conn.execute(
+            "SELECT requests FROM runs ORDER BY run_id DESC LIMIT 1"
+        ).fetchone()
+        assert row["requests"] == 7
