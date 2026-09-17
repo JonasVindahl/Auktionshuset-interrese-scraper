@@ -19,15 +19,14 @@ auktionshusets side og må derfor aldrig bruges som filnavn direkte.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import ipaddress
 import logging
 import os
-import re
-import shutil
 import socket
 import urllib.parse
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import requests
@@ -249,10 +248,8 @@ def download(
         log.debug("Kunne ikke hente billede %s: %s", url, exc)
         return False
     finally:
-        try:
+        with contextlib.suppress(OSError):
             temporary.unlink(missing_ok=True)
-        except OSError:
-            pass
 
 
 def pending(conn, db_path: str | Path, limit: int = MAX_PER_RUN) -> list[tuple[str, str]]:
@@ -329,7 +326,7 @@ def prune(conn, db_path: str | Path, *, days: int | None = None) -> int:
     if not directory.is_dir():
         return 0
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days or retention_days())
+    cutoff = datetime.now(UTC) - timedelta(days=days or retention_days())
 
     keep: set[str] = set()
     for row in conn.execute("SELECT lot_id, ends_at FROM lots"):
@@ -343,7 +340,7 @@ def prune(conn, db_path: str | Path, *, days: int | None = None) -> int:
             keep.add(_filename(row["lot_id"]))
             continue
         if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
+            parsed = parsed.replace(tzinfo=UTC)
         if parsed > cutoff:
             keep.add(_filename(row["lot_id"]))
 
@@ -371,8 +368,6 @@ def usage(db_path: str | Path) -> tuple[int, int]:
     for path in directory.iterdir():
         if path.is_file():
             count += 1
-            try:
+            with contextlib.suppress(OSError):
                 total += path.stat().st_size
-            except OSError:
-                pass
     return count, total

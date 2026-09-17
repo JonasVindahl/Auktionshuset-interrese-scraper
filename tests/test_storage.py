@@ -6,7 +6,7 @@ bevarer den viden dedup'en hviler på, og at agenten kan opdage at den er blevet
 blind uden at sige det.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -55,7 +55,7 @@ def test_sidste_chance_huskes(store):
 
 
 def iso(days_ago: float = 0) -> str:
-    return (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat(
+    return (datetime.now(UTC) - timedelta(days=days_ago)).isoformat(
         timespec="seconds"
     )
 

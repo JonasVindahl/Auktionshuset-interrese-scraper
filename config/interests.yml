@@ -5,10 +5,12 @@
 
 source:
   base_url: https://auktionshuset.dk
-  # Sjælland. Se regions-mappingen nedenfor for de øvrige landsdele.
-  region_ids:
-    - lyr0boj4d8
-  region_label: Sjælland
+  # 'all' følger alle landsdele fra regions-mappingen nedenfor, så agenten ikke
+  # kun ser Sjælland. Skriv enkelte id'er for at indsnævre.
+  region_ids: all
+  # region_label udledes automatisk ("Hele Danmark" for alle). Sæt den kun hvis
+  # du vil have dit eget navn i beskederne.
+  # region_label: Sjælland
   # 1 = aktive auktioner, 0 = afsluttede, 2 = alle
   auction_status: 1
 

@@ -12,13 +12,13 @@ import os
 import signal
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Callable
+from datetime import UTC, datetime
 
 from . import images
-from .config import MIN_SCRAPE_INTERVAL_SECONDS, Config, ConfigError, Source, load_config
 from .classifier import Classifier, ClassifierSettings, OpenAICompatibleClient
+from .config import MIN_SCRAPE_INTERVAL_SECONDS, Config, ConfigError, Source, load_config
 from .matcher import Match, last_chance, match_all, sort_matches
 from .notifier import DiscordNotifier, LastChanceAlert, PriceAlert, send_digest
 from .scraper import ScrapeError, Scraper
@@ -158,7 +158,9 @@ def build_classifier(config: Config, store: Store) -> Classifier | None:
     return Classifier(client, runtime, store)
 
 
-def check_blindness(stats: RunStats, store: Store) -> str | None:
+def check_blindness(
+    stats: RunStats, store: Store, region_label: str = "Sjælland"
+) -> str | None:
     """Opdager at agenten er holdt op med at se lots.
 
     Dette er den farligste langsigtede fejl: auktionshuset ændrer deres HTML, og
@@ -171,7 +173,7 @@ def check_blindness(stats: RunStats, store: Store) -> str | None:
     if stats.auctions == 0:
         return (
             "**Agenten er holdt op med at finde auktioner.**\n"
-            "Der blev ikke fundet en enkelt aktiv auktion i Sjælland. "
+            f"Der blev ikke fundet en enkelt aktiv auktion i {region_label}. "
             "Tjek om auktionshuset har ændret deres side, eller om der "
             "midlertidigt ikke er aktive auktioner."
         )
@@ -196,16 +198,21 @@ def check_blindness(stats: RunStats, store: Store) -> str | None:
     return None
 
 
-def alert_if_blind(stats: RunStats, store: Store, notifier: DiscordNotifier | None) -> bool:
+def alert_if_blind(
+    stats: RunStats,
+    store: Store,
+    notifier: DiscordNotifier | None,
+    region_label: str = "Sjælland",
+) -> bool:
     """Advar om blindhed, men højst én gang i døgnet."""
-    message = check_blindness(stats, store)
+    message = check_blindness(stats, store, region_label)
     if message is None or notifier is None:
         return False
 
     last = store.get_meta(BLIND_ALERT_KEY)
     if last is not None:
         try:
-            elapsed = datetime.now(timezone.utc) - datetime.fromisoformat(last)
+            elapsed = datetime.now(UTC) - datetime.fromisoformat(last)
             if elapsed.total_seconds() < BLIND_ALERT_COOLDOWN_HOURS * 3600:
                 log.warning("Blindheds-advarsel undertrykt (sendt for nylig): %s", last)
                 return False
@@ -215,7 +222,7 @@ def alert_if_blind(stats: RunStats, store: Store, notifier: DiscordNotifier | No
     log.error("BLINDHEDS-ADVARSEL: %s", message.replace("\n", " "))
     if notifier.send_text(message):
         store.set_meta(
-            BLIND_ALERT_KEY, datetime.now(timezone.utc).isoformat(timespec="seconds")
+            BLIND_ALERT_KEY, datetime.now(UTC).isoformat(timespec="seconds")
         )
         stats.blind_alert_sent = True
         return True
@@ -242,7 +249,7 @@ def select_price_alerts(
     om. Derefter kraever en besked at prisen er steget, at lot'et stadig er
     aktivt, og at cooldown er udloebet.
     """
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     out: list[PriceAlert] = []
     for match in matches:
         lot = match.lot
@@ -296,7 +303,7 @@ def maybe_price_alerts(
     alerts = select_price_alerts(matches, actions, states)
     sent = bool(alerts) and notifier.send_price_alerts(alerts)
     alerted = {a.lot_id for a in alerts}
-    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    now_iso = datetime.now(UTC).isoformat(timespec="seconds")
 
     for match in watched:
         lot_id = match.lot.lot_id
@@ -338,7 +345,7 @@ def select_last_chance(
     Beskeden skal kun komme én gang pr. lot. Ellers ville den komme hvert 15.
     minut i den sidste time.
     """
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     hours = LAST_CHANCE_HOURS if within_hours is None else within_hours
     out: list[LastChanceAlert] = []
     for match in matches:
@@ -385,7 +392,7 @@ def maybe_last_chance(
     if notifier.send_last_chance(alerts):
         store.mark_last_chance(
             [alert.lot_id for alert in alerts],
-            datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            datetime.now(UTC).isoformat(timespec="seconds"),
         )
         stats.last_chance = len(alerts)
 
@@ -400,7 +407,7 @@ def maybe_prune(store: Store) -> dict[str, int]:
     last = store.get_meta(PRUNE_KEY)
     if last is not None:
         try:
-            elapsed = datetime.now(timezone.utc) - datetime.fromisoformat(last)
+            elapsed = datetime.now(UTC) - datetime.fromisoformat(last)
             if elapsed.total_seconds() < PRUNE_INTERVAL_HOURS * 3600:
                 return {}
         except ValueError:
@@ -417,7 +424,7 @@ def maybe_prune(store: Store) -> dict[str, int]:
     except Exception:
         log.exception("Billedoprydning fejlede — fortsætter")
 
-    store.set_meta(PRUNE_KEY, datetime.now(timezone.utc).isoformat(timespec="seconds"))
+    store.set_meta(PRUNE_KEY, datetime.now(UTC).isoformat(timespec="seconds"))
     return removed
 
 
@@ -533,7 +540,7 @@ def run_once(
         # Blindheds-tjekket ligger efter notifikationerne, så en advarsel ikke
         # fortrænger et rigtigt fund. Det fanger at udtrækket er holdt op med at
         # virke, hvilket ellers ligner "der er ingen fund i dag" i det uendelige.
-        alert_if_blind(stats, store, notifier)
+        alert_if_blind(stats, store, notifier, config.source.region_label)
 
         store.finish_run(
             run_id,

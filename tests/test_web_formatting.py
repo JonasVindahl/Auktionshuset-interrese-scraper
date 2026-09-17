@@ -8,15 +8,20 @@ melde at alting ligger i fremtiden.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from auction_hunter.web.formatting import (
-    date_label, kr, parse_dt, rel_past, time_left, timestamp,
+    date_label,
+    kr,
+    parse_dt,
+    rel_past,
+    time_left,
+    timestamp,
 )
 
-UTC = timezone.utc
+UTC = UTC
 
 
 def iso_in(**delta) -> str:

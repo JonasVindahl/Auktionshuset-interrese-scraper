@@ -18,7 +18,6 @@ import http.server
 import struct
 import threading
 import zlib
-from pathlib import Path
 
 import pytest
 

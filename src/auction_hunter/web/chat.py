@@ -24,9 +24,9 @@ import json
 import logging
 import re
 import sqlite3
-from urllib.parse import urlencode
 from dataclasses import dataclass, field, replace
 from typing import Any
+from urllib.parse import urlencode
 
 from ..classifier import LLMError, OpenAICompatibleClient
 from ..config import Config
@@ -581,7 +581,7 @@ def ask(
         (f"Tidligere samtale:\n{earlier}\n\n" if earlier else "")
         + f"Spørgsmål: {question}\n\n"
         + f"Databasen fandt {result.total} lots. Her er {len(candidates)},\n"
-        + f"nummereret fra 1:\n"
+        + "nummereret fra 1:\n"
         + f"{_rows_for_model(candidates)}"
         + f"{context}"
     )

@@ -1,9 +1,12 @@
 """Tests for Discord-payloads. Ingen netværkskald."""
 
+from datetime import UTC
+
 from auction_hunter.config import load_config
 from auction_hunter.matcher import match_lot
 from auction_hunter.notifier import (
     MAX_EMBEDS_PER_MESSAGE,
+    DiscordError,
     DiscordNotifier,
     build_embed,
     build_payload,
@@ -85,7 +88,7 @@ def test_long_title_is_truncated():
 def test_notifier_rejects_empty_webhook():
     import pytest
 
-    with pytest.raises(Exception):
+    with pytest.raises(DiscordError):
         DiscordNotifier("")
 
 
@@ -144,9 +147,9 @@ class TestDigest:
 
 def make_match(title, *, bid=500, hours=3, auction_title="Testauktion"):
     """Et match med en sluttid, saa tid-tilbage kan testes."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
-    ends = datetime.now(timezone.utc) + timedelta(hours=hours) if hours else None
+    ends = datetime.now(UTC) + timedelta(hours=hours) if hours else None
     lot = Lot(
         lot_id="E1", title=title, url="https://auktionshuset.dk/lots/1",
         lot_number="7", auction_id="A1", auction_title=auction_title,

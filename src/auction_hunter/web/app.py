@@ -12,41 +12,57 @@ import io
 import json
 import logging
 import os
+import platform
 import sqlite3
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Annotated, Any, Callable
+from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
-from pydantic import BeforeValidator
 from fastapi.responses import (
-    HTMLResponse, RedirectResponse, Response, StreamingResponse,
+    HTMLResponse,
+    RedirectResponse,
+    Response,
+    StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BeforeValidator
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.status import HTTP_303_SEE_OTHER
 
+from .. import __version__ as APP_VERSION
 from .. import evaluate as evaluate_mod
 from .. import images as images_mod
 from ..classifier import OpenAICompatibleClient
 from ..config import DEFAULT_CONFIG_PATH, ConfigError, load_config
-from ..fees import DEFAULT_OPENING_BID, is_vat_exempt
 from ..details import FLAG_LABELS
+from ..fees import DEFAULT_OPENING_BID, is_vat_exempt
 from ..formatting import MONTHS_DA
 from ..secrets import SecretError, get_secret
 from . import (
     auth,
-    chat as chat_mod,
     chatstore,
     queries,
+)
+from . import (
+    chat as chat_mod,
+)
+from . import (
     rows as rows_mod,
+)
+from . import (
     search as search_mod,
+)
+from . import (
     similar as similar_mod,
+)
+from . import (
     suggest as suggest_mod,
 )
 from .formatting import date_label, kr, rel_past, time_left, timestamp
-from .yamledit import EditError, InterestsFile, LEVELS
+from .yamledit import LEVELS, EditError, InterestsFile
 
 log = logging.getLogger(__name__)
 
@@ -368,6 +384,7 @@ def create_app() -> FastAPI:
     templates.env.globals["rel_past"] = rel_past
     templates.env.globals["is_vat_exempt"] = is_vat_exempt
     templates.env.globals["nav"] = NAV
+    templates.env.globals["app_version"] = APP_VERSION
 
     def with_series(rows: list[dict]) -> list[dict]:
         """Læg prisforløbet på de forberedte rækker, i ét opslag."""
@@ -1034,12 +1051,18 @@ def create_app() -> FastAPI:
                 "soft": config.soft_over_budget_factor,
                 "opening_bid": config.opening_bid,
                 "region": config.source.region_label,
+                "region_ids": list(config.source.region_ids),
+                "regions_known": len(config.regions),
+                "version": APP_VERSION,
+                "python": platform.python_version(),
                 "ai_enabled": config.classifier.enabled,
                 "ai_model": config.classifier.model,
                 "ai_base": config.classifier.base_url,
             }
         except ConfigError as exc:
             settings |= {"readable": False, "error": str(exc)}
+        settings.setdefault("version", APP_VERSION)
+        settings.setdefault("python", platform.python_version())
 
         ai_key = secret_status("CLASSIFIER_API_KEY")
         if ai_key == "ikke sat":
@@ -1148,9 +1171,36 @@ def create_app() -> FastAPI:
                 conn.execute("SELECT 1 FROM lots LIMIT 1").fetchone()
             finally:
                 conn.close()
-            return {"ok": True}
+            return {"ok": True, "version": APP_VERSION}
         except Exception as exc:
             raise HTTPException(503, f"database utilgængelig: {exc}") from exc
+
+    @app.get("/readyz")
+    def readyz() -> dict:
+        """Klar til trafik: både databasen og konfigurationen kan læses.
+
+        Adskilt fra /healthz fordi en manglende eller ugyldig interests.yml er
+        en fejlkonfiguration, ikke en midlertidig fejl — containeren skal ikke
+        meldes klar mens den kører med et tomt eller forkert matchgrundlag.
+        """
+        try:
+            conn = queries.ro_conn(db_path())
+            try:
+                conn.execute("SELECT 1 FROM lots LIMIT 1").fetchone()
+            finally:
+                conn.close()
+        except Exception as exc:
+            raise HTTPException(503, f"database utilgængelig: {exc}") from exc
+        try:
+            config = load_config(config_path())
+        except ConfigError as exc:
+            raise HTTPException(503, f"konfigurationen kan ikke læses: {exc}") from exc
+        return {
+            "ok": True,
+            "version": APP_VERSION,
+            "regioner": list(config.source.region_ids),
+            "kategorier": len(config.categories),
+        }
 
     return app
 

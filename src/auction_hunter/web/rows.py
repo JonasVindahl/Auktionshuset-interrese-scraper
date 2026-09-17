@@ -15,7 +15,8 @@ from urllib.parse import quote
 
 from .. import images
 from ..details import FLAG_LABELS, SERIOUS_FLAGS
-from ..fees import DEFAULT_OPENING_BID, estimate as price_estimate
+from ..fees import DEFAULT_OPENING_BID
+from ..fees import estimate as price_estimate
 from .formatting import (
     LOCAL_TZ,
     date_label,

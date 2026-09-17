@@ -176,6 +176,62 @@ def _normalize_keywords(values: Any) -> tuple[str, ...]:
     return tuple(str(v).strip().lower() for v in values if str(v).strip())
 
 
+# Genveje der betyder "alle landsdele i regions-mappingen".
+_ALL_REGION_ALIASES = {"all", "alle", "*", "danmark", "hele danmark"}
+
+
+def _resolve_region_ids(
+    env_value: tuple[str, ...] | None,
+    source_raw: dict[str, Any],
+    regions_map: dict[str, str],
+) -> tuple[str, ...]:
+    """Region-id'er fra miljø eller YAML, med 'all' som genvej.
+
+    Miljøet vinder over YAML, som resten af konfigurationen. 'all' udvides til
+    alle id'er i regions-mappingen, så man ikke skal vedligeholde listen to
+    steder når auktionshuset tilføjer en landsdel.
+    """
+    if env_value is not None:
+        values: tuple[str, ...] = env_value
+    else:
+        yaml_value = source_raw.get("region_ids")
+        if isinstance(yaml_value, str):
+            values = (yaml_value,)
+        elif yaml_value:
+            values = tuple(str(v) for v in yaml_value)
+        else:
+            values = ("lyr0boj4d8",)
+
+    if any(str(v).strip().lower() in _ALL_REGION_ALIASES for v in values):
+        if not regions_map:
+            raise ConfigError(
+                "region_ids beder om alle landsdele, men 'regions' er tom i konfigurationen"
+            )
+        return tuple(regions_map.values())
+    return tuple(str(v).strip() for v in values if str(v).strip())
+
+
+def _region_label(
+    source_raw: dict[str, Any],
+    regions_map: dict[str, str],
+    region_ids: tuple[str, ...],
+) -> str:
+    """Et læsbart navn på de valgte regioner.
+
+    Sættes eksplicit med REGION_LABEL eller region_label. Ellers udledes navnet
+    fra regions-mappingen, så teksten ikke påstår "Sjælland" når man følger
+    hele landet.
+    """
+    explicit = os.environ.get("REGION_LABEL") or source_raw.get("region_label")
+    if explicit:
+        return str(explicit)
+    id_to_name = {v: k for k, v in regions_map.items()}
+    if regions_map and set(region_ids) == set(regions_map.values()):
+        return "Hele Danmark"
+    names = [id_to_name.get(rid, rid) for rid in region_ids]
+    return ", ".join(names)
+
+
 def load_config(path: str | Path | None = None) -> Config:
     config_path = Path(path or os.environ.get("CONFIG_PATH") or DEFAULT_CONFIG_PATH)
     try:
@@ -188,21 +244,21 @@ def load_config(path: str | Path | None = None) -> Config:
     if not isinstance(raw, dict):
         raise ConfigError(f"{config_path} skal indeholde et YAML-mapping i toppen")
 
+    regions_map = {str(k): str(v) for k, v in (raw.get("regions") or {}).items()}
+
     source_raw = raw.get("source") or {}
     base_url = os.environ.get("BASE_URL") or source_raw.get(
         "base_url", "https://auktionshuset.dk"
     )
 
-    region_ids = _env_list("REGION_IDS")
-    if region_ids is None:
-        region_ids = tuple(str(r) for r in (source_raw.get("region_ids") or ["lyr0boj4d8"]))
+    region_ids = _resolve_region_ids(_env_list("REGION_IDS"), source_raw, regions_map)
     if not region_ids:
         raise ConfigError("Mindst ét region-id skal være angivet (REGION_IDS)")
 
     source = Source(
         base_url=base_url.rstrip("/"),
         region_ids=region_ids,
-        region_label=str(source_raw.get("region_label", "Sjælland")),
+        region_label=_region_label(source_raw, regions_map, region_ids),
         auction_status=_env_int("AUCTION_STATUS", int(source_raw.get("auction_status", 1))),
     )
 
@@ -237,7 +293,7 @@ def load_config(path: str | Path | None = None) -> Config:
         categories=tuple(categories),
         max_price=max_price,
         soft_over_budget_factor=soft_factor,
-        regions={str(k): str(v) for k, v in (raw.get("regions") or {}).items()},
+        regions=regions_map,
         exclude=_normalize_keywords(raw.get("exclude")),
         opening_bid=_env_int("OPENING_BID", int(raw.get("opening_bid", DEFAULT_OPENING_BID))),
         classifier=_load_classifier(raw.get("classifier") or {}),
