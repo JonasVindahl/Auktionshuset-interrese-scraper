@@ -30,7 +30,9 @@ jobs:
       - name: Installer
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pytest
+          # httpx2 kraves af Starlettes TestClient; den er ikke en
+          # driftsafhaengighed, saa den staar kun her og i dev-extraen.
+          pip install -r requirements.txt pytest "httpx2>=2.13"
       - name: Tests
         run: python -m pytest
 
