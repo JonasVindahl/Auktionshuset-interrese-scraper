@@ -71,8 +71,6 @@
     {% endif %}
 
     {% if row.is_estimate %}
-    <p class="hint">Der er ikke budt på lot'et endnu. Beløbet er hvad første bud
-      koster inkl. salær og moms med et åbningsbud på {{ 0|kr }}.</p>
     {% endif %}
 
     {% if row.series and row.series|length > 1 %}
@@ -129,8 +127,6 @@
         {% endfor %}
       </ol>
     </div>
-    <p class="hint">Beløbene er hvad lot'ene kostede inkl. salær og moms, altså til
-      sammenligning med prisen øverst. Klik på en titel for at se det salg.</p>
     {% else %}
     <p class="empty">Arkivet har ikke tidligere salg der ligner dette nok.</p>
     {% endif %}

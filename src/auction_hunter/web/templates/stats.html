@@ -7,9 +7,7 @@
 
 {% block content %}
 <header class="page-head">
-  <p class="overline">{{ icon('spark', 13) }} Overblik</p>
   <h1>Statistik</h1>
-  <p class="page-meta">Hvad agenten har set, hvad der blev fund, og hvordan profilen rammer.</p>
 </header>
 
 <dl class="metrics">
@@ -55,19 +53,14 @@
     </div>
     {% endfor %}
   </div>
-  <p class="hint"><strong>Støjandel</strong> er hvor stor en del af kategoriens fund du har
-    markeret ikke interesseret. En høj andel betyder at nøgleordene er for brede.</p>
   {% else %}
-  {{ empty_state('Ingen fund sendt endnu', 'Når agenten finder noget der matcher profilen, dukker kategorierne op her.', 'spark') }}
+  {{ empty_state('Ingen fund sendt endnu', '', 'spark') }}
   {% endif %}
 </section>
 
 {% if noise %}
 <section class="section">
   <h2 class="section-title">Hvor støjen kommer fra</h2>
-  <p class="section-note">Nøgleord der ofte optræder i lots du har afvist. En høj andel
-    med flere end tre forekomster er et tegn på at ordet er for bredt og hører
-    bedre i et andet niveau, eller i udelukkelserne.</p>
   <div class="panel comps">
     {% for row in noise %}
     <div class="comp" data-cat="{{ row.category }}">
@@ -86,8 +79,6 @@
 
 <section class="section">
   <h2 class="section-title">Hvad fundene koster</h2>
-  <p class="section-note">Reel pris inkl. salær og moms, altså det man faktisk betaler.
-    Et lot uden bud har ingen pris endnu og tælles derfor ikke med.</p>
   {% if bands and bands|sum(attribute='n') %}
   {% set top_band = bands|map(attribute='n')|max %}
   {% set band_total = bands|sum(attribute='n') %}
@@ -104,7 +95,7 @@
     {% endfor %}
   </div>
   {% else %}
-  {{ empty_state('Ingen fund med en pris endnu', 'Først når der er budt på et fund, har det en pris at regne med.', 'info') }}
+  {{ empty_state('Ingen fund med en pris endnu', '', 'info') }}
   {% endif %}
 </section>
 
@@ -133,7 +124,7 @@
     {% endfor %}
   </ol>
   {% else %}
-  {{ empty_state('Ingen kørsler endnu', 'Agenten skriver en række hver gang den har været forbi auktionshuset.', 'info') }}
+  {{ empty_state('Ingen kørsler endnu', '', 'info') }}
   {% endif %}
 </section>
 
@@ -147,10 +138,8 @@
       <div class="metric"><dt>Følger</dt><dd>{{ feedback.get('watch', 0) }}</dd></div>
       <div class="metric"><dt>Afvist</dt><dd>{{ feedback.get('skip', 0) }}</dd></div>
     </dl>
-    <p class="hint">Træningsdata til AI-trinnet.
-      <a href="/export/feedback.csv">Hent dem som CSV</a>.</p>
     {% else %}
-    {{ empty_state('Ingen markeringer endnu', 'Når du markerer fund, samles tallene her.', 'bookmark') }}
+    {{ empty_state('Ingen markeringer endnu', '', 'bookmark') }}
     {% endif %}
   </section>
 
