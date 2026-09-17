@@ -8,6 +8,7 @@ hurtigere — ikke mulig.
 from __future__ import annotations
 
 import csv
+import hmac
 import io
 import json
 import logging
@@ -50,6 +51,9 @@ from . import (
 )
 from . import (
     chat as chat_mod,
+)
+from . import (
+    metrics as metrics_mod,
 )
 from . import (
     rows as rows_mod,
@@ -1365,6 +1369,37 @@ def create_app() -> FastAPI:
             "regioner": list(config.source.region_ids),
             "kategorier": len(config.categories),
         }
+
+    @app.get("/metrics")
+    def metrics(request: Request) -> Response:
+        """Prometheus-format. Aggregerede tal, ingen titler eller hemmeligheder.
+
+        Aabent som standard, fordi Prometheus ikke har en login-session. Saet
+        METRICS_TOKEN for at kraeve et bearer-token (eller ?token=).
+        """
+        token = os.environ.get("METRICS_TOKEN", "").strip()
+        if token:
+            header = request.headers.get("authorization", "")
+            supplied = header[7:].strip() if header.lower().startswith("bearer ") else ""
+            supplied = supplied or request.query_params.get("token", "")
+            if not hmac.compare_digest(supplied, token):
+                # Bevidst et direkte svar og ikke HTTPException(401): den
+                # globale 401-handler sender videre til /login, og /login
+                # sender tilbage igen, saa det endte i en redirect-loekke.
+                return Response("ugyldigt token", status_code=401)
+
+        conn = ro_conn(db_path())
+        try:
+            body = metrics_mod.collect(
+                conn,
+                version=APP_VERSION,
+                db_path=db_path(),
+                profiles=len(profile_context()) or 1,
+                categories=len(category_labels()),
+            )
+        finally:
+            conn.close()
+        return Response(body, media_type="text/plain; version=0.0.4; charset=utf-8")
 
     return app
 

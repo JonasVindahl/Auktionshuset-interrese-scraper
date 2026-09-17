@@ -164,6 +164,11 @@ kør testene. Vil man hellere følge taget løbende, kan man bygge med
   auktionshuset.
 - `/readyz` — klarhed. Kræver også at `interests.yml` kan læses, så containeren
   ikke meldes klar med et tomt matchgrundlag.
+- `/metrics` — Prometheus-format med aggregerede tal: rækkeantal, alderen på
+  seneste kørsel, AI-fordelingen, database- og cachestørrelse. Ingen titler og
+  ingen hemmeligheder. Endpunktet er åbent som standard, så Prometheus kan
+  skrape det uden en login-session; sæt `METRICS_TOKEN` for at kræve et
+  bearer-token (eller `?token=`).
 - `/drift` — kørsler, størrelser, konfiguration, version og hemmelighedernes
   tilstand (kun sat/ikke sat, aldrig værdien).
 - Blindheds-advarsel: falder antallet af lots under halvdelen af normalen,
@@ -203,14 +208,23 @@ OCI-labels og digest-pinning af base-imaget.
 Alt kan ogsaa kaldes direkte med `.venv/bin/python -m pytest` og
 `.venv/bin/ruff check src tests`. `make help` viser resten.
 
-CI kører tests på Python 3.11 og 3.13, ruff og et Docker-build ved hvert push.
+CI-workflowet ligger klar i `ci/ci.yml` og kører tests på Python 3.11 og 3.13,
+ruff og et Docker-build. Det er ikke lagt i `.github/workflows/` endnu, fordi et
+GitHub-token skal have `workflow`-scopet for at oprette en workflow-fil. Aktivér
+det med:
+
+    gh auth refresh -s workflow
+    make ci-install
+    git add .github/workflows/ci.yml && git commit -m "ci: aktivér workflow"
+
 Versionen ligger ét sted (`auction_hunter.__version__`) og vises i `/healthz`,
 `/readyz`, sidefoden og på `/drift`.
 
 ## 10. Kendte mangler
 
-- Ingen `LICENSE` i repoet.
+- Ingen `LICENSE` i repoet. Det er en beslutning, ikke en forglemmelse.
 - `DESIGN.md` og `README.md` beskriver et ældre udtryk end koden.
-- Intet værktøj til backup/restore (kun kommandoerne ovenfor).
-- Ingen metrics-endpoint; `/drift` er manuel.
-- Ens bruger og én adgangskode. Der er ingen profiler pr. bruger endnu.
+- CI er ikke aktiveret endnu; se afsnit 9.
+- Billederne i `data/images` er ikke med i `auction_hunter backup`; de skal
+  sikres separat.
+- Ens bruger og én adgangskode. Profilerne er interessesæt, ikke brugere.
