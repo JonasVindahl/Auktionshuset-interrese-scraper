@@ -1,27 +1,62 @@
-"""Backup og gendannelse af SQLite-hukommelsen.
+"""Backup og gendannelse af hele hukommelsen.
 
-En rå filkopi af en SQLite-database i WAL-tilstand kan mangle de sidste
-transaktioner, og den kan tages midt i en skrivning. Backuppen her bruger
-VACUUM INTO, som tager et konsistent oejebliksbillede ogsaa mens agenten
-skriver, og som giver praecis én fil uden WAL-soeskende.
+Et backup er én tar.gz med:
 
-Backup indeholder kun databasen. Billederne i data/images/ og
-config/interests.yml skal sikres separat; se DEPLOYMENT.md.
+    db/main.db            konsistent snapshot af agentens database
+    db/conversations.db   samtalernes database, hvis den findes
+    images/               de cachede miniaturebilleder, hvis de findes
+
+Snapshotet tages med VACUUM INTO. En rå filkopi af en SQLite-database i
+WAL-tilstand kan mangle de sidste transaktioner og kan tages midt i en
+skrivning; VACUUM INTO giver et konsistent oejebliksbillede ogsaa mens agenten
+skriver, og giver én ren fil uden WAL-soeskende.
+
+config/interests.yml er ikke med. Den ligger i git, og en gendannelse skal ikke
+kunne rulle profilændringer tilbage ved et uheld.
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import shutil
 import sqlite3
+import tarfile
+import tempfile
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .web.chatstore import chat_db_path
+
 log = logging.getLogger(__name__)
+
+ARCHIVE_SUFFIX = ".tar.gz"
+DB_MEMBER = "db/main.db"
+CHAT_MEMBER = "db/conversations.db"
+IMAGES_MEMBER = "images"
 
 
 class BackupError(RuntimeError):
     """Backup eller gendannelse kunne ikke gennemfoeres."""
+
+
+@dataclass(frozen=True)
+class BackupResult:
+    path: Path
+    has_conversations: bool
+    image_count: int
+
+
+@dataclass(frozen=True)
+class RestoreResult:
+    safety: tuple[Path, ...]
+    has_conversations: bool
+    image_count: int
+
+
+def _stamp(value: str | None) -> str:
+    return value or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
 def integrity_check(path: str | Path) -> str:
@@ -55,35 +90,79 @@ def _snapshot(source: Path, target: Path) -> None:
         conn.close()
 
 
+def _drop_wal(target: Path) -> None:
+    """WAL-filerne hoerer til den gamle database og maa ikke overleve."""
+    for suffix in ("-wal", "-shm"):
+        Path(str(target) + suffix).unlink(missing_ok=True)
+
+
+def _safe_extract(tar: tarfile.TarFile, dest: Path) -> None:
+    """Pak arkivet ud, men afvis links og stier uden for maalmappen."""
+    root = dest.resolve()
+    for member in tar.getmembers():
+        if member.issym() or member.islnk():
+            raise BackupError(f"arkivmedlemmet {member.name} er et link")
+        resolved = (root / member.name).resolve()
+        if resolved != root and root not in resolved.parents:
+            raise BackupError(f"arkivmedlemmet {member.name} peger uden for maalet")
+    try:
+        tar.extractall(dest, filter="data")   # Python 3.12+
+    except TypeError:
+        tar.extractall(dest)
+
+
+def _count_files(directory: Path) -> int:
+    if not directory.is_dir():
+        return 0
+    return sum(1 for path in directory.iterdir() if path.is_file())
+
+
 def backup(
     source: str | Path,
     target_dir: str | Path,
     *,
     stamp: str | None = None,
-) -> Path:
-    """Tag et konsistent backup og returnér stien til filen.
-
-    Filnavnet får et UTC-tidsstempel, så flere backups kan ligge side om side
-    uden at overskrive hinanden.
-    """
+) -> BackupResult:
+    """Tag et komplet backup og returnér hvad det indeholder."""
     source = Path(source)
     if not source.exists():
         raise BackupError(f"databasen findes ikke: {source}")
 
     target_dir = Path(target_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
-    stamp = stamp or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    target = target_dir / f"{source.stem}-{stamp}.db"
+    stamp = _stamp(stamp)
+    target = target_dir / f"{source.stem}-{stamp}{ARCHIVE_SUFFIX}"
+    if target.exists():
+        raise BackupError(f"der findes allerede et backup med samme navn: {target}")
 
-    _snapshot(source, target)
+    conversations = chat_db_path(source)
+    have_conversations = conversations.exists() and conversations != source
+    images = source.parent / IMAGES_MEMBER
+    image_count = _count_files(images)
 
-    check = integrity_check(target)
-    if check != "ok":
-        # Et ugyldigt backup er vaerre end intet backup: det ser ud som om man
-        # er daekket ind. Derfor fjernes det, og fejlen meldes.
-        target.unlink(missing_ok=True)
-        raise BackupError(f"integritetstjek af backup fejlede: {check}")
-    return target
+    with tempfile.TemporaryDirectory() as raw:
+        tmp = Path(raw)
+        main_snapshot = tmp / "main.db"
+        _snapshot(source, main_snapshot)
+        check = integrity_check(main_snapshot)
+        if check != "ok":
+            # Et ugyldigt backup er vaerre end intet backup: det ser ud ud som
+            # om man er daekket ind. Derfor skrives arkivet slet ikke.
+            raise BackupError(f"integritetstjek af snapshot fejlede: {check}")
+
+        chat_snapshot: Path | None = None
+        if have_conversations:
+            chat_snapshot = tmp / "conversations.db"
+            _snapshot(conversations, chat_snapshot)
+
+        with tarfile.open(target, "w:gz") as tar:
+            tar.add(main_snapshot, arcname=DB_MEMBER)
+            if chat_snapshot is not None:
+                tar.add(chat_snapshot, arcname=CHAT_MEMBER)
+            if image_count:
+                tar.add(images, arcname=IMAGES_MEMBER)
+
+    return BackupResult(target, have_conversations, image_count)
 
 
 def restore(
@@ -91,38 +170,94 @@ def restore(
     target: str | Path,
     *,
     stamp: str | None = None,
-) -> Path | None:
-    """Gendan target fra source.
+) -> RestoreResult:
+    """Gendan target fra et backup.
 
-    Den nuvaerende database sikres foerst, saa en gendannelse kan rulles
-    tilbage. Returnerer stien til sikkerhedskopien, eller None hvis der ikke
-    var nogen database i forvejen.
+    Arkivet sikres foerst, saa en gendannelse kan rulles tilbage. Returnerer
+    stierne til sikkerhedskopierne, ikke selve indholdet.
     """
     source = Path(source)
     target = Path(target)
     if not source.exists():
         raise BackupError(f"backupfilen findes ikke: {source}")
+
+    stamp = _stamp(stamp)
+    if tarfile.is_tarfile(source):
+        return _restore_archive(source, target, stamp)
+    return _restore_db(source, target, stamp)
+
+
+def _restore_db(source: Path, target: Path, stamp: str) -> RestoreResult:
     check = integrity_check(source)
     if check != "ok":
         raise BackupError(f"backupfilen er ikke en intakt database: {check}")
 
     target.parent.mkdir(parents=True, exist_ok=True)
-    stamp = stamp or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-
-    safety: Path | None = None
+    safety: list[Path] = []
     if target.exists():
-        safety = target.with_name(f"{target.name}.foer-gendannelse-{stamp}")
-        _snapshot(target, safety)
+        dest = target.with_name(f"{target.name}.foer-gendannelse-{stamp}")
+        _snapshot(target, dest)
+        safety.append(dest)
 
-    # Skriv den nye database ved siden af og flyt den paa plads, saa target
-    # aldrig staar halvt overskrevet.
+    _replace_db(source, target, stamp)
+    return RestoreResult(tuple(safety), False, 0)
+
+
+def _replace_db(source: Path, target: Path, stamp: str) -> None:
+    """Skriv den nye database ved siden af og flyt den paa plads."""
     temp = target.with_name(f".{target.name}.ny-{stamp}")
     temp.unlink(missing_ok=True)
     _snapshot(source, temp)
     os.replace(temp, target)
+    _drop_wal(target)
 
-    # WAL-filerne hoerer til den gamle database og skal ikke overleve en
-    # gendannelse, ellers kan de skygge for det netop indlaeste indhold.
-    for suffix in ("-wal", "-shm"):
-        Path(str(target) + suffix).unlink(missing_ok=True)
-    return safety
+
+def _restore_archive(source: Path, target: Path, stamp: str) -> RestoreResult:
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    with tempfile.TemporaryDirectory() as raw:
+        tmp = Path(raw)
+        with tarfile.open(source, "r:gz") as tar:
+            _safe_extract(tar, tmp)
+
+        main = tmp / DB_MEMBER
+        if not main.exists():
+            raise BackupError(f"arkivet mangler {DB_MEMBER}")
+        check = integrity_check(main)
+        if check != "ok":
+            raise BackupError(f"databasen i arkivet er ikke intakt: {check}")
+
+        safety: list[Path] = []
+        if target.exists():
+            dest = target.with_name(f"{target.name}.foer-gendannelse-{stamp}")
+            _snapshot(target, dest)
+            safety.append(dest)
+        _replace_db(main, target, stamp)
+
+        chat_source = tmp / CHAT_MEMBER
+        have_conversations = chat_source.exists()
+        if have_conversations:
+            chat_target = chat_db_path(target)
+            if chat_target.exists():
+                dest = chat_target.with_name(
+                    f"{chat_target.name}.foer-gendannelse-{stamp}"
+                )
+                _snapshot(chat_target, dest)
+                safety.append(dest)
+            _replace_db(chat_source, chat_target, stamp)
+
+        images_source = tmp / IMAGES_MEMBER
+        image_count = _count_files(images_source)
+        if image_count:
+            images_target = target.parent / IMAGES_MEMBER
+            if _count_files(images_target):
+                dest = images_target.with_name(f"images.foer-gendannelse-{stamp}")
+                if dest.exists():
+                    raise BackupError(
+                        f"der findes allerede en sikkerhedskopi af billederne: {dest}"
+                    )
+                images_target.rename(dest)
+                safety.append(dest)
+            shutil.copytree(images_source, images_target, dirs_exist_ok=True)
+
+    return RestoreResult(tuple(safety), have_conversations, image_count)

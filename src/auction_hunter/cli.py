@@ -186,21 +186,27 @@ def cmd_check(args: argparse.Namespace) -> int:
 
 
 def cmd_backup(args: argparse.Namespace) -> int:
-    """Tag et konsistent backup af databasen."""
+    """Tag et komplet backup: database, samtaler og billeder."""
     from .backup import BackupError, backup
 
     try:
-        path = backup(args.db, args.out)
+        result = backup(args.db, args.out)
     except BackupError as exc:
         print(f"Backup fejlede: {exc}", file=sys.stderr)
         return 2
-    print(f"Backup skrevet: {path}")
-    print("Husk at billederne i data/images og config/interests.yml sikres separat.")
+
+    parts = ["database"]
+    if result.has_conversations:
+        parts.append("samtaler")
+    if result.image_count:
+        parts.append(f"{result.image_count} billeder")
+    print(f"Backup skrevet: {result.path}")
+    print(f"Indhold: {', '.join(parts)}")
     return 0
 
 
 def cmd_restore(args: argparse.Namespace) -> int:
-    """Gendan databasen fra en backup. Kraever --yes, fordi det overskriver."""
+    """Gendan fra et backup. Kraever --yes, fordi det overskriver."""
     from .backup import BackupError, restore
 
     if not args.yes:
@@ -210,13 +216,20 @@ def cmd_restore(args: argparse.Namespace) -> int:
         )
         return 2
     try:
-        safety = restore(args.fil, args.db)
+        result = restore(args.fil, args.db)
     except BackupError as exc:
         print(f"Gendannelse fejlede: {exc}", file=sys.stderr)
         return 2
+
     print(f"Gendannet {args.db} fra {args.fil}")
-    if safety:
-        print(f"Den tidligere database ligger i {safety}")
+    if result.has_conversations:
+        print("Samtalerne er ogsaa gendannet.")
+    if result.image_count:
+        print(f"{result.image_count} billeder gendannet.")
+    for path in result.safety:
+        print(f"Sikkerhedskopi af det gamle: {path}")
+    if not result.safety:
+        print("Der var intet at sikre: maalet fandtes ikke i forvejen.")
     return 0
 
 
