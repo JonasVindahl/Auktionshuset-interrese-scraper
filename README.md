@@ -162,6 +162,15 @@ profiles:
     exclude: [bil, trailer]
 ```
 
+En profil kan også have sin egen `classifier_profile`, altså sin egen smag til
+AI-trinnet, så HiFi-fund bedømmes efter HiFi-smag og værktøjsfund efter en
+anden. Uden den bruges `classifier.profile` fra topniveauet.
+
+Bemærk at en profil er et **interessesæt, ikke en bruger**. Dashboardet har
+ingen konti og ingen roller: der er ét `WEB_PASSWORD`, og den der har det kan
+alt. Profiler oprettes kun ved at redigere `config/interests.yml`, ikke fra
+webben — siden viser dem på `/drift` og som filter på fund-siderne.
+
 Uden `profiles` er der én implicit standardprofil, og alt kører som før.
 `categories: null` betyder alle kategorier, `[]` betyder ingen. Globale
 `exclude`-ord gælder altid. En profil slås fra med `enabled: false` eller
@@ -307,6 +316,14 @@ databasen — det værste der kan ske er en mærkelig søgning.
 
 Assistenten bruger samme nøgle som AI-trinnet (`CLASSIFIER_API_KEY`). Uden
 nøgle virker siden stadig, men som en almindelig nøgleordssøgning.
+
+Dashboardets AI-kald har et loft: som standard 60 pr. time, sat med
+`WEB_AI_MAX_PER_HOUR` (`0` slår det helt fra). Agenten har haft sit eget loft
+hele tiden i `classifier.max_per_run`; det her dækker chatten og
+forslagsknappen, hvor ét spørgsmål er to kald og knappen er ét kald pr. klik.
+Siden ligger bag adgangskoden, men adgangen er alt-eller-intet, så loftet er
+det der gør et misbrugt kodeord endeligt frem for ubegrænset. Rammes det,
+opfører siderne sig som uden en nøgle, og forbruget står på `/drift`.
 
 Modellen udvider spørgsmålet med beslægtede produkttyper og mærker i stedet for
 kun at søge på de ord du selv skrev, og ordene lægges sammen med OR. Et
