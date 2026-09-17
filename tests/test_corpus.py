@@ -56,12 +56,37 @@ def matched_categories(title: str, config) -> set[str]:
     return {m.category.key for m in match_lot(make_lot(title), config)}
 
 
+def matched_keywords(title: str, config) -> set[str]:
+    return {
+        keyword.strip().lower()
+        for m in match_lot(make_lot(title), config)
+        for keyword in m.keywords
+    }
+
+
 @pytest.mark.parametrize(
     "case", [c for c in CASES if c["expect"] == "yes"], ids=lambda c: c["title"][:44]
 )
 def test_interessante_varer_matches(case, config):
     assert matched_categories(case["title"], config), (
         f"BURDE MATCHE: {case['title']!r} — {case['why']}"
+    )
+
+
+@pytest.mark.parametrize(
+    "case", [c for c in CASES if c.get("via")], ids=lambda c: c["title"][:44]
+)
+def test_via_noegleordet_baerer_casen(case, config):
+    """En case med 'via' skal rammes af netop det nøgleord.
+
+    Uden dette er en case opfyldt så snart noget rammer, og den kan derfor gå
+    igennem ad en anden vej end den den skulle dække. Facitlistens seks
+    netværkslinjer så ud som forleds-tilfælde, men blev alle båret af
+    efterleddet 'switch'.
+    """
+    hits = matched_keywords(case["title"], config)
+    assert case["via"].lower() in hits, (
+        f"{case['title']!r} skulle baeres af {case['via']!r}, men ramte {sorted(hits)}"
     )
 
 

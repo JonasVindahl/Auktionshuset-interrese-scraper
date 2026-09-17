@@ -5,6 +5,12 @@ skal vurderes før det anvendes. Facitlisten bor i config/ sammen med profilen,
 så den også er med i Docker-imaget, hvor kun src/ og config/ kopieres ind.
 
 'yes' og 'no' er hårde krav. 'maybe' er grænsetilfælde og blokerer intet.
+
+En case kan desuden bære et valgfrit ``via``-felt: navnet på det nøgleord der
+skal bære matchet. Uden det er en case opfyldt så snart *et eller andet*
+rammer, og så kan den gå igennem ad en helt anden vej end den man troede.
+Det var præcis tilfældet for facitlistens netværkslinjer: de læste som
+forleds-tilfælde, men blev alle båret af efterleddet 'switch'.
 """
 
 from __future__ import annotations
@@ -52,6 +58,15 @@ def matches(config: Config, title: str) -> bool:
     return bool(match_lot(_lot(title), config))
 
 
+def hit_keywords(config: Config, title: str) -> set[str]:
+    """De nøgleord der faktisk ramte titlen, på tværs af kategorier."""
+    return {
+        keyword.strip().lower()
+        for match in match_lot(_lot(title), config)
+        for keyword in match.keywords
+    }
+
+
 def hard_failures(config: Config, cases: list[dict]) -> dict[str, str]:
     """Titler hvor profilen svarer forkert på et hårdt krav."""
     out: dict[str, str] = {}
@@ -63,6 +78,12 @@ def hard_failures(config: Config, cases: list[dict]) -> dict[str, str]:
         hit = matches(config, title)
         if (expect == "yes" and not hit) or (expect == "no" and hit):
             out[title] = str(case.get("why") or "")
+            continue
+        # 'via' binder casen til det nøgleord den skal bæres af. Uden det
+        # kunne et helt andet ord opfylde den og skjule at vejen er brudt.
+        via = str(case.get("via") or "").strip().lower()
+        if expect == "yes" and via and via not in hit_keywords(config, title):
+            out[title] = f"skulle rammes af '{via}'"
     return out
 
 

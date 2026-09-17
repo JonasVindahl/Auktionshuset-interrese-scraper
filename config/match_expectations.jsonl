@@ -1,9 +1,9 @@
-{"title": "Netværksswitches HP  Model: ProCurve", "expect": "yes", "why": "Netværksswitch, it_tech"}
-{"title": "Switch TP-LINK TL-SG1016D", "expect": "yes", "why": "Netværksswitch, it_tech"}
-{"title": "Switch HPE OfficeConnect 1820", "expect": "yes", "why": "Netværksswitch, it_tech"}
-{"title": "Netværkskontakt (switch) 8G PoE+ HP Model: HPE ARUBA", "expect": "yes", "why": "Netværksswitch med PoE"}
-{"title": "Netværkskontakt (switch)  NETGEAR Model: M4250-10G2XF-PoE+", "expect": "yes", "why": "Netværksswitch"}
-{"title": "\"Easy smart-switch\" 24-port TP-LINK Model: TL-SG1428PE(UN)", "expect": "yes", "why": "Netværksswitch"}
+{"title": "Netværksswitches HP  Model: ProCurve", "expect": "yes", "why": "Netværksswitch, it_tech", "via": "switch"}
+{"title": "Switch TP-LINK TL-SG1016D", "expect": "yes", "why": "Netværksswitch, it_tech", "via": "switch"}
+{"title": "Switch HPE OfficeConnect 1820", "expect": "yes", "why": "Netværksswitch, it_tech", "via": "switch"}
+{"title": "Netværkskontakt (switch) 8G PoE+ HP Model: HPE ARUBA", "expect": "yes", "why": "Netværksswitch med PoE", "via": "switch"}
+{"title": "Netværkskontakt (switch)  NETGEAR Model: M4250-10G2XF-PoE+", "expect": "yes", "why": "Netværksswitch", "via": "switch"}
+{"title": "\"Easy smart-switch\" 24-port TP-LINK Model: TL-SG1428PE(UN)", "expect": "yes", "why": "Netværksswitch", "via": "switch"}
 {"title": "Espressomaskine FUTURMAT  Ariette", "expect": "yes", "why": "Espressomaskine, coffee"}
 {"title": "Espressomaskine STEAMHAMMER XLVI", "expect": "yes", "why": "Espressomaskine, over budget men relevant"}
 {"title": "Kaffemaskine med vandindtag  MELITTA", "expect": "yes", "why": "Kaffemaskine, coffee"}
@@ -58,3 +58,9 @@
 {"title": "Videoopbygning med skærm, server og UPS", "expect": "maybe", "why": "Indeholder en server, men er et videopakke-lot over budget; AI-trinnet boer vurdere"}
 {"title": "Div. Computerudstyr: SSD-kort, adapter mv.  SONNOS", "expect": "maybe", "why": "Tilbehoer; matcher paa 'ssd', AI-trinnet forventes at sige nej"}
 {"title": "Div. lydudstyr: DVI-forlængere, HDD-adaptere mv.  BLACK MAGIC DESIGN/ADDONICS Model: AD2SAHDCF", "expect": "maybe", "why": "Rodlot med adaptere; matcher paa 'hdd', AI-trinnet forventes at sige nej"}
+{"title": "Højttalerkabinet DYNAUDIO  Model: BM5", "expect": "yes", "via": "højttaler", "why": "Forled: højttaler+kabinet. Uden forleds-match baeres casen kun af 'kabinet' + maerket, altsaa en anden vej end den vi tror"}
+{"title": "Netværkskabinet MIKROTIK med router", "expect": "yes", "via": "netværk", "why": "Forled: netværk+skabinet"}
+{"title": "Netværksudstyr UBIQUITI UniFi", "expect": "yes", "via": "netværk", "why": "Forled med dansk bindebogstav: netværk+s+udstyr"}
+{"title": "Pladespillerarm ORTOFON", "expect": "yes", "via": "pladespiller", "why": "Forled: pladespiller+arm"}
+{"title": "Div. kaffeservering til 100 personer", "expect": "no", "why": "Graensen for forleds-match: 'server' er for kort til at staa som forled, ellers ville dette blive et fund"}
+{"title": "Batteridrevet boremaskine MAKITA", "expect": "no", "why": "Samme graense fra udelukkelsessiden: 'batteri' maa ikke som forled udelukke et batteridrevet vaerktoej"}
