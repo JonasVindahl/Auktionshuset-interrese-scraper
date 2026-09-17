@@ -5,6 +5,8 @@
     python -m auction_hunter scan         # vis fund uden at gemme eller sende
     python -m auction_hunter stats        # hvad husker databasen
     python -m auction_hunter export       # dump hukommelsen til JSON
+    python -m auction_hunter backup       # konsistent backup af databasen
+    python -m auction_hunter restore FIL  # gendan fra en backup
 """
 
 from __future__ import annotations
@@ -183,6 +185,41 @@ def cmd_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_backup(args: argparse.Namespace) -> int:
+    """Tag et konsistent backup af databasen."""
+    from .backup import BackupError, backup
+
+    try:
+        path = backup(args.db, args.out)
+    except BackupError as exc:
+        print(f"Backup fejlede: {exc}", file=sys.stderr)
+        return 2
+    print(f"Backup skrevet: {path}")
+    print("Husk at billederne i data/images og config/interests.yml sikres separat.")
+    return 0
+
+
+def cmd_restore(args: argparse.Namespace) -> int:
+    """Gendan databasen fra en backup. Kraever --yes, fordi det overskriver."""
+    from .backup import BackupError, restore
+
+    if not args.yes:
+        print(
+            "Stop web og hunter foerst, og tilfoej --yes for at gendanne.",
+            file=sys.stderr,
+        )
+        return 2
+    try:
+        safety = restore(args.fil, args.db)
+    except BackupError as exc:
+        print(f"Gendannelse fejlede: {exc}", file=sys.stderr)
+        return 2
+    print(f"Gendannet {args.db} fra {args.fil}")
+    if safety:
+        print(f"Den tidligere database ligger i {safety}")
+    return 0
+
+
 def cmd_config(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     data = asdict(config)
@@ -244,6 +281,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_export = sub.add_parser("export", help="dump hukommelse til JSON")
     p_export.add_argument("--out", default="reports/export.json")
     p_export.set_defaults(func=cmd_export)
+
+    p_backup = sub.add_parser("backup", help="tag et konsistent backup af databasen")
+    p_backup.add_argument("--out", default="backups", help="mappe til backupfiler")
+    p_backup.set_defaults(func=cmd_backup)
+
+    p_restore = sub.add_parser("restore", help="gendan databasen fra en backup")
+    p_restore.add_argument("fil", help="backupfilen der skal gendannes fra")
+    p_restore.add_argument(
+        "--yes", action="store_true",
+        help="bekraeft at web og hunter er stoppet",
+    )
+    p_restore.set_defaults(func=cmd_restore)
 
     sub.add_parser("check", help="vis konfiguration og test Discord").set_defaults(func=cmd_check)
     sub.add_parser("dump-config", help="vis fuld effektiv konfiguration").set_defaults(func=cmd_config)
