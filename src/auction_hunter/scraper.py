@@ -33,6 +33,11 @@ COPENHAGEN = ZoneInfo("Europe/Copenhagen")
 PAGE_SIZE = 48
 MAX_PAGES = 200
 
+# Auktionslisten pagineres ogsaa, men uden en limit vi kan saette: serveren
+# bestemmer selv sidestoerrelsen (24 i praksis). Loftet er derfor en
+# sikkerhedsventil, ikke en forventning.
+MAX_AUCTION_PAGES = 40
+
 DEFAULT_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
@@ -124,8 +129,15 @@ class Scraper:
         # opdages i stedet for at fjerne alle deadlines i stilhed.
         self.lots_with_ends = 0
         self.ends_parse_failures = 0
+        # Hvor mange HTTP-kald en koersel faktisk koster. Projektet har
+        # beskrevet sig selv som "ét scrape hvert 15. minut", men en koersel
+        # henter auktionslistens sider plus mindst ét katalogkald pr. auktion.
+        # Tallet maales derfor i stedet for at blive paastaaet.
+        self.requests = 0
+        self.auction_pages = 0
 
     def _get(self, url: str) -> str:
+        self.requests += 1
         last_error: Exception | None = None
         for attempt in range(1, self.max_retries + 1):
             try:
@@ -192,8 +204,38 @@ class Scraper:
         return details_mod.parse(html)
 
     def fetch_auctions(self) -> list[Auction]:
-        """Hent alle aktive auktioner for de valgte regioner."""
-        html = self._get(self.auction_list_url())
+        """Hent alle aktive auktioner for de valgte regioner.
+
+        Listen pagineres. Hentes kun foerste side, ser agenten de foerste ~24
+        auktioner og melder alligevel succes, fordi lot-antallet stadig er
+        stort nok til at blindheds-tjekket tier. Derfor foelges siderne indtil
+        en side ikke laengere giver nye auktions-id'er.
+        """
+        auctions: list[Auction] = []
+        seen: set[str] = set()
+
+        for page in range(1, MAX_AUCTION_PAGES + 1):
+            html = self._get(self.auction_list_url(page))
+            self.auction_pages = page
+            found = self._parse_auctions(html)
+            new = [a for a in found if a.auction_id not in seen]
+            if not new:
+                break
+            auctions.extend(new)
+            seen.update(a.auction_id for a in new)
+            if page < MAX_AUCTION_PAGES:
+                self._polite_pause()
+        else:
+            log.warning(
+                "Naaede loftet paa %d sider i auktionslisten — der kan mangle "
+                "auktioner. Tjek om pagineringen er aendret.", MAX_AUCTION_PAGES,
+            )
+
+        log.info("Fandt %d aktive auktioner (%s)", len(auctions), self.source.region_label)
+        return auctions
+
+    def _parse_auctions(self, html: str) -> list[Auction]:
+        """Auktionskortene paa én side af listen."""
         soup = BeautifulSoup(html, "lxml")
         auctions: list[Auction] = []
 
@@ -233,7 +275,6 @@ class Scraper:
                 )
             )
 
-        log.info("Fandt %d aktive auktioner (%s)", len(auctions), self.source.region_label)
         return auctions
 
     def fetch_lots(self, auction: Auction) -> list[Lot]:

@@ -95,3 +95,65 @@ def test_parse_lots_from_saved_html():
     assert first.title
     assert first.url.startswith("http")
     assert first.ends_at is not None
+
+
+def _auction_card(auction_id: str, title: str, lots: int = 10) -> str:
+    """Et kort som auktionslisten serverer det."""
+    return (
+        f'<li class="loadmore-item" id="{auction_id}">'
+        f'<a href="/auktioner/{auction_id}"><h3>{title}</h3></a>'
+        f'<span>{lots} lots</span>'
+        f'<p class="text-xs font-bold">1. januar</p>'
+        f"</li>"
+    )
+
+
+def _auction_page(ids: list[str]) -> str:
+    cards = "".join(_auction_card(i, f"Auktion {i}") for i in ids)
+    return f"<html><body><ul>{cards}</ul></body></html>"
+
+
+def test_fetch_auctions_follows_pagination():
+    """Auktionslisten pagineres, så side 2 og frem skal med.
+
+    Uden det ser agenten kun de første 24 auktioner. Det ligner ikke en fejl,
+    fordi lot-antallet stadig er stort, så blindheds-tjekket tier.
+    """
+    scraper = _make_scraper()
+    pages = {
+        1: _auction_page([f"a{i}" for i in range(24)]),
+        2: _auction_page([f"b{i}" for i in range(24)]),
+        3: _auction_page([f"c{i}" for i in range(5)]),
+    }
+    seen_urls: list[str] = []
+
+    def fake_get(url: str) -> str:
+        seen_urls.append(url)
+        page = 1
+        if "page=" in url:
+            page = int(url.split("page=")[1].split("&")[0])
+        return pages.get(page, _auction_page([]))
+
+    scraper._get = fake_get
+    auctions = scraper.fetch_auctions()
+
+    assert len(auctions) == 53, f"forventede alle tre sider, fik {len(auctions)}"
+    assert {a.auction_id for a in auctions} >= {"a0", "b0", "c4"}
+    assert len(seen_urls) >= 3
+
+
+def test_fetch_auctions_stops_without_new_cards():
+    """En server der svarer med samme side igen må ikke give en uendelig løkke."""
+    scraper = _make_scraper()
+    same = _auction_page([f"a{i}" for i in range(24)])
+    calls = {"n": 0}
+
+    def fake_get(url: str) -> str:
+        calls["n"] += 1
+        return same
+
+    scraper._get = fake_get
+    auctions = scraper.fetch_auctions()
+
+    assert len(auctions) == 24
+    assert calls["n"] <= 3, "måtte ikke blive ved med at hente den samme side"
