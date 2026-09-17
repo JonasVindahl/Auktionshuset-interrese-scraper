@@ -6,6 +6,7 @@
 
 {% block content %}
 <header class="page-head">
+  <p class="overline">{{ icon('info', 13) }} Maskinen</p>
   <h1>Drift</h1>
   <p class="page-meta">
     <span class="dot{% if stale %} is-stale{% endif %}" aria-hidden="true"></span>
@@ -25,7 +26,12 @@
     <div class="metric"><dt>Til gennemsyn</dt><dd>{{ reviews }}</dd></div>
   </dl>
   {% if span.first %}
-  <p class="muted-note">{{ span.first[:10] }} til {{ span.last[:10] }}</p>
+  <p class="hint">
+    Arkivet dækker fra {{ span.first[:10] }} til {{ span.last[:10] }}.
+    Seneste normale kørsel gav {{ normal_lots or '?' }} lots; falder tallet til under
+    halvdelen, sender agenten en blindheds-advarsel.
+    {%- if blind_at %} Sidste advarsel: {{ blind_at[:16].replace('T', ' ') }}.{% endif %}
+  </p>
   {% endif %}
 </section>
 
@@ -35,6 +41,8 @@
     <div class="metric"><dt>Billeder</dt><dd>{{ image_count }}</dd></div>
     <div class="metric"><dt>Størrelse</dt><dd>{{ (image_bytes / 1024 / 1024)|round(1) }} <span class="metric-unit">MB</span></dd></div>
   </dl>
+  <p class="hint">Billeder hentes kun for fund, og kun mens lot'et er aktivt. De ryddes
+    automatisk efter 180 dage.</p>
 </section>
 
 <section class="section">

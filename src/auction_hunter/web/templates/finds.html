@@ -108,12 +108,14 @@
 <div id="flat-list" class="flat-list" hidden></div>
 
 {% else %}
-{{ empty_state(empty, '', 'search') }}
+{{ empty_state(empty,
+     'Agenten kører videre og lægger nye fund her, så snart der er noget der matcher profilen.', 'search') }}
 {% endif %}
 
 {% if reviews %}
 <section class="section">
   <h2 class="section-title">Til gennemsyn <span class="count">{{ reviews|length }}</span></h2>
+  <p class="section-note">Lots hvor AI-trinnet svarede måske. De er ikke sendt til Discord endnu.</p>
   <div class="review-list">
     {% for review in reviews %}
     {% set rel, full = rel_past(review.created_at) %}

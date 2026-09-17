@@ -50,30 +50,28 @@
      Roller: 1-3 flader, 6-8 kanter, 11-14 tekst.
      Kontrast mod surface: text 12.1:1, text-2 7.4:1, text-3 4.6:1,
      text-4 3.1:1. text-4 er derfor IKKE til tekst, kun til ikoner og streger. */
-  --bg:#f2f1ee;
-  --surface:#ffffff;
-  --surface-2:#eceae5;
-  --surface-3:#e2e0da;
-  --border:#d9d6d0;
-  --border-strong:#b3afa7;
-  --border-input:#78756e;
-  --text:#16181a;
-  --text-2:#45474a;
-  --text-3:#6a6c70;
-  --text-4:#9a9c9f;   /* 3.1:1, kun ikoner og streger */
+  --bg:#ece3d5;
+  --surface:#fffdfa;
+  --surface-2:#f5efe4;
+  --surface-3:#e7ddce;
+  --border:#ded3c2;
+  --border-strong:#bfb2a0;
+  --border-input:#877e6f;   /* 3.3:1, så feltet har en synlig kant */
+  --text:#211c16;
+  --text-2:#4a433a;
+  --text-3:#6a6257;   /* 5.7:1 paa surface, 4.7:1 paa sidebaggrunden */
+  --text-4:#948b7d;   /* 3.2:1, kun ikoner og streger */
 
   /* Accent, amber H60. Trin 9 er hans #e8954a og er den eneste flade der
      bruges som brand. Lys tekst på den ville være 2.3:1, så knappen i lys
      tilstand bruger det dybe trin 12 med hvid tekst (5.2:1). */
-  /* Amber er signaturen: brand, aktiv fane, valgt raekke, fokus og de
-     faa steder hvor noget haster. Den er en markoer, ikke en flade. */
-  --accent:#8a4a10;
-  --accent-deep:#6b3806;
-  --accent-solid:#e8954a;
+  --accent:#8f4c0f;          /* link og tekst, 6.5:1 på surface */
+  --accent-deep:#713a08;
+  --accent-solid:#e8954a;    /* brand, prikker, målere */
   --accent-bright:#f2a45c;
-  --accent-soft:#f8efe2;
-  --accent-line:#e6c9a6;
-  --on-accent:#ffffff;
+  --accent-soft:#fff0df;
+  --accent-line:#f0c79c;
+  --on-accent:#fffdfa;
 
   --ok:#2f7442; --ok-soft:#e7f4e9; --ok-line:#bcdcc4;
   --warn:#745600; --warn-soft:#fcf1d8; --warn-line:#e6d5a4;
@@ -92,7 +90,7 @@
 
   /* typografi */
   --font:'Onest',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
-  --font-display:'Onest',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --font-display:'Bricolage Grotesque','Onest',system-ui,sans-serif;
   --font-mono:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace;
   --fs-display:2.75rem; --fs-h1:2.125rem; --fs-h2:1.5rem; --fs-h3:1.1875rem; --fs-price:1.4375rem;
   --fs-body:0.9375rem; --fs-small:0.8125rem; --fs-caption:0.75rem; --fs-overline:0.6875rem;
@@ -101,16 +99,16 @@
   --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px;
   --sp-6:32px; --sp-7:48px; --sp-8:64px; --sp-9:96px;
 
-  /* radius: naesten firkantet. Piller er afskaffet. */
-  --r-1:4px; --r-2:6px; --r-3:8px; --r-4:10px; --r-pill:6px;
+  /* radius efter størrelse */
+  --r-1:3px; --r-2:5px; --r-3:8px; --r-4:12px; --r-pill:999px;
 
-  /* dybde: en hårfin kant, ikke bloede skygger. Kun overlays loeftes. */
-  --e1:0 0 0 0 rgba(0,0,0,0);
-  --e2:0 2px 5px rgba(20,20,20,.10);
-  --e3:0 6px 18px rgba(20,20,20,.13);
-  --e4:0 12px 32px rgba(20,20,20,.18);
-  --edge:inset 0 0 0 1px var(--border);
-  --hi:inset 0 0 0 0 rgba(255,255,255,0);
+  /* dybde, varm skygge */
+  --e1:0 1px 1.5px rgba(50,38,22,.06),0 3px 7px rgba(50,38,22,.07);
+  --e2:0 3px 6px rgba(50,38,22,.08),0 12px 26px rgba(50,38,22,.11);
+  --e3:0 6px 12px rgba(50,38,22,.09),0 22px 44px rgba(50,38,22,.15);
+  --e4:0 10px 20px rgba(50,38,22,.10),0 30px 64px rgba(50,38,22,.22);
+  --edge:inset 0 0 0 1px rgba(50,38,22,.06);
+  --hi:inset 0 1px 0 rgba(255,255,255,.55);
 
   /* motion */
   --dur-instant:80ms; --dur-fast:140ms; --dur-base:220ms;
@@ -129,12 +127,12 @@
     /* Mørk: dybde er lysere flader, ikke skygger. Hvert niveau løftes
        .025-.035 i L. Kontrast mod surface: text 15:1, text-2 11:1,
        text-3 8.1:1, text-4 5.5:1. */
-    --bg:#131416; --surface:#1b1c1e; --surface-2:#232426; --surface-3:#2b2d2f;
-    --border:#333537; --border-strong:#4b4e51; --border-input:#75797c;
-    --text:#ececec; --text-2:#c2c4c6; --text-3:#9a9c9f; --text-4:#75787b;
+    --bg:#14110d; --surface:#1e1a15; --surface-2:#26211a; --surface-3:#2f2921;
+    --border:#3a332a; --border-strong:#554c40; --border-input:#7c7466;
+    --text:#f0eae1; --text-2:#d4cdc2; --text-3:#b3aba0; --text-4:#948c80;
 
     --accent:#f3a55e; --accent-deep:#ffc392; --accent-solid:#e8954b;
-    --accent-bright:#f3a55e; --accent-soft:#2b2013; --accent-line:#5d401f;
+    --accent-bright:#f3a55e; --accent-soft:#3a2412; --accent-line:#6a411c;
     --on-accent:#1a140d;
 
     --ok:#88ca95; --ok-soft:#16281a; --ok-line:#2f4d38;
@@ -149,12 +147,12 @@
     --cat-gaming:#ef97c8; --cat-text-gaming:#ef97c8;
     --cat-coffee:#eb8652; --cat-text-coffee:#eb8652;
 
-    --e1:0 0 0 0 rgba(0,0,0,0);
-    --e2:0 2px 5px rgba(0,0,0,.5);
-    --e3:0 6px 18px rgba(0,0,0,.55);
-    --e4:0 12px 32px rgba(0,0,0,.6);
-    --edge:inset 0 0 0 1px var(--border);
-    --hi:inset 0 0 0 0 rgba(255,255,255,0);
+    --e1:0 1px 2px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.35);
+    --e2:0 2px 6px rgba(0,0,0,.55),0 10px 26px rgba(0,0,0,.5);
+    --e3:0 4px 10px rgba(0,0,0,.55),0 18px 40px rgba(0,0,0,.55);
+    --e4:0 8px 20px rgba(0,0,0,.6),0 28px 60px rgba(0,0,0,.6);
+    --edge:inset 0 0 0 1px rgba(255,255,255,.06);
+    --hi:inset 0 1px 0 rgba(255,255,255,.05);
   }
 }
 
@@ -163,8 +161,10 @@
 *{margin:0;padding:0}
 html{-webkit-text-size-adjust:100%;scroll-padding-top:80px}
 body{
-  background-color:var(--bg);
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+  background:
+    radial-gradient(1200px 460px at 50% -220px,
+      color-mix(in oklab,var(--accent-solid) 14%,transparent),transparent 72%),
+    var(--bg);
   background-attachment:fixed;
   color:var(--text);
   font:400 var(--fs-body)/1.55 var(--font);
@@ -206,8 +206,12 @@ hr{border:0;border-top:1px solid var(--border)}
   position:sticky;top:0;z-index:var(--z-sticky);
   display:flex;align-items:center;justify-content:center;gap:var(--sp-4);
   height:64px;padding:0 var(--sp-6);
-  background:var(--surface);
-  border-bottom:1px solid var(--border);
+  background:linear-gradient(180deg,
+    color-mix(in oklab,var(--surface) 94%,var(--accent-solid)),
+    color-mix(in oklab,var(--surface) 88%,var(--surface-2)));
+  backdrop-filter:saturate(150%) blur(14px);
+  border-bottom:1px solid var(--border-strong);
+  box-shadow:inset 0 3px 0 0 var(--accent-solid),0 8px 20px rgba(50,38,22,.07);
   animation:bar-in var(--dur-slower) var(--ease-out) both;
 }
 .topbar-inner{display:flex;align-items:center;gap:var(--sp-4);width:100%;max-width:1240px}
@@ -250,9 +254,11 @@ hr{border:0;border-top:1px solid var(--border)}
 .page.is-wide{max-width:1240px}
 .page-head{margin-bottom:var(--sp-5);padding-bottom:var(--sp-4);
   border-bottom:1px solid var(--border-strong);position:relative}
-.overline{display:inline-flex;align-items:center;gap:6px;
-  font-family:var(--font-mono);font-size:var(--fs-caption);font-weight:500;
-  color:var(--text-3);text-transform:none;letter-spacing:.01em;margin-bottom:5px}
+.page-head::after{content:"";position:absolute;left:0;bottom:-2px;width:58px;height:3px;
+  border-radius:2px;background:var(--accent-solid)}
+.overline{display:inline-flex;align-items:center;gap:7px;
+  font-size:var(--fs-overline);font-weight:700;color:var(--accent);
+  text-transform:uppercase;letter-spacing:.14em;margin-bottom:7px}
 .page-head h1{
   font-family:var(--font-display);font-size:var(--fs-h1);font-weight:700;
   line-height:1.06;letter-spacing:-.025em;text-wrap:balance;
@@ -517,8 +523,10 @@ select{appearance:none;padding-right:30px;cursor:pointer;
              border-color var(--dur-base) var(--ease-standard),
              opacity var(--dur-base) var(--ease-standard),
              transform var(--dur-base) var(--ease-out);
+  animation:card-in var(--dur-slow) var(--ease-out) both;
+  animation-delay:calc(var(--i,0) * var(--stagger));
 }
-.card:hover{box-shadow:none;border-color:var(--border-strong)}
+.card:hover{box-shadow:var(--e2);border-color:var(--border-strong);transform:translateY(-2px)}
 .card[data-hidden]{display:none!important}
 .card.is-hiding{opacity:0;transform:scale(.98)}
 .card[data-feedback=skip]{opacity:.5}
@@ -535,6 +543,7 @@ select{appearance:none;padding-right:30px;cursor:pointer;
 .thumb{position:absolute;inset:0;overflow:hidden}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block;
   transition:transform var(--dur-slow) var(--ease-out)}
+.card:hover .thumb img{transform:scale(1.03)}
 .thumb img.is-broken{display:none}
 .thumb-fallback{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   color:color-mix(in oklab,var(--accent) 60%,var(--text-4));opacity:.5}
@@ -548,8 +557,8 @@ select{appearance:none;padding-right:30px;cursor:pointer;
 
 .badge-time,.badge-state{
   position:absolute;z-index:2;display:inline-flex;align-items:center;gap:4px;
-  border-radius:var(--r-1);font-size:var(--fs-caption);font-weight:600;
-  padding:2px 7px;white-space:nowrap;
+  border-radius:var(--r-pill);font-size:var(--fs-caption);font-weight:600;
+  padding:3px 9px;backdrop-filter:blur(6px);
 }
 .badge-time{
   left:9px;bottom:9px;
@@ -561,8 +570,8 @@ select{appearance:none;padding-right:30px;cursor:pointer;
   color:#fff;font-weight:500}
 .badge-state{
   right:9px;top:9px;text-transform:uppercase;letter-spacing:.09em;
-  font-size:var(--fs-caption);font-weight:700;padding:3px 9px;
-  box-shadow:none;
+  font-size:10px;font-weight:700;padding:3px 9px;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.34),0 1px 3px rgba(0,0,0,.25);
 }
 .badge-state.is-skip{background:color-mix(in srgb,var(--urgent) 90%,transparent);color:#fff}
 .badge-state.is-bid{background:color-mix(in srgb,var(--warn) 92%,transparent);color:#fff}
@@ -1324,179 +1333,3 @@ tr.run-error td{background:var(--urgent-soft);color:var(--urgent);font-size:var(
 .bar-fill{box-shadow:inset 0 -1px 0 rgba(0,0,0,.08)}
 .panel{box-shadow:var(--e2),var(--edge)}
 .section-title .count{background:var(--surface-3);color:var(--text-2)}
-
-/* ==========================================================================
-   Katalog som lot-tabel
-   --------------------------------------------------------------------------
-   Erstattter flise-moensteret. Samme DOM og samme data-attributter, saa
-   app.js' filtrering, sortering og tastaturnavigation er uaendret.
-   ========================================================================== */
-.lot-grid,.date-group,.flat-list{grid-template-columns:1fr;gap:0}
-.date-group{margin-bottom:var(--sp-6)}
-.date-label{
-  font-family:var(--font-mono);font-size:var(--fs-caption);font-weight:600;
-  text-transform:none;letter-spacing:.02em;color:var(--text-3);
-  border-bottom:1px solid var(--text);padding:3px 0 6px;
-}
-.date-label .count{background:transparent;color:var(--text-3);border-radius:0;padding:0}
-
-.card{
-  display:grid;
-  grid-template-columns:52px 56px minmax(0,1fr) auto;
-  align-items:center;gap:0 14px;
-  background:transparent;border:0;border-bottom:1px solid var(--border);
-  border-radius:0;overflow:visible;box-shadow:none;
-  padding:9px 2px;
-}
-.card:hover{border-color:var(--text-3);box-shadow:none}
-
-.lot-no{
-  font-family:var(--font-mono);font-size:var(--fs-caption);color:var(--text-3);
-  font-variant-numeric:tabular-nums;text-align:right;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-}
-
-.card-media{position:relative;width:56px;height:56px;aspect-ratio:auto;
-  border-radius:var(--r-2);overflow:hidden}
-.card-media::after{display:none}
-.badge-time,.badge-state{display:none}
-.thumb img{transition:none}
-
-.card-body{
-  display:grid;grid-template-columns:minmax(0,1fr) auto;
-  grid-template-areas:"title price" "meta price";
-  align-items:baseline;gap:2px 18px;padding:0;
-}
-.card-title{grid-area:title;font-size:1rem;-webkit-line-clamp:1}
-.card-title a{padding:0}
-.card-meta{grid-area:meta;margin:0;gap:4px 10px}
-.card-sub{display:none}
-.card-facts{grid-area:price;display:flex;flex-direction:column;align-items:flex-end;
-  gap:1px;margin:0;flex-wrap:nowrap}
-.price{font-size:1.0625rem;font-weight:600;letter-spacing:-.01em}
-.price-label{display:none}
-.time-inline{display:inline-flex;align-items:center;gap:4px;
-  font-size:var(--fs-caption);color:var(--text-3);white-space:nowrap}
-.time-inline.urgent{color:var(--urgent)}
-.time-inline.soon{color:var(--warn)}
-.spark{margin-left:0}
-
-.card-actions{margin:0;padding:0;border:0;gap:2px;flex-wrap:nowrap}
-.card-actions .fb-btn{
-  flex:0 0 auto;min-height:28px;padding:3px 9px;border-radius:var(--r-1);
-  border:1px solid transparent;background:transparent;box-shadow:none;
-  font-size:var(--fs-caption);color:var(--text-3);
-}
-.card-actions .fb-btn .ic{display:inline-flex}
-.card-actions .fb-btn span{display:inline}
-.card-actions .fb-btn:hover{background:var(--surface-2);color:var(--text)}
-.card-actions .fb-btn[aria-pressed=true]{background:var(--surface-3);color:var(--text);
-  border-color:var(--border-strong)}
-
-[data-view=kompakt] .card{grid-template-columns:44px 40px minmax(0,1fr) auto;gap:0 10px;padding:5px 2px}
-[data-view=kompakt] .card-media{width:40px;height:40px}
-[data-view=kompakt] .card-body{padding:0}
-
-[data-view=kompakt] .card-actions .fb-btn{border-radius:var(--r-1)}
-
-/* Under 760 px: to linjer pr. række i stedet for fire kolonner. */
-@media (max-width:760px){
-  .card{
-    grid-template-columns:40px 52px minmax(0,1fr);
-    grid-template-areas:"lot thumb body" "actions actions actions";
-    gap:4px 10px;padding:10px 2px;
-  }
-  .lot-no{grid-area:lot;text-align:left}
-  .card-media{grid-area:thumb;width:52px;height:52px}
-  .card-body{grid-area:body;grid-template-columns:minmax(0,1fr);
-    grid-template-areas:"title" "meta" "price";gap:2px}
-  .card-facts{grid-area:price;flex-direction:row;flex-wrap:wrap;align-items:center;
-    justify-content:flex-start;gap:4px 12px;margin-top:2px}
-  .price{font-size:1rem}
-  .card-actions{grid-area:actions;justify-content:flex-start;padding-top:4px}
-  .card-actions .fb-btn{flex:0 0 auto}
-}
-@media (max-width:560px){
-  .card-actions .fb-btn{flex:1 1 0;padding:4px 6px}
-  .card-actions .fb-btn .ic{display:none}
-}
-
-/* ==========================================================================
-   Overflader og bevaegelse
-   ========================================================================== */
-.topbar{animation:none}
-.brand-mark{background:var(--accent);border-radius:var(--r-2);box-shadow:none}
-.brand-name{letter-spacing:0}
-.brand-name em{font-weight:500;color:var(--text-3)}
-
-.panel{background:transparent;border-radius:0;box-shadow:none;
-  border-top:1px solid var(--text);border-bottom:1px solid var(--border);overflow:visible}
-.bar-row{border-bottom:1px solid var(--border)}
-.bar-row:last-child{border-bottom:0}
-
-.metrics{background:transparent;border-radius:0;box-shadow:none;gap:0;
-  border-top:1px solid var(--text);border-bottom:1px solid var(--border)}
-.metric{background:transparent;border-left:1px solid var(--border);padding:12px 16px}
-.metric:first-child{border-left:0}
-.metric dd{font-size:1.75rem;font-weight:650;letter-spacing:-.02em}
-
-.cat-block{background:transparent;border-radius:0;margin-bottom:0;
-  border-bottom:1px solid var(--border)}
-.cat-block[open]{box-shadow:none}
-.cat-head{border-radius:0}
-.cat-body{padding:var(--sp-3) 0 6px}
-
-.empty-state{
-  align-items:flex-start;text-align:left;gap:8px;max-width:64ch;
-  margin:var(--sp-5) 0;padding:var(--sp-5) 0;
-  background:transparent;border:0;border-top:1px solid var(--text);
-  border-bottom:1px solid var(--border);border-radius:0;box-shadow:none;
-}
-.empty-glyph{width:auto;height:auto;border-radius:0;background:transparent;
-  box-shadow:none;color:var(--text-3)}
-.empty-state h2{font-family:var(--font);font-size:1.125rem;font-weight:700;letter-spacing:0}
-.empty-state p{text-align:left}
-
-.lot-price{padding:16px 0 14px;background:transparent;border-radius:0;box-shadow:none;
-  border-top:1px solid var(--text)}
-.lot-price-value{font-weight:650;letter-spacing:-.02em}
-
-.fb-btn[aria-pressed=true]{animation:none}
-details[open]>.cat-body{animation:none}
-.is-changed{animation:none}
-
-/* ==========================================================================
-   Personlighed: bloedere former, amber som signatur, papirkorn
-   ========================================================================== */
-.brand-mark{background:var(--accent-solid);color:#1a140d;border-radius:var(--r-2)}
-.nav-link{border-radius:var(--r-2)}
-.nav-link.is-active{background:var(--accent-soft);color:var(--accent)}
-
-.date-label{display:flex;justify-content:flex-start;align-items:center;gap:9px}
-.date-label::before{content:"";width:9px;height:9px;border-radius:2px;
-  background:var(--accent-solid);flex:none}
-.date-label .count{margin-left:auto}
-
-.card{padding:9px 12px;border-radius:var(--r-3);
-  transition:background-color var(--dur-fast) var(--ease-standard),
-             border-color var(--dur-fast) var(--ease-standard)}
-.card:hover{background:var(--surface-2);border-bottom-color:transparent;
-  border-radius:var(--r-3)}
-.card.is-selected{outline:2px solid var(--accent-solid);outline-offset:-2px;border-radius:var(--r-3)}
-
-.chip,.btn{border-radius:var(--r-2)}
-input[type=text],input[type=number],input[type=password],input[type=search],select,textarea{
-  border-radius:var(--r-2)}
-.search-field{border-radius:var(--r-2)}
-.meta-toggle{border-radius:var(--r-2)}
-.card-actions .fb-btn{border-radius:var(--r-2)}
-.card-actions .fb-btn[aria-pressed=true]{background:var(--accent-soft);
-  color:var(--accent);border-color:var(--accent-line)}
-.metric dt,.field label,.field legend,.filter-label,.price-form label,.legend-item dt{
-  text-transform:none;letter-spacing:.01em}
-.panel,.filter-panel,.answer,.tester-body,.legend-list,.login-form,.cat-block{
-  border-radius:var(--r-3)}
-.pager .btn,.toolbar-actions .btn{border-radius:var(--r-2)}
-
-
-

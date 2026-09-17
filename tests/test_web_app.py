@@ -416,7 +416,7 @@ def test_samtalefilen_ligger_ved_siden_af_agentens(client, sample_db):
 def test_statistik_viser_kategorier(client):
     body = client.get("/stats").text
     assert "it_tech" in body
-    assert "bar-fill" in body
+    assert "Støjandel" in body
 
 
 def test_statistik_viser_koersler(client):

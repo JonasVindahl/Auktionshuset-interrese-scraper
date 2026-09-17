@@ -16,6 +16,7 @@
 
 {% block content %}
 <header class="page-head">
+  <p class="overline">{{ icon('filter', 13) }} Matchningsprofil</p>
   <h1>Interesser</h1>
   <p class="page-meta">
     <span>{{ categories|length }} kategorier</span>
@@ -53,6 +54,7 @@
       {% if explanation %}<p class="trace-explain">{{ explanation }}</p>{% endif %}
     </div>
     {% else %}
+    <p class="hint">Feltet kører den samme matcher som agenten bruger, og viser hvilke nøgleord der blev ramt eller manglede.</p>
     {% endif %}
   </div>
 </details>
@@ -60,6 +62,7 @@
 {% if suggestions or unmatched %}
 <section class="section suggest">
   <h2 class="section-title">Forslag fra dine markeringer <span class="count">{{ suggestions|length }}</span></h2>
+  <p class="section-note">Bygget på hvad du selv har afvist og købt. Tallene er antal lots, ikke et bevis. Intet ændres før du siger ja, og profilen bør køres mod facitlisten bagefter.</p>
   {% if suggestions %}
   <div class="suggest-list">
     {% for s in suggestions %}
@@ -93,7 +96,7 @@
     {% endfor %}
   </div>
   {% else %}
-  <p class="empty">Ingen forslag endnu.</p>
+  <p class="empty">Ingen nøgleord støjer nok endnu. Der skal være mindst fem afviste lots bag et ord, før det foreslås.</p>
   {% endif %}
   {% if unmatched %}
   <details class="unmatched"{% if ai %} open{% endif %}>
@@ -101,6 +104,7 @@
     <ul class="kw-list">
       {% for m in unmatched %}<li class="kw"><span class="kw-text">{{ m.title[:80] }}</span></li>{% endfor %}
     </ul>
+    <p class="hint">Lots du har budt på eller købt, som aldrig blev et fund. Det tyder på et manglende nøgleord.</p>
     {% if ai_suggestions %}
     <div class="suggest-list">
       {% for s in ai_suggestions %}
@@ -133,7 +137,7 @@
       {% endfor %}
     </div>
     {% else %}
-    <p>
+    <p class="hint">
       <a class="btn" href="/interests?ai=1{% if selected %}&cat={{ selected.key }}{% endif %}" data-busy>Spørg modellen om manglende nøgleord</a>
     </p>
     {% endif %}
@@ -235,6 +239,7 @@
         </div>
         {% endfor %}
       </dl>
+      <p class="hint">Et mærke må aldrig matche alene. <code>brands</code> kræver derfor et ord ved siden af, og <code>exclude</code> vinder over alt andet.</p>
     </details>
   </section>
   {% endif %}
@@ -245,6 +250,7 @@
 
 <section class="section">
   <h2 class="section-title">Udelukkelser <span class="count">{{ excludes|length }}</span></h2>
+  <p class="section-note">Udelukkelser vinder over alt andet. Et lot med et af disse ord bliver aldrig et fund, uanset hvilken kategori der ellers ville ramme.</p>
 
   {% if excludes %}
   <ul class="kw-list">
@@ -279,4 +285,8 @@
   {% endif %}
 </section>
 
+<p class="hint hint-foot">
+  Ændringer skrives linje for linje i <code>config/interests.yml</code>, så kommentarerne i filen bevares.
+  Agenten genlæser filen ved hver kørsel, så en ændring slår igennem inden for 15 minutter uden genstart.
+</p>
 {% endblock %}

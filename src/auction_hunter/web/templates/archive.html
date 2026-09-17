@@ -117,6 +117,7 @@
           <option value="{{ choice }}" {% if q.sort == choice %}selected{% endif %}>{{ {'relevans':'Relevans','nyeste':'Nyeste','slutter':'Slutter først','pris_op':'Laveste pris','pris_ned':'Højeste pris'}[choice] }}</option>
           {% endfor %}
         </select>
+        <span class="field-hint">Relevans følger søgeordets vægt. Nyeste er senest set af agenten, ikke senest sendt.</span>
       </div>
     </div>
 
@@ -149,9 +150,11 @@
     </nav>
     {% endif %}
   {% elif q.is_empty %}
-    {{ empty_state('Søg i arkivet', '', 'search') }}
+    {{ empty_state('Søg i arkivet',
+       'Skriv et søgeord eller vælg et filter. Søgningen folder danske tegn, så hojttaler finder højttaler. Arkivet rummer hvert lot agenten har set, også dem der aldrig ramte profilen.',
+       'search') }}
   {% else %}
-    {{ empty_state('Ingen lots matcher søgningen', '', 'ban', '/archive', 'Ryd filtre') }}
+    {{ empty_state('Ingen lots matcher søgningen', 'Prøv et bredere søgeord, eller ryd filtrene.', 'ban', '/archive', 'Ryd filtre') }}
   {% endif %}
 </section>
 {% endblock %}

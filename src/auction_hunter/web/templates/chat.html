@@ -20,13 +20,15 @@
 
 {% block content %}
 <header class="page-head">
+  <p class="overline">{{ icon('search', 13) }} Spørg arkivet</p>
   <h1>Assistent</h1>
+  <p class="page-meta">En samtale om arkivet. Spørg i almindeligt sprog, og byg videre på svaret.</p>
 </header>
 
 {% if not has_key %}
 <p class="banner is-note" role="status">
   {{ icon('info', 15) }}
-  <span><strong>CLASSIFIER_API_KEY er ikke sat.</strong> Spørgsmål besvares som nøgleordssøgning.</span>
+  <span><strong>CLASSIFIER_API_KEY er ikke sat.</strong> Du kan stadig søge: spørgsmålet bliver til en nøgleordssøgning, og du får lot'ene direkte i stedet for et skrevet svar.</span>
 </p>
 {% endif %}
 
@@ -50,7 +52,9 @@
 {% endif %}
 
 {% if not thread %}
-{{ empty_state('Spørg arkivet', '', 'search') }}
+{{ empty_state('Spørg arkivet',
+   'Jeg leder i alt hvad agenten har set, også de lots der aldrig blev til et fund. Spørgsmålet oversættes til en søgning, og det er Python der bygger den, så en mærkelig lot-titel kan ikke narre mig til at hente noget andet end lots.',
+   'search') }}
 {% endif %}
 
 <div class="thread">

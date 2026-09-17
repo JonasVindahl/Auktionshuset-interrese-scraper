@@ -7,6 +7,7 @@
 
 {% block content %}
 <header class="page-head">
+  <p class="overline">{{ icon('bookmark', 13) }} Din historik</p>
   <h1>Mine markeringer</h1>
   <p class="page-meta">
     <span>{{ count }} i alt</span>
@@ -39,6 +40,7 @@
       </table>
     </div>
   </div>
+  <p class="hint">Kun det du har budt på eller købt, med den reelle pris inkl. salær og moms.</p>
 </section>
 {% endif %}
 
@@ -52,7 +54,13 @@
   </section>
   {% endfor %}
 
+  <p class="hint">
+    Beløbene er den reelle pris inkl. salær og moms. Markeringerne gemmes lokalt som
+    træningsdata til AI-trinnet og kan <a href="/export/feedback.csv">hentes som CSV</a>.
+  </p>
 {% else %}
-  {{ empty_state('Ingen markeringer endnu', '', 'bookmark') }}
+  {{ empty_state('Ingen markeringer endnu',
+     'Knapperne Afvis, Følg, Budt og Købt på hvert lot gemmer et menneskeligt svar på, om profilen ramte rigtigt. Markeringerne bliver træningsdata til AI-trinnet.',
+     'bookmark') }}
 {% endif %}
 {% endblock %}
