@@ -918,6 +918,7 @@ def create_app() -> FastAPI:
                 answer = chat_mod.ask(
                     conn, client, question,
                     categories=keys, history=history, previous=previous,
+                    labels=category_labels(),
                 )
                 store.append(conversation_id, "assistant", answer.text, answer.meta)
                 # Oprydning i samme fil, hoejst en gang i doegnet.

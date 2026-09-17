@@ -62,7 +62,8 @@ FILTER_SYSTEM = (
     "  max_price   heltal, kroner\n"
     '  status      "alle" | "aktive" | "afsluttede"\n'
     '  matched     "alle" | "kun_fund" | "kun_ikke_fund"\n'
-    "  kategori    en af kategorinøglerne\n"
+    "  kategori    en af kategorinøglerne. Udelad den naar brugeren spoerger "
+    "om noget der ikke blev et fund, for et ikke-fund har ingen kategori.\n"
     "  days_back   heltal, hvor mange dage tilbage\n"
     '  sort        "relevans" | "nyeste" | "slutter" | "pris_op" | "pris_ned"\n\n'
     'Brug matched="kun_ikke_fund" når brugeren spørger om noget der IKKE blev '
@@ -453,6 +454,7 @@ def ask(
     categories: list[str] | None = None,
     history: list[dict] | None = None,
     previous: dict | None = None,
+    labels: dict[str, str] | None = None,
 ) -> ChatAnswer:
     """Besvar et spørgsmål om arkivet.
 
@@ -502,10 +504,9 @@ def ask(
 
     result = search(conn, query)
 
-    # Et for stramt filter må ikke give "intet fundet", når et løsere ville
-    # give svar. At slippe søgeordene helt er derimod farligt: så svarer
-    # modellen på noget andet end der blev spurgt om, og det er værre end et
-    # ærligt tomt svar. Derfor kun AND til OR, aldrig teksten væk.
+    # Bliver der intet, løsnes filtrene et ad gangen, fra det mest specifikke
+    # til det bredeste. Søgeordene fjernes aldrig: det var netop den fejl der
+    # fik et spørgsmål om et server rack til at blive besvaret med en switch.
     if result.total == 0 and query.text and not query.any_words:
         relaxed = replace(query, any_words=True)
         alternative = search(conn, relaxed)
@@ -513,6 +514,19 @@ def ask(
             result, query = alternative, relaxed
             note = ("Jeg fandt intet med alle ordene, så jeg søgte efter dem "
                     "hver for sig.")
+    if result.total == 0 and query.category:
+        # En kategori kræver en notifikation, så den skjuler alle ikke-fund.
+        relaxed = replace(query, category="")
+        alternative = search(conn, relaxed)
+        if alternative.total:
+            result, query = alternative, relaxed
+            note = "Jeg fandt intet i den kategori, så jeg søgte i hele arkivet."
+    if result.total == 0 and query.matched != "alle":
+        relaxed = replace(query, matched="alle")
+        alternative = search(conn, relaxed)
+        if alternative.total:
+            result, query = alternative, relaxed
+            note = "Jeg fandt intet med det filter, så jeg søgte i hele arkivet."
 
     candidates = result.rows[:MAX_CANDIDATES]
 
@@ -526,6 +540,8 @@ def ask(
                        "afsluttede": "kun afsluttede"}.get(query.status),
             "kun": {"kun_fund": "kun fund",
                     "kun_ikke_fund": "kun ikke-fund"}.get(query.matched),
+            "kategori": ((labels or {}).get(query.category, query.category)
+                         if query.category else None),
             "dage_tilbage": f"{query.days_back} dage" if query.days_back else None,
         }.items() if value
     }

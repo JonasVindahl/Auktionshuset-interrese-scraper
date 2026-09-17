@@ -25,6 +25,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterator
 
+from .fees import estimate as price_estimate
 from .matcher import Match
 from .scraper import Lot
 from .textmatch import normalize, normalize_loose
@@ -343,6 +344,12 @@ class Store:
         """Skrivningen bag baade record_lot og record_lots. Deler transaktion."""
         now = utcnow()
         ends = lot.ends_at.isoformat(timespec="seconds") if lot.ends_at else None
+
+        if total is None:
+            # Kortet viser den reelle pris inkl. salær og moms. Gem samme tal,
+            # saa et prisfilter rammer det brugeren ser i stedet for det raa bud.
+            price = price_estimate(lot.current_bid, auction_title=lot.auction_title)
+            total = price.current_total or price.entry_cost
 
         row = conn.execute(
             "SELECT last_bid, last_total FROM lots WHERE lot_id=?", (lot.lot_id,)

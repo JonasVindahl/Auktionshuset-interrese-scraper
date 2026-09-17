@@ -225,3 +225,27 @@ def test_indeks_bygges_for_gammel_database(tmp_path, lot_factory):
         assert search(connection, SearchQuery(text="harddiske")).total == 1
     finally:
         connection.close()
+
+
+def test_kategori_og_ikke_fund_kan_ikke_kombineres(tmp_path, lot_factory):
+    """Et ikke-fund har ingen kategori, saa de to filtre gav altid nul."""
+    with Store(tmp_path / "t.db") as store:
+        store.record_lot(
+            lot_factory("nf", "Computer LENOVO ThinkCentre M720q", first_bid=325), None
+        )
+        store.conn.commit()
+        query = SearchQuery(
+            text="thinkcentre", matched="kun_ikke_fund", category="it_tech"
+        ).normalized()
+        assert query.category == ""
+        assert search(store.conn, query).total == 1
+
+
+def test_prisfilter_rammer_den_viste_pris(tmp_path, lot_factory):
+    """325 i bud er 488 kr inkl. salær og moms, altsaa det kortet viser."""
+    with Store(tmp_path / "t.db") as store:
+        store.record_lot(
+            lot_factory("nf", "Computer LENOVO ThinkCentre M720q", first_bid=325), None
+        )
+        store.conn.commit()
+        assert search(store.conn, SearchQuery(min_price=487, max_price=489)).total == 1
