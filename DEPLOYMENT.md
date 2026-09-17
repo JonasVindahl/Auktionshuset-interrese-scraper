@@ -215,19 +215,19 @@ OCI-labels og digest-pinning af base-imaget.
 Alt kan ogsaa kaldes direkte med `.venv/bin/python -m pytest` og
 `.venv/bin/ruff check src tests`. `make help` viser resten.
 
-CI-workflowet ligger klar i `ci/ci.yml` og kører tests på Python 3.11 og 3.13,
-ruff og et Docker-build. Det er ikke lagt i `.github/workflows/` endnu, fordi et
-GitHub-token skal have `workflow`-scopet for at oprette en workflow-fil. Aktivér
-det med:
+CI kører ved hvert push til `main` og på hver pull request: tests på Python 3.11
+og 3.13, ruff og et Docker-build. Kilden er `ci/ci.yml` og kopien i
+`.github/workflows/ci.yml`; retter du det ene, skal det andet med. `make ci-install`
+kopierer kilden på plads, hvis de skulle komme ud af trit.
 
-    gh auth refresh -s workflow
-    make ci-install
-    git add .github/workflows/ci.yml && git commit -m "ci: aktivér workflow"
+Starlettes TestClient kræver `httpx2`, som ikke er en driftsafhængighed. Den
+installeres derfor kun i CI, i dev-extraen i `pyproject.toml` og af
+`make install`. Det var den første fejl CI fangede: lokalt lå `httpx` i
+forvejen, så forskellen var skjult indtil testene kørte på en ren maskine.
 
 Versionen ligger ét sted (`auction_hunter.__version__`) og vises i `/healthz`,
 `/readyz`, sidefoden og på `/drift`.
 
 ## 10. Kendte mangler
 
-- CI er ikke aktiveret endnu; se afsnit 9.
 - Ens bruger og én adgangskode. Profilerne er interessesæt, ikke brugere.

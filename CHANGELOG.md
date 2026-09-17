@@ -8,6 +8,14 @@ versionerne er [semantiske](https://semver.org/lang/da/).
 ### Tilføjet
 
 - `LICENSE`: MIT.
+- CI kører nu på GitHub: tests på Python 3.11 og 3.13, ruff og et Docker-build.
+  Badge i README.
+
+### Rettet
+
+- CI's første kørsel fangede at `httpx2` manglede i testopsætningen. Lokalt lå
+  `httpx` i forvejen, så fejlen var skjult indtil testene kørte på en ren
+  maskine.
 
 ### Ændret
 

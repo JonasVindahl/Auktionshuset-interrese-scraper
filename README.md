@@ -1,5 +1,7 @@
 # Auktionshuset Hunter
 
+[![CI](https://github.com/JonasVindahl/Auktionshuset-interrese-scraper/actions/workflows/ci.yml/badge.svg)](https://github.com/JonasVindahl/Auktionshuset-interrese-scraper/actions/workflows/ci.yml)
+
 Overvåger aktive auktioner på [auktionshuset.dk](https://auktionshuset.dk) for
 de landsdele du vælger, matcher dem mod en eller flere interesseprofiler og
 sender fund til Discord.
