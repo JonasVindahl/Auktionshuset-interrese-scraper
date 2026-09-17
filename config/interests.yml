@@ -700,3 +700,27 @@ categories:
       - kaffekop
       - kaffepresse
       - french press
+
+# ---------------------------------------------------------------------------
+# Profiler (valgfrit)
+# ---------------------------------------------------------------------------
+# Uden dette afsnit er der én implicit profil, og alt opfører sig praecis som
+# foer. En profil kan indsnaevre hvilke kategorier der gaelder, saette sit eget
+# prisloft og sine egne udelukkelser, og pege paa sin egen Discord-webhook via
+# 'webhook_env'. Brug ascii-noegler, da de ogsaa bruges i miljoevariabler.
+#
+# 'categories: null' eller udeladt betyder alle kategorier; en tom liste [] 
+# betyder ingen. 'enabled: false' slukker profilen, og kan overstyres med
+# PROFILE_<NOEGLE>_ENABLED=1.
+#
+# profiles:
+#   hifi:
+#     label: HiFi og lyd
+#     categories: [audio_hifi]
+#     max_price: 2500
+#   vaerktoj:
+#     label: Vaerktoj og maker
+#     categories: [maker_electronics, it_tech]
+#     max_price: 800
+#     exclude: [bil, trailer]
+#     webhook_env: DISCORD_WEBHOOK_VAERKTOEJ

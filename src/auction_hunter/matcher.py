@@ -12,9 +12,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from .config import Category, Config
+from .config import Category, Config, Profile
 from .fees import PriceEstimate, estimate
 from .scraper import Lot
+from .textmatch import find_keywords
 
 
 @dataclass(frozen=True)
@@ -44,19 +45,29 @@ def last_chance(lot: Lot, within_hours: float, now: datetime | None = None) -> b
     return 0 <= remaining <= within_hours
 
 
-def match_lot(lot: Lot, config: Config, *, opening_bid: int | None = None) -> list[Match]:
+def match_lot(
+    lot: Lot,
+    config: Config,
+    *,
+    opening_bid: int | None = None,
+    profile: Profile | None = None,
+) -> list[Match]:
     """Find alle kategorier et lot matcher, med respekt for prisloftet.
 
     Et lot kan matche flere kategorier. Titlen er den primære signalkilde;
     auktionsnavnet bruges kun til at afgøre momsforhold, ikke til at matche
     nøgleord — ellers ville hvert lot i en "IT-udstyr"-auktion blive et match.
+
+    Med en profil indsnævres kategorierne, og profilens loft og udelukkelser
+    gælder i stedet for topniveauets. Uden profil er adfærden uændret.
     """
     haystack = lot.title.lower()
     if lot.lot_number:
         haystack = f"lot {lot.lot_number} {haystack}"
 
-    # Eksplicitte udelukkelser slår altid igennem.
-    if config.is_excluded(haystack):
+    # Eksplicitte udelukkelser slår altid igennem. Globale gælder også for en
+    # profil, som kun kan lægge sine egne oveni.
+    if find_keywords(haystack, config.profile_exclude(profile)):
         return []
 
     price = estimate(
@@ -66,14 +77,21 @@ def match_lot(lot: Lot, config: Config, *, opening_bid: int | None = None) -> li
     )
     cost = price.current_total or price.entry_cost
 
+    soft = (
+        profile.soft_over_budget_factor
+        if profile is not None and profile.soft_over_budget_factor is not None
+        else config.soft_over_budget_factor
+    )
+    profile_budget = profile.max_price if profile is not None else None
+
     matches: list[Match] = []
-    for category in config.categories:
+    for category in config.profile_categories(profile):
         is_match, keywords = category.match(haystack)
         if not is_match:
             continue
 
-        ceiling = category.max_price * config.soft_over_budget_factor
-        if cost > ceiling:
+        budget = profile_budget if profile_budget is not None else category.max_price
+        if cost > budget * soft:
             continue
 
         matches.append(
@@ -82,17 +100,23 @@ def match_lot(lot: Lot, config: Config, *, opening_bid: int | None = None) -> li
                 category=category,
                 keywords=keywords,
                 price=price,
-                over_budget=cost > category.max_price,
+                over_budget=cost > budget,
             )
         )
 
     return matches
 
 
-def match_all(lots: list[Lot], config: Config, *, opening_bid: int | None = None) -> list[Match]:
+def match_all(
+    lots: list[Lot],
+    config: Config,
+    *,
+    opening_bid: int | None = None,
+    profile: Profile | None = None,
+) -> list[Match]:
     results: list[Match] = []
     for lot in lots:
-        results.extend(match_lot(lot, config, opening_bid=opening_bid))
+        results.extend(match_lot(lot, config, opening_bid=opening_bid, profile=profile))
     return results
 
 
