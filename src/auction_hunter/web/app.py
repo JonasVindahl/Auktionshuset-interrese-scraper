@@ -785,6 +785,7 @@ def create_app() -> FastAPI:
         status: str = "alle",
         matched: str = "alle",
         category: str = "",
+        auction: str = Query("", max_length=160),
         days_back: OptionalInt = None,
         sort: str = "relevans",
         page_no: Annotated[
@@ -797,7 +798,8 @@ def create_app() -> FastAPI:
             result = search_mod.search(conn, search_mod.SearchQuery(
                 text=q, min_price=min_price, max_price=max_price,
                 status=status, matched=matched, category=category,
-                days_back=days_back, sort=sort, page=page_no or 1,
+                auction=auction, days_back=days_back, sort=sort,
+                page=page_no or 1,
             ))
             stats = search_mod.archive_stats(conn)
             categories = search_mod.categories_seen(conn)
@@ -813,7 +815,8 @@ def create_app() -> FastAPI:
                     "q": q, "min_price": min_price, "max_price": max_price,
                     "status": status if status != "alle" else None,
                     "matched": matched if matched != "alle" else None,
-                    "category": category or None, "days_back": days_back,
+                    "category": category or None,
+                    "auction": auction or None, "days_back": days_back,
                     "sort": sort if sort != "relevans" else None,
                     "page": target,
                 }.items() if v
