@@ -120,7 +120,9 @@ class TestPrune:
         store.conn.execute("INSERT INTO price_history VALUES ('OLD',?,1,1)", (iso(400),))
         store.conn.execute("INSERT INTO price_history VALUES ('NEW',?,2,2)", (iso(0),))
         store.conn.execute(
-            "INSERT INTO notifications VALUES ('OLD','it_tech',?,125)", (iso(400),)
+            "INSERT INTO notifications (lot_id, category_key, sent_at, cost)"
+            " VALUES ('OLD','it_tech',?,125)",
+            (iso(400),),
         )
         store.conn.execute(
             "INSERT INTO classifications VALUES ('h1','OLD','it_tech','1','m','ja','',?)",

@@ -41,6 +41,35 @@ Etiketten i beskederne udledes automatisk ("Hele Danmark" for alle) og kan
 overstyres med `REGION_LABEL`. Uden det ville varslerne påstå "Sjælland" mens
 agenten fulgte hele landet.
 
+## 3b. Profiler
+
+En profil er et navngivet interessesæt: sine egne kategorier, sit eget prisloft,
+sine egne udelukkelser og sin egen webhook. Uden `profiles` i `interests.yml` er
+der én implicit standardprofil, og alt kører som før.
+
+    profiles:
+      hifi:
+        label: HiFi og lyd
+        categories: [audio_hifi]
+        max_price: 2500
+        webhook_env: DISCORD_WEBHOOK_HIFI
+      vaerktoj:
+        label: Værktøj og maker
+        categories: [maker_electronics, it_tech]
+        max_price: 800
+        exclude: [bil, trailer]
+
+- `categories: null` (eller udeladt) betyder alle kategorier; `[]` betyder ingen.
+- Globale `exclude`-ord gælder altid; profilens ord lægges oveni.
+- En profil kan slukkes med `enabled: false` eller `PROFILE_<NØGLE>_ENABLED=0`.
+  Brug ascii-nøgler, da nøglen også bruges i miljøvariabelnavnet.
+- Dedup er pr. (lot, kategori, profil), så det samme lot kan give én besked pr.
+  profil, men aldrig to til den samme.
+- `webhook_env` navngiver en miljøvariabel med en webhook. Er den sat, sendes
+  profilens fund der; ellers bruges `DISCORD_WEBHOOK_URL`.
+- Ukendte kategorinavne i en profil stopper opstarten med en fejl i stedet for
+  at matche stille på ingenting.
+
 ## 4. Reverse proxy
 
 Dashboardet bør ikke eksponeres direkte. Bind det til lokalhost og lad

@@ -25,6 +25,16 @@ class Match:
     keywords: tuple[str, ...]
     price: PriceEstimate
     over_budget: bool
+    profile: Profile | None = None
+
+    @property
+    def profile_key(self) -> str:
+        """Noeglen paa den profil fundet kom fra.
+
+        Uden profiler er der én implicit standardprofil, så notifikationer fra
+        foer profilerne beholder deres noegle og ikke sendes igen.
+        """
+        return self.profile.key if self.profile else "standard"
 
     @property
     def cost(self) -> int:
@@ -101,6 +111,7 @@ def match_lot(
                 keywords=keywords,
                 price=price,
                 over_budget=cost > budget,
+                profile=profile,
             )
         )
 

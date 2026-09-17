@@ -18,10 +18,17 @@ from datetime import UTC, datetime
 
 from . import images
 from .classifier import Classifier, ClassifierSettings, OpenAICompatibleClient
-from .config import MIN_SCRAPE_INTERVAL_SECONDS, Config, ConfigError, Source, load_config
+from .config import (
+    MIN_SCRAPE_INTERVAL_SECONDS,
+    Config,
+    ConfigError,
+    Profile,
+    Source,
+    load_config,
+)
 from .matcher import Match, last_chance, match_all, sort_matches
 from .notifier import DiscordNotifier, LastChanceAlert, PriceAlert, send_digest
-from .scraper import ScrapeError, Scraper
+from .scraper import Lot, ScrapeError, Scraper
 from .secrets import SecretError, get_secret, redact
 from .storage import Store
 
@@ -428,6 +435,101 @@ def maybe_prune(store: Store) -> dict[str, int]:
     return removed
 
 
+def _match_profiles(lots: list[Lot], config: Config) -> list[Match]:
+    """Match hvert lot mod hver aktiv profil.
+
+    Uden 'profiles' i konfigurationen er der én implicit profil, så resultatet
+    er identisk med at matche mod topniveauet direkte.
+    """
+    results: list[Match] = []
+    for profile in config.active_profiles():
+        results.extend(
+            match_all(lots, config, opening_bid=config.opening_bid, profile=profile)
+        )
+    return results
+
+
+def _dedupe_by_lot(matches: list[Match]) -> list[Match]:
+    """Ét fund pr. lot, til de varsler der ikke hoerer til en enkelt profil.
+
+    Med flere profiler kan samme lot optraede flere gange i listen. Pris- og
+    sidste-chance-varsler gaar paa lot'et, ikke paa profilen, så de må ikke
+    sende det samme to gange.
+    """
+    seen: set[str] = set()
+    unique: list[Match] = []
+    for match in matches:
+        if match.lot.lot_id in seen:
+            continue
+        seen.add(match.lot.lot_id)
+        unique.append(match)
+    return unique
+
+
+def _notifier_for_profile(
+    profile: Profile | None, default: DiscordNotifier
+) -> DiscordNotifier | None:
+    """Profilens egen webhook hvis den peger på en, ellers den faelles."""
+    if profile is None or not profile.webhook_env:
+        return default
+    try:
+        url = get_secret(profile.webhook_env)
+    except SecretError as exc:
+        log.error(
+            "Profilen %s peger på %s, men den kunne ikke læses: %s",
+            profile.key, profile.webhook_env, exc,
+        )
+        return None
+    if not url:
+        log.warning(
+            "Profilen %s peger på %s, som ikke er sat — springer den over",
+            profile.key, profile.webhook_env,
+        )
+        return None
+    return DiscordNotifier(url.strip())
+
+
+def _notify_profiles(
+    config: Config,
+    default: DiscordNotifier,
+    matches: list[Match],
+    details_flags: dict[str, tuple[str, ...]],
+    region_label: str,
+    store: Store,
+) -> int:
+    """Send nye fund, grupperet pr. profil.
+
+    En profil kan pege på sin egen webhook, så HiFi og vaerktoj lander i hver
+    sin kanal. Kun det der faktisk blev leveret markeres, så en fejlet besked
+    forsoeges igen naeste gang i stedet for at gå tabt.
+    """
+    groups: dict[str, list[Match]] = {}
+    for match in matches:
+        groups.setdefault(match.profile_key, []).append(match)
+
+    sent_total = 0
+    for key, group in groups.items():
+        profile = config.profile(key)
+        client = _notifier_for_profile(profile, default)
+        if client is None:
+            continue
+
+        label = profile.label if profile else ""
+        where = f"{label} · {region_label}" if label else region_label
+        heading = (
+            f"**{len(group)} nyt fund** i {where}"
+            if len(group) == 1
+            else f"**{len(group)} nye fund** i {where}"
+        )
+        result = client.send_matches(group, heading=heading, details=details_flags)
+        for match in result.sent:
+            store.mark_notified(
+                match.lot.lot_id, match.category.key, match.cost, match.profile_key
+            )
+        sent_total += len(result.sent)
+    return sent_total
+
+
 def run_once(
     config: Config,
     store: Store,
@@ -467,7 +569,7 @@ def run_once(
         stats.lots_with_ends = int(getattr(scraper, "lots_with_ends", 0))
         stats.ends_parse_failures = int(getattr(scraper, "ends_parse_failures", 0))
 
-        matches = sort_matches(match_all(all_lots, config, opening_bid=config.opening_bid))
+        matches = sort_matches(_match_profiles(all_lots, config))
         stats.matches = len(matches)
 
         # Totalen inkl. salær og moms gemmes sammen med lot'et. Uden den står
@@ -505,28 +607,26 @@ def run_once(
             details_flags = _fetch_details(config, store, scraper, new_matches, stats)
 
         if new_matches and notifier is not None:
-            result = notifier.send_matches(
+            stats.notified = _notify_profiles(
+                config,
+                notifier,
                 new_matches,
-                heading=(
-                    f"**{len(new_matches)} nyt fund** i {config.source.region_label}"
-                    if len(new_matches) == 1
-                    else f"**{len(new_matches)} nye fund** i {config.source.region_label}"
-                ),
-                details=details_flags,
+                details_flags,
+                config.source.region_label,
+                store,
             )
-            stats.notified = len(result.sent)
-            # Kun de fund der faktisk blev leveret markeres, så en fejlet
-            # besked forsøges igen ved næste kørsel i stedet for at gå tabt.
-            for match in result.sent:
-                store.mark_notified(match.lot.lot_id, match.category.key, match.cost)
+
+        # Pris- og sidste-chance-varsler gaar paa lot'et, ikke på profilen, så
+        # et lot der matcher to profiler må ikke give to ens beskeder.
+        unique_matches = _dedupe_by_lot(matches)
 
         # Prisen kan stige på et lot brugeren selv følger. Det er den anden
         # slags ny information ud over et nyt fund.
-        maybe_price_alerts(store, notifier, matches, stats)
+        maybe_price_alerts(store, notifier, unique_matches, stats)
 
         # Og naar et fulgt lot er taet paa hammerslag, saa det ikke bliver
         # opdaget for sent.
-        maybe_last_chance(store, notifier, matches, stats)
+        maybe_last_chance(store, notifier, unique_matches, stats)
 
         # Grænsetilfælde sendes samlet i ét digest i stedet for én ad gangen,
         # så de ikke støjer i nuet. Først når beskeden er leveret markeres de,

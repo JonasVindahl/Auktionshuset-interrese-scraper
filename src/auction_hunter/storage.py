@@ -60,9 +60,10 @@ CREATE TABLE IF NOT EXISTS price_history (
 CREATE TABLE IF NOT EXISTS notifications (
     lot_id       TEXT NOT NULL,
     category_key TEXT NOT NULL,
+    profile_key  TEXT NOT NULL DEFAULT 'standard',
     sent_at      TEXT NOT NULL,
     cost         INTEGER,
-    PRIMARY KEY (lot_id, category_key)
+    PRIMARY KEY (lot_id, category_key, profile_key)
 );
 
 CREATE TABLE IF NOT EXISTS runs (
@@ -188,7 +189,39 @@ def _migrate(conn: sqlite3.Connection) -> None:
             log.info("Migrerer: tilføjer %s.%s", table, column)
             conn.execute(statement)
 
+    _migrate_notification_profiles(conn)
     _backfill_search_index(conn)
+
+
+def _migrate_notification_profiles(conn: sqlite3.Connection) -> None:
+    """Giv notifikationer en profil-noegle og en tre-delt primaernoegle.
+
+    SQLite kan ikke aendre en primaernoegle, så tabellen bygges om. Raekker fra
+    foer profilerne hoerer til standardprofilen, hvilket er praecis den adfaerd
+    de havde: uden 'profiles' i konfigurationen er der kun den ene.
+    """
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(notifications)")}
+    if not existing or "profile_key" in existing:
+        return
+
+    log.info("Migrerer: bygger notifications om med profile_key")
+    conn.execute("ALTER TABLE notifications RENAME TO notifications_old")
+    conn.execute(
+        """CREATE TABLE notifications (
+               lot_id       TEXT NOT NULL,
+               category_key TEXT NOT NULL,
+               profile_key  TEXT NOT NULL DEFAULT 'standard',
+               sent_at      TEXT NOT NULL,
+               cost         INTEGER,
+               PRIMARY KEY (lot_id, category_key, profile_key)
+           )"""
+    )
+    conn.execute(
+        """INSERT INTO notifications (lot_id, category_key, profile_key, sent_at, cost)
+           SELECT lot_id, category_key, 'standard', sent_at, cost FROM notifications_old"""
+    )
+    conn.execute("DROP TABLE notifications_old")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_notifications_sent ON notifications(sent_at)")
 
 
 def _search_text(title: str) -> str:
@@ -409,26 +442,41 @@ class Store:
 
     # -- notifikationer ----------------------------------------------------
 
-    def already_notified(self, lot_id: str, category_key: str) -> bool:
+    def already_notified(
+        self, lot_id: str, category_key: str, profile_key: str = "standard"
+    ) -> bool:
         row = self.conn.execute(
-            "SELECT 1 FROM notifications WHERE lot_id=? AND category_key=?",
-            (lot_id, category_key),
+            """SELECT 1 FROM notifications
+               WHERE lot_id=? AND category_key=? AND profile_key=?""",
+            (lot_id, category_key, profile_key),
         ).fetchone()
         return row is not None
 
-    def mark_notified(self, lot_id: str, category_key: str, cost: int | None) -> None:
+    def mark_notified(
+        self,
+        lot_id: str,
+        category_key: str,
+        cost: int | None,
+        profile_key: str = "standard",
+    ) -> None:
         with self._tx() as conn:
             conn.execute(
-                """INSERT OR REPLACE INTO notifications (lot_id, category_key, sent_at, cost)
-                   VALUES (?,?,?,?)""",
-                (lot_id, category_key, utcnow(), cost),
+                """INSERT OR REPLACE INTO notifications
+                       (lot_id, category_key, profile_key, sent_at, cost)
+                   VALUES (?,?,?,?,?)""",
+                (lot_id, category_key, profile_key, utcnow(), cost),
             )
 
     def filter_new(self, matches: list[Match]) -> list[Match]:
-        """Behold kun fund der ikke er sendt før."""
+        """Behold kun fund der ikke er sendt før.
+
+        Noeglen er (lot, kategori, profil), så det samme lot godt kan give en
+        besked pr. profil — fx HiFi til én kanal og vaerktoj til en anden — men
+        aldrig to gange til den samme.
+        """
         return [
             m for m in matches
-            if not self.already_notified(m.lot.lot_id, m.category.key)
+            if not self.already_notified(m.lot.lot_id, m.category.key, m.profile_key)
         ]
 
     def lot_stats(self, lot_id: str) -> LotStats | None:
