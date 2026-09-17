@@ -12,6 +12,7 @@ respekt for ``retry_after``.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import time
 from dataclasses import dataclass, field
@@ -195,10 +196,8 @@ class DiscordNotifier:
                     return
                 if response.status_code == 429:
                     retry_after = 1.0
-                    try:
+                    with contextlib.suppress(ValueError, AttributeError):
                         retry_after = float(response.json().get("retry_after", 1.0))
-                    except (ValueError, AttributeError):
-                        pass
                     log.warning("Discord rate limit — venter %.1fs", retry_after)
                     last_error = DiscordError(f"rate limit, ventede {retry_after:.1f}s")
                     time.sleep(min(retry_after, 30))

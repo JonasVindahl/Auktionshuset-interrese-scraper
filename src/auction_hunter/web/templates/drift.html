@@ -62,7 +62,10 @@
   <dl class="deflist">
     <div><dt>Fil</dt><dd><code>{{ settings.path }}</code>
       {%- if settings.writable %} (kan redigeres herfra){% else %} (skrivebeskyttet){% endif %}</dd></div>
-    <div><dt>Region</dt><dd>{{ settings.region or '?' }}</dd></div>
+    <div><dt>Regioner</dt><dd>{{ settings.region or '?' }}
+      <span class="muted-note">{{ settings.region_ids|length if settings.region_ids else '?' }} af {{ settings.regions_known or '?' }} landsdele</span></dd></div>
+    <div><dt>Version</dt><dd>{{ settings.version or '?' }}
+      <span class="muted-note">Python {{ settings.python or '?' }}</span></dd></div>
     <div><dt>Over loftet</dt><dd>rapporteres indtil {{ settings.soft or '?' }} gange loftet</dd></div>
     <div><dt>AI-model</dt><dd>{{ settings.ai_model or '?' }} <span class="muted-note">{{ settings.ai_base or '' }}</span></dd></div>
     {% for name, state in secrets.items() %}

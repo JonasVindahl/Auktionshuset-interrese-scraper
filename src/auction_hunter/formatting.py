@@ -12,7 +12,7 @@ se ud til at ligge i fremtiden.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 try:
     LOCAL_TZ: Any = ZoneInfo("Europe/Copenhagen")
 except ZoneInfoNotFoundError:      # pragma: no cover - kun hvis tzdata mangler
-    LOCAL_TZ = timezone.utc
+    LOCAL_TZ = UTC
 
 # Under så mange timer tilbage markeres et lot som "haster".
 URGENT_HOURS = 6
@@ -49,7 +49,7 @@ def parse_dt(value: str | None) -> datetime | None:
         dt = datetime.fromisoformat(str(value))
     except (ValueError, TypeError):
         return None
-    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+    return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt
 
 
 def timestamp(value: str | None) -> int:
@@ -69,7 +69,7 @@ def rel_past(value: str | None) -> tuple[str, str]:
     dt = parse_dt(value)
     if dt is None:
         return "", ""
-    secs = int((datetime.now(timezone.utc) - dt).total_seconds())
+    secs = int((datetime.now(UTC) - dt).total_seconds())
     full = dt.astimezone(LOCAL_TZ).strftime("%d/%m %H:%M")
     if secs < 120:
         return "lige nu", full
@@ -93,7 +93,7 @@ def time_left(ends_at: str | None) -> tuple[str, str, int]:
         # data mangler, så det siges højt i samme stil som de øvrige tider.
         return "Sluttid ukendt", "unknown", 0
 
-    secs = int((dt - datetime.now(timezone.utc)).total_seconds())
+    secs = int((dt - datetime.now(UTC)).total_seconds())
 
     if secs <= 0:
         past = abs(secs)

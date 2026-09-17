@@ -17,7 +17,7 @@ from dataclasses import asdict
 
 from .config import MIN_SCRAPE_INTERVAL_SECONDS, ConfigError, load_config
 from .matcher import match_all, sort_matches
-from .runner import run_forever, run_once, resolve_notifier, setup_logging
+from .runner import resolve_notifier, run_forever, run_once, setup_logging
 from .scraper import ScrapeError, Scraper
 from .secrets import SecretError, get_secret, redact
 from .storage import Store

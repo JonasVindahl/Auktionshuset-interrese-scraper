@@ -7,7 +7,7 @@ så agentens tests kører uden web-afhængighederne installeret.
 from __future__ import annotations
 
 import shutil
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -15,7 +15,7 @@ import pytest
 from auction_hunter.scraper import Lot
 from auction_hunter.storage import Store
 
-UTC = timezone.utc
+UTC = UTC
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 

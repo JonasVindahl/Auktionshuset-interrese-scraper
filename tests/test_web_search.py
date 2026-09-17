@@ -12,7 +12,11 @@ import pytest
 from auction_hunter.storage import Store
 from auction_hunter.web import queries
 from auction_hunter.web.search import (
-    SearchQuery, archive_stats, categories_seen, search, to_fts_query,
+    SearchQuery,
+    archive_stats,
+    categories_seen,
+    search,
+    to_fts_query,
 )
 
 

@@ -6,7 +6,7 @@ er den graense testene vogter her.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from auction_hunter.web.chatstore import ChatStore, chat_db_path, utcnow
 
@@ -52,7 +52,7 @@ def test_oprydning_fjerner_gamle_samtaler(tmp_path):
     with ChatStore(tmp_path / "c.db") as store:
         cid = store.new_conversation()
         store.append(cid, "user", "gammel")
-        old = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat(timespec="seconds")
+        old = (datetime.now(UTC) - timedelta(days=200)).isoformat(timespec="seconds")
         store.conn.execute("UPDATE conversations SET created_at=?", (old,))
         store.conn.commit()
         assert store.prune(days=90) == 1
@@ -83,7 +83,7 @@ def test_utcnow_er_iso():
 
 
 def test_oprydning_koerer_hoejst_en_gang_i_doegnet(tmp_path):
-    old = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat(timespec="seconds")
+    old = (datetime.now(UTC) - timedelta(days=200)).isoformat(timespec="seconds")
     with ChatStore(tmp_path / "c.db") as store:
         first = store.new_conversation()
         store.conn.execute("UPDATE conversations SET created_at=? WHERE id=?", (old, first))

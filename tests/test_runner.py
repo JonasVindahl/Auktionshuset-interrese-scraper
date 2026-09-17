@@ -7,7 +7,7 @@ rammes.
 """
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -15,10 +15,15 @@ from auction_hunter.classifier import Classifier, ClassifierSettings, OpenAIComp
 from auction_hunter.config import Category, ClassifierConfig, Config, Source
 from auction_hunter.fees import PriceEstimate
 from auction_hunter.matcher import Match
-from auction_hunter.notifier import DiscordNotifier, NotifyResult
+from auction_hunter.notifier import DiscordNotifier
 from auction_hunter.runner import (
-    RunStats, build_classifier, maybe_last_chance, maybe_price_alerts, run_once,
-    select_last_chance, select_price_alerts,
+    RunStats,
+    build_classifier,
+    maybe_last_chance,
+    maybe_price_alerts,
+    run_once,
+    select_last_chance,
+    select_price_alerts,
 )
 from auction_hunter.scraper import Auction, Lot
 from auction_hunter.storage import Store
@@ -333,9 +338,9 @@ class TestFailOpen:
 
     def _classify(self, store, transport):
         from auction_hunter.classifier import Classifier, ClassifierSettings
+        from auction_hunter.config import load_config
         from auction_hunter.matcher import match_lot
         from auction_hunter.scraper import Lot
-        from auction_hunter.config import load_config
 
         config = load_config("config/interests.yml")
         lot = Lot("L1", "Switch TP-LINK TL-SG1016D", "u", "1", "A", "T",
@@ -515,11 +520,11 @@ class TestBlindness:
 
 # -- prisadvarsler ---------------------------------------------------------
 
-NOW = datetime(2026, 9, 16, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 9, 16, 12, 0, tzinfo=UTC)
 
 
 def _match(lot_id, cost, *, ends_in_hours=24, title="Et lot", now=None):
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     lot = Lot(
         lot_id=lot_id, title=title, url=f"https://x/{lot_id}", lot_number="1",
         auction_id="A1", auction_title="Test", current_bid=cost, total_price=cost,

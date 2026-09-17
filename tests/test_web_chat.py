@@ -20,7 +20,10 @@ from auction_hunter.classifier import LLMError
 from auction_hunter.config import load_config
 from auction_hunter.web import queries
 from auction_hunter.web.chat import (
-    ask, build_filter, explain_title, _fallback_filter,
+    _fallback_filter,
+    ask,
+    build_filter,
+    explain_title,
 )
 
 

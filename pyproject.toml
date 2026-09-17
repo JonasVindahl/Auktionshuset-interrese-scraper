@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "auction-hunter"
+dynamic = ["version"]
+description = "Overvåger auktionshuset.dk for interessante fund og sender dem til Discord."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Jonas Vindahl Bang", email = "github@jonasvindahl.dev" }]
+keywords = ["auktion", "scraper", "discord", "agent"]
+classifiers = [
+  "Private :: Do Not Upload",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+  "requests==2.34.2",
+  "beautifulsoup4==4.15.0",
+  "lxml==5.4.0",
+  "PyYAML==6.0.2",
+]
+
+[project.optional-dependencies]
+web = [
+  "fastapi==0.141.1",
+  "uvicorn==0.53.0",
+  "jinja2==3.1.6",
+  "itsdangerous==2.2.0",
+  "python-multipart==0.0.32",
+]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[project.urls]
+Repository = "https://github.com/JonasVindahl/Auktionshuset-interrese-scraper"
+
+[project.scripts]
+auction-hunter = "auction_hunter.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+auction_hunter = ["web/templates/*.html", "web/static/*", "web/static/fonts/*"]
+
+[tool.setuptools.dynamic]
+version = { attr = "auction_hunter.__version__" }
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+# SIM118: 'key in row.keys()' er korrekt for sqlite3.Row — 'key in row' tjekker
+# vaerdier, ikke kolonnenavne. UP042: (str, Enum) er et bevidst valg; StrEnum
+# aendrer str() og dermed f-strings i beskederne.
+ignore = ["E501", "B008", "B904", "SIM118", "UP042"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]

@@ -19,11 +19,11 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Iterator
 
 from .fees import estimate as price_estimate
 from .matcher import Match
@@ -235,7 +235,7 @@ DEFAULT_RETENTION_DAYS = 180
 
 
 def utcnow() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 def utcnow_precise() -> str:
@@ -246,7 +246,7 @@ def utcnow_precise() -> str:
     sekund — hvilket sker når en tests kører hurtigt, og når en auktion lukker
     med bud i sidste øjeblik — kun gemme den sidste observation.
     """
-    return datetime.now(timezone.utc).isoformat(timespec="microseconds")
+    return datetime.now(UTC).isoformat(timespec="microseconds")
 
 
 @dataclass(frozen=True)
@@ -290,7 +290,7 @@ class Store:
     def close(self) -> None:
         self.conn.close()
 
-    def __enter__(self) -> "Store":
+    def __enter__(self) -> Store:
         return self
 
     def __exit__(self, *exc: object) -> None:
@@ -609,7 +609,7 @@ class Store:
         det som set før.
         """
         cutoff = (
-            datetime.now(timezone.utc) - timedelta(days=retention_days)
+            datetime.now(UTC) - timedelta(days=retention_days)
         ).isoformat(timespec="seconds")
 
         removed: dict[str, int] = {}

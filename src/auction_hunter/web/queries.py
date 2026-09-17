@@ -7,7 +7,7 @@ ligger i ``save_feedback``. Agenten ejer alt andet.
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from ..textmatch import find_keywords
@@ -92,7 +92,7 @@ def split_by_end(rows: list[sqlite3.Row]) -> tuple[list[sqlite3.Row], list[sqlit
     Filtreringen sker i Python, fordi ``ends_at`` ikke kan sammenlignes som
     streng med SQLites tidsfunktioner — se ``formatting``.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     active: list[sqlite3.Row] = []
     expired: list[sqlite3.Row] = []
     for row in rows:
@@ -156,7 +156,7 @@ def last_run(conn: sqlite3.Connection) -> tuple[str, bool]:
     dt = parse_dt(row[0])
     if dt is None:
         return str(row[0]), True
-    mins = int((datetime.now(timezone.utc) - dt).total_seconds() // 60)
+    mins = int((datetime.now(UTC) - dt).total_seconds() // 60)
     stale = mins > 45
     if mins < 2:
         return "opdateret lige nu", stale
@@ -257,7 +257,7 @@ def save_feedback(
                    (lot_id, category_key, action, title, created_at)
                    VALUES (?,?,?,?,?)""",
                 (lot_id, category_key, action, title,
-                 datetime.now(timezone.utc).isoformat(timespec="seconds")),
+                 datetime.now(UTC).isoformat(timespec="seconds")),
             )
         else:
             conn.execute(
@@ -598,7 +598,7 @@ def price_bands(
     bands: list[dict[str, Any]] = [
         {"label": f"under {edges[0]} kr", "lo": None, "hi": edges[0], "n": 0}
     ]
-    for lo, hi in zip(edges, edges[1:]):
+    for lo, hi in zip(edges, edges[1:], strict=False):
         bands.append({"label": f"{lo}-{hi} kr", "lo": lo, "hi": hi, "n": 0})
     bands.append({"label": f"over {edges[-1]} kr", "lo": edges[-1], "hi": None, "n": 0})
 

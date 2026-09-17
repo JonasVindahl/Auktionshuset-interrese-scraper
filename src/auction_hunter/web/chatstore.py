@@ -12,7 +12,7 @@ import json
 import logging
 import os
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ RETENTION_DAYS = 90
 
 
 def utcnow() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 def chat_db_path(db_path: str | Path | None = None) -> Path:
@@ -77,7 +77,7 @@ class ChatStore:
     def close(self) -> None:
         self.conn.close()
 
-    def __enter__(self) -> "ChatStore":
+    def __enter__(self) -> ChatStore:
         return self
 
     def __exit__(self, *exc: object) -> None:
@@ -164,7 +164,7 @@ class ChatStore:
     # -- oprydning ---------------------------------------------------------
 
     def prune(self, days: int = RETENTION_DAYS) -> int:
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds")
+        cutoff = (datetime.now(UTC) - timedelta(days=days)).isoformat(timespec="seconds")
         cursor = self.conn.execute(
             "DELETE FROM conversations WHERE created_at < ?", (cutoff,)
         )
@@ -189,7 +189,7 @@ class ChatStore:
         last = self.conn.execute("SELECT value FROM meta WHERE key='pruned_at'").fetchone()
         if last:
             try:
-                elapsed = datetime.now(timezone.utc) - datetime.fromisoformat(last["value"])
+                elapsed = datetime.now(UTC) - datetime.fromisoformat(last["value"])
                 if elapsed.total_seconds() < every_hours * 3600:
                     return 0
             except ValueError:

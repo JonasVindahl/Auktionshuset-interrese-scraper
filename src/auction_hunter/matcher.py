@@ -10,7 +10,7 @@ men markeres, indtil de passerer ``max_price * soft_over_budget_factor``.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from .config import Category, Config
 from .fees import PriceEstimate, estimate
@@ -39,7 +39,7 @@ def last_chance(lot: Lot, within_hours: float, now: datetime | None = None) -> b
     """Bruges til at fremhæve fund tæt på hammerslag."""
     if lot.ends_at is None:
         return False
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     remaining = (lot.ends_at - now).total_seconds() / 3600
     return 0 <= remaining <= within_hours
 

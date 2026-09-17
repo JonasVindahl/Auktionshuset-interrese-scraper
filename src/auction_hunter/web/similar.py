@@ -16,17 +16,14 @@ from __future__ import annotations
 import re
 import sqlite3
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from ..textmatch import normalize
 from .formatting import parse_dt
 from .queries import has_schema
 
 # Ord der ikke siger noget om hvad varen er.
-STOPWORDS = frozenset("""
-og i på til med for af om en et den det de som uden diverse div div. mv fl
-stk ca cirka inkl ekskl samt andre andet nye ny brugt ubrugt komplet
-""".split())
+STOPWORDS = frozenset(["og", "i", "på", "til", "med", "for", "af", "om", "en", "et", "den", "det", "de", "som", "uden", "diverse", "div", "div.", "mv", "fl", "stk", "ca", "cirka", "inkl", "ekskl", "samt", "andre", "andet", "nye", "ny", "brugt", "ubrugt", "komplet"])
 
 MIN_TERM_LENGTH = 3
 # Modelnumre er det mest sigende i en auktionstitel: "650" og "600" er to
@@ -151,7 +148,7 @@ def find(
         (match, MAX_CANDIDATES),
     ).fetchall()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     sales: list[Sale] = []
     for row in rows:
         if row["lot_id"] == lot_id:

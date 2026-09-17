@@ -625,3 +625,25 @@ def test_chat_viser_vurderingspanel(client, monkeypatch):
     response = client.post("/chat", data={"q": "hvad er den vaerd", "c": ""})
     assert response.status_code == 200
     assert "Hvad samme slags er gået for" in response.text
+
+
+# -- version og klarhed ----------------------------------------------------
+
+def test_healthz_rapporterer_version(client):
+    body = client.get("/healthz").json()
+    assert body["ok"] is True
+    assert body["version"]
+
+
+def test_readyz_kraever_database_og_konfiguration(client):
+    body = client.get("/readyz").json()
+    assert body["ok"] is True
+    assert body["kategorier"] >= 1
+    assert body["regioner"]
+
+
+def test_drift_viser_version_og_regioner(client):
+    body = client.get("/drift").text
+    assert "Version" in body
+    assert "Python" in body
+    assert "Regioner" in body

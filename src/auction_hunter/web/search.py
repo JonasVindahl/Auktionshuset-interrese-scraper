@@ -14,7 +14,7 @@ from __future__ import annotations
 import re
 import sqlite3
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from ..textmatch import normalize, normalize_loose
 from .formatting import parse_dt
@@ -65,7 +65,7 @@ class SearchQuery:
     # lots hvis bud er steget mest. Tom betyder en almindelig søgning.
     liste: str = ""
 
-    def normalized(self) -> "SearchQuery":
+    def normalized(self) -> SearchQuery:
         """Ret ugyldige værdier til deres standard i stedet for at fejle."""
         matched = self.matched if self.matched in MATCH_CHOICES else "alle"
         # Et ikke-fund har ingen notifikation og dermed ingen kategori. De to
@@ -198,7 +198,7 @@ def search(conn: sqlite3.Connection, query: SearchQuery) -> SearchResult:
 
     if query.days_back:
         cutoff = (
-            datetime.now(timezone.utc) - timedelta(days=query.days_back)
+            datetime.now(UTC) - timedelta(days=query.days_back)
         ).isoformat(timespec="seconds")
         where.append("l.first_seen >= ?")
         params.append(cutoff)
@@ -239,7 +239,7 @@ def search(conn: sqlite3.Connection, query: SearchQuery) -> SearchResult:
     rows = conn.execute(select + " LIMIT ?", (*params, hard_limit)).fetchall()
 
     if needs_python_status:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         def active(row: sqlite3.Row) -> bool:
             ends = parse_dt(row["ends_at"])
             return ends is None or ends > now
